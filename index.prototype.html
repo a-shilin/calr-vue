@@ -1,0 +1,4072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Indirect Calorimetry Portal</title>
+
+  <link
+    type="text/css"
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+  />
+    <link
+    type="text/css"
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-vue@2.23.1/dist/bootstrap-vue.min.css"
+  />
+
+  <!-- Vue via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+
+  <!-- Plotly via CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+  <!-- Bootstrap via CDN-->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap-vue@2.23.1/dist/bootstrap-vue.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #f5f5f5;
+      font-size: 14px;
+    }
+    header {
+      background: #334;
+      color: white;
+      padding: 10px 20px;
+      font-size: 20px;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .tabs {
+      display: flex;
+      background: #ddd;
+      padding: 0;
+      margin: 0;
+    }
+    .tab {
+      padding: 12px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tab.active {
+      background: white;
+      border-bottom: 2px solid #334;
+    }
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .section {
+      background: white;
+      padding: 15px;
+      flex: 1;
+    }
+
+
+    .dropzone {
+        border: 2px dashed #888;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+    }
+    .dropzone.dragover {
+        border-color: #2a7;
+        background: #f5fff8;
+    }
+
+    #session-form-table{
+        border-collapse: collapse;
+        table-layout: fixed;
+        width: max-content;
+        width:100%;
+
+        td, th {
+            white-space: nowrap;
+            border: 1px solid #ccc; /* Sets border width, style, and color */
+        }
+
+        tr.pad-row th,
+        tr.pad-row td{
+            padding: 5px;
+        }
+
+        tr.thick-b-t th{
+            border-top: 5px solid #ccc;
+        }
+
+        .no-b{ border: none; }
+        .no-b-t{ border-top: none; }
+        .no-b-r{ border-right: none; }
+        .no-b-b{ border-bottom: none; }
+        .no-b-l{ border-left: none; }
+
+        input, select{ 
+            width:100%;
+            padding: 3px;
+        }
+
+        .add-group-btn{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            right: 5px;
+            height: 19px;
+            border: 0;
+            background: #4f864f;
+            color: white;
+            font-size: .8em;
+            border-radius: 5px;
+            z-index: 1;
+        }
+        .add-group-btn:hover{
+            background: #6cb06c;
+        }
+        .add-group-btn:hover::after{
+            content: '+ add group';
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: inherit;
+            border-radius: 5px;
+            height: 19px;
+            padding: 0 6px;
+            line-height: 19px;
+        }
+        .add-group-btn:disabled{
+            background: #a3aba3;
+        }
+
+        .remove-group-btn{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            right: 5px;
+            height: 19px;
+            border: 0;
+            background: #864f4f;
+            color: white;
+            font-size: .8em;
+            border-radius: 5px;
+            z-index: 1;
+        }
+        .remove-group-btn:hover{
+            background: #b06c6c;
+        }
+        .remove-group-btn:hover::after{
+            content: 'x remove group';
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: inherit;
+            border-radius: 5px;
+            height: 19px;
+            padding: 0 6px;
+            line-height: 19px;
+        }
+        .remove-group-btn:disabled{
+            background: #aba3a3;
+        }
+
+        .remove-diet-btn{
+            background: #ccc;
+        }
+        .remove-diet-btn:hover{
+            background: #afaeae;
+        }
+        .remove-diet-btn:hover::after{
+            content: 'x change diet';
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: inherit;
+            border-radius: 5px;
+            height: 19px;
+            padding: 0 6px;
+            line-height: 19px;
+        }
+    }
+    
+    .txt-c{
+        text-align: center;
+    }
+    .txt-r{
+        text-align: right;
+    }
+
+
+    .plot-placeholder {
+      height: 400px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      margin-top: 10px;
+      position: relative;
+    }
+    .controls {
+      background: #eef;
+      padding: 10px;
+      display:flex; 
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    label{
+        display: flex;
+        align-items: center;
+        margin-bottom: 0;
+    }
+    label:has(select) {
+        align-items: unset;
+        flex-direction: column;
+    }
+
+    .plotly{
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+    }
+  </style>
+</head>
+
+<body>
+    <header>CalR</header>
+
+<div id="app">
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab"
+         :class="{active: tab==='dashboard'}"
+         @click="tab='dashboard'">Home</div>
+
+    <div class="tab"
+         :class="{active: tab==='account'}"
+         @click="tab='account'">Account</div>
+
+    <div class="tab"
+         :class="{active: tab==='analysis'}"
+         @click="tab='analysis'">Analysis</div>
+
+    <div class="tab"
+         :class="{active: tab==='community'}"
+         @click="tab='community'">Community</div>
+         
+  </div>
+
+  <div class="content">
+        <!-- ====================== -->
+        <!-- DASHBOARD VIEW         -->
+        <!-- ====================== -->
+        <div v-if="tab==='dashboard'">
+            <div style="display:grid; grid-template-columns: 1fr 1fr;">
+                <div style="display:flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 50px; border: 1px solid #ccc;">
+                    <strong>CalR</strong>
+                    <div>Why. Analysis of indirect calorimetry experiments requires specialized statistical treatment to account
+for differential contributions of fat mass and lean mass to metabolic rates. <br/>What. CalR is designed to
+help scientists translate these guidelines into practice and to provide standardized methods for
+reproducible research. <br/>How. CalR imports data files from instruments designed by Columbus
+Instruments, TSE, and Sable, automatically determines the appropriate statistical tests,
+performs basic statistical analyses, and generates graphical output. 
+                    </div>
+                </div>
+                <div style="display:flex; flex-direction: column;  align-items: flex-start; justify-content: center; padding: 50px; border: 1px solid #ccc;">
+                    <strong>Standardization</strong>
+                    <ul>
+                        <li>Standardized units</li>
+                        <li>Animal metadata</li>
+                        <li>Experimental metadata</li>
+                        <li>Quality control</li>
+                        <li>Data visualizations</li>
+                    </ul>
+                </div>
+                <div style="display:flex; flex-direction: column;  align-items: flex-start; justify-content: center; padding: 50px; border: 1px solid #ccc;">
+                    <strong>Analysis</strong>
+                    <ul>
+                        <li>Compatible</li>
+                        <li>Fast</li>
+                        <li>Customizable</li>
+                        <li>Standardized</li>
+                        <li>Transparent</li>
+                        <li>Adaptable</li>
+                    </ul>
+                </div>
+                <div style="display:flex; flex-direction: column;  align-items: flex-start; justify-content: center; padding: 50px; border: 1px solid #ccc;">
+                    <strong>Community Repository</strong>
+                    Contribute your data to the CalR community to see your data compared to other calorimetry expriments.<br/>
+                    Add your results to the CalR Data Repository.
+                    <ul>
+                        <li>Uploaded by the community</li>
+                        <li>FAIR data principles</li>
+                        <li>Standardized framewok and metadata</li>
+                        <li>Search</li>
+                        <li>Compare</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====================== -->
+        <!-- ACCOUNT VIEW           -->
+        <!-- ====================== -->
+        <div :style="`display:${tab==='account'?'flex':'none'}`" style="display:flex; flex-direction: column;">
+            <div style="display:flex; flex-direction: column; gap:20px; padding: 20px; border: 1px solid #ccc; margin: 0 0 200px 0">
+                <div v-if="!userToken" style="display:flex; flex-direction: row; gap: 20px">
+                    <div  style="display:flex; flex-direction: column; gap:10px;">
+                        <strong>Login</strong>
+                        <div style="display:flex; flex-direction: column; gap: 5px; width:250px">
+                            <div style="display:grid; grid-template-columns: 1fr 1fr;">
+                                <strong>Username</strong><input type="text" v-model="testUsername" @keyup.enter="drLogin"/>
+                                <strong>Password</strong><input type="password" v-model="testPassword" @keyup.enter="drLogin"/>
+                            </div>
+                            <button @click="drLogin" :disabled="loaders.login">
+                                <b-spinner v-if="loaders.login" small></b-spinner>
+                                <span v-else>Login</span>
+                            </button>
+                            <div>{{loginMessage}}</div>
+                        </div>
+                    </div>
+                    <div style="width:350px;">
+                        <strong>CalR Accounts</strong>
+                        <div>Login or create an account to upload, standardize and analyze your own data. And, optionally, contribute it to the public CalR community repository for comparison with other calorimetry experiments.</div>
+                    </div>
+                </div>
+                <div v-else>
+                    <div style="display:flex; justify-content: space-between;">
+                        <div>
+                            Logged in as <strong>{{userInfo.user.username}}</strong>
+                        </div>
+                        <div v-if="!userCreatingNew">
+                            <b-button @click="userCreatingNew=true" variant="info">Create New Experiment</b-button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="userToken && userFiles" style="display:flex; flex-direction: column;">
+                    <strong>Your experiments</strong>
+
+                    <div v-if="loaders.getUserFiles" style="display:flex; height: 200px; align-items: center; justify-content: center;">
+                        <b-spinner small>Loading your experiments</b-spinner>
+                    </div>
+
+                    <b-table v-if="userFiles.length"
+                        :items="userFiles"
+                        :fields="['name', 'description', 'public', 'files', 'uploaded_at', 'actions']"
+                        striped
+                        hover
+                        small
+                    >
+                        <!-- Public -->
+                        <template #cell(public)="data">
+                            <b-badge :variant="data.item.public ? 'success' : 'secondary'" @click="drUpdateExperimentPublicStatus(data.item)" style="cursor: pointer;">
+                            {{ data.item.public ? 'Yes' : 'No' }}
+                            </b-badge>
+                        </template>
+                        <!-- Files -->
+                        <template #cell(files)="data">
+                            <div v-for="file in data.item.files" :key="file.id" class="d-flex align-items-center">
+                            <b-badge variant="primary" class="mr-2">
+                                {{ file.file_type }}
+                            </b-badge>
+
+                            <span class="mr-2">
+                                {{ file.file_name }}
+                                ({{ formatFileSize(file.file_size) }})
+                            </span>
+
+                            <b-button size="sm" variant="link">
+                                ⬇
+                            </b-button>
+                            </div>
+                        </template>
+                        <!-- Uploaded -->
+                        <template #cell(uploaded_at)="data">
+                            {{ formatDate(data.item.uploaded_at) }}
+                        </template>
+                        <template #cell(actions)="data">
+                            <b-button size="sm" variant="link" @click="getUserExperiment(data.item)">
+                                <template v-if="data.item.loading">
+                                    <b-spinner small></b-spinner>
+                                </template>
+                                <template v-else>
+                                    📊
+                                </template>
+                            </b-button>
+                            <b-button size="sm" variant="link">
+                            ✏️
+                            </b-button>
+                            <b-button size="sm" variant="link" class="text-danger" @click="drDeleteExperiment(data.item)">
+                            🗑
+                            </b-button>
+                        </template>
+                    </b-table>
+
+                    <div v-else style="display:flex; height: 200px; align-items: center; justify-content: center;">You have no experiments yet.</div>
+                </div>
+
+                <div v-if="userToken" :style="`display:${userCreatingNew?'flex':'none'}`" style="flex-direction: column; gap:10px; flex:1;">
+                    <!--
+                    //step 1
+                    //upload files(s)
+                    //submit/wait
+                    //show inferred metadata
+                    //preview results
+                    -->
+                    <strong>Upload your instruments data.</strong>
+                    <div v-if="!isCalrFormat && !convertedJSON" class="calr-upload">   
+                        <div>
+                            Columbus, Sable, TSE. <a href="#">How to export your instrument data.</a>
+                            <br/>
+                            To be converted to <a href="#">CalR standard</a>.<br/>
+                        </div>
+                        <div v-if="!loaders.convertFile">
+                            <div
+                                class="dropzone"
+                                :class="{ dragover: dragover }"
+                                @click="openFileDialog"
+                                @dragover.prevent="dragover = true"
+                                @dragleave="dragover = false"
+                                @drop.prevent="handleDrop"
+                            >
+                                <div v-if="files.length === 0">
+                                    Drag & drop CSV files here<br>
+                                    or click to select
+                                </div>
+    
+                                <div v-else>
+                                    <strong>{{ files.length }} file(s) selected</strong>
+                                    <div v-for="file in files" :key="file.name">
+                                        {{ file.name }}
+                                    </div>
+                                </div>
+                            </div>
+    
+                            <input
+                                ref="fileInput"
+                                type="file"
+                                multiple
+                                hidden
+                                @change="handleFileSelect"
+                            >
+                            <button @click="uploadFiles" :disabled="files.length === 0 || loading">
+                                {{ loading ? "Uploading..." : "Convert" }}
+                            </button>
+                            <button @click="clearDrop" :disabled="files.length === 0 || loading">
+                                Clear
+                            </button>
+                        </div>
+                        <div v-else class="dropzone" style="cursor: default;">
+                            <b-spinner small></b-spinner> Coverting {{detectedFileFormat}} intrument data to CalR standard format
+                        </div>
+
+                        <pre v-if="textResponse">{{ textResponse }}</pre>
+                    </div>
+                    <div v-if="convertedJSON">
+                        <div>Converted <strong>{{this.files[0].name}}</strong> to CalR format</div>
+                        <div>[TODO] show data points: subjects, hours</div>
+                    </div>
+                    <div v-if="isCalrFormat">
+                        <div>CalR format detected for <strong>{{this.files[0].name}} </strong> <button @click="clearDrop">x</button></div>
+                    </div>
+                </div>
+
+                <div v-if="isCalrFormat" style="display:flex; flex-direction: column; gap:10px; flex:1;">
+                    <!--
+                    //step 1
+                    //upload files(s)
+                    //submit/wait
+                    //show inferred metadata
+                    //preview results
+                    -->
+                    <strong>Create experiment metadata</strong>
+                    <div>I already have a session file for this data.</div>
+                    <div>[TODO] show dropzone for session file</div>
+                </div>
+
+
+                <div v-if="showSessionForm" style="display:flex; flex-direction: column; flex:1; gap:10px;">
+                    <!--
+                    //step 2
+                    //after upload, show form
+                    //pre-fill form from step 1
+                    //submit/wait
+                    -->
+                    <strong>Fill out experiment metadata</strong>
+                    <div style="display:flex; flex-direction: column; gap:10px">
+                        <table id="session-form-table">
+                            <colgroup>
+                                <col style="width: 100px" />
+                                <col v-for="group in groups" style="width: 170px" />
+                                <col style="width: 100px; background: #e9e9e9;"/>
+                                <col style="width: 100px; background: #e9e9e9;"/>
+                                <col style="width: 100px; background: #e9e9e9;"/>
+                                <col style="width: 100px; background: #dadada;"/>
+                                <col style="width: 100px; background: #dadada;"/>
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th :colspan="1+groups.length" class="no-b-b" style="position: relative; padding: 5px">
+                                        Designate Groups <button class="add-group-btn" @click="addGroup" :disabled="groups.length>3">+</button>
+                                    </th>
+
+                                    <th colspan="3" class="no-b-b" style="padding: 5px">Weights (optional)</th>
+
+                                    <th colspan="2" class="no-b-b" style="padding: 5px">Exclusions (optional)</th>
+                                </tr>
+                                <tr>
+                                    <th class="txt-r no-b-t no-b-r no-b-b" style="padding: 0 5px">Name</th>
+                                    <th v-for="(group, idx) in groups" class="no-b" style="position: relative" :key="idx">
+                                        <input type="text" v-model="group.name" placeholder="Enter group name" :value="group.name.trim()" />
+                                        <button v-if="idx>1" class="remove-group-btn" @click="removeGroup(idx)">x</button>
+                                    </th>
+
+                                    <th colspan="3" rowspan="3" class="txt-c" style="font-weight: normal; white-space: initial;">
+                                        Weights from calorimeter will be used<br/>unless specified here
+                                    </th>
+
+                                    <th colspan="2" rowspan="3" class="txt-c" style="font-weight: normal; white-space: initial;">
+                                        Exclude subject ID's<br/>starting at hour
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <th class="txt-r no-b-t no-b-r no-b-b" style="padding: 0 5px">Diet</th>
+                                    <th v-for="(group, group_idx) in groups" class="no-b" :key="group.name">
+                                        <select v-if="group.diet>-1" @change="changeDiet($event, group_idx)">
+                                            <option :value="-1">Custom</option>
+                                            <option v-for="(diet, idx) in dietOptions" :selected="group.diet===idx" :value="idx" :key="diet.name">{{diet.name}}</option>
+                                        </select>
+                                        <div v-else style="position: relative;">
+                                            <input type="text" placeholder="Enter diet name" v-model="sessionDiets[group_idx].name"/>
+                                            <button class="remove-group-btn remove-diet-btn" @click="removeDiet(group_idx)">x</button>
+                                        </div>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <th class="txt-r no-b-t no-b-r" style="padding: 0 5px">Kcal/g</th>
+                                    <th v-for="(group, group_idx) in groups" class="no-b">
+                                        <input v-if="group.diet>=0" type="text" :value="dietOptions[group.diet].kcal"/>
+                                        <input v-else type="text" placeholder="Enter caloric value (Kcal/g)" v-model="sessionDiets[group_idx].kcal"/>
+                                    </th>
+                                </tr>
+                                <tr class="pad-row thick-b-t">
+                                    <th class="txt-c">Subject ID</th>
+                                    <th v-for="(group, idx) in groups" class="txt-c">
+                                        Group {{group.name}} <span style="font-weight:normal">{{idx===0?"(control)":""}}</span>
+                                    </th>
+                                    <th>Total Mass (g)</th>
+                                    <th>Lean Mass (g)</th>
+                                    <th>Fat Mass (g)</th>
+
+                                    <th>Hour</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(values, subject) in subjects">
+                                    <td class="txt-c">{{subject}}</td>
+                                    <td v-for="(group, idx) in groups">
+                                        <input type="radio"
+                                            :name="`subj_${subject}`" 
+                                            :value="idx"
+                                            v-model="subjects[subject].groupIndex"
+                                        />
+                                    </td>
+
+                                    <td><input type="text" v-model="subjects[subject].total_mass"/></td>
+                                    <td><input type="text" v-model="subjects[subject].lean_mass"/></td>
+                                    <td><input type="text" v-model="subjects[subject].fat_mass"/></td>
+
+                                    <td><input type="text" v-model="subjects[subject].exc_hour"/></td>
+                                    <td><input type="text" v-model="subjects[subject].exc_reason"/></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div>
+                            <strong>Designate hours for the light/dark cycle over 24 hours</strong>
+                            <div style="display:flex; gap:10px">
+                                <div style="display:flex; flex-direction: column;">
+                                    Light cycle starts at hour:<br>
+                                    (i.e. 7 for 7:00 AM)
+                                    <input type="text" v-model="sessionForm.light_cycle_start" placeholder="i.e. 7 for 7:00 AM" />
+                                </div>
+                                <div style="display:flex; flex-direction: column;">
+                                    Dark cycle starts at hour:<br>
+                                    (i.e. 19 for 7:00 PM)
+                                    <input type="text" v-model="sessionForm.dark_cycle_start" placeholder="i.e. 19 for 7:00 PM" />
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <strong>Set hard food cutoff?</strong>
+                            <div style="display:flex; gap:5px">
+                                <label style="display: flex; gap:5px;">No <input type="radio" name="cutoff" :value="false" v-model="cutoff" checked/></label>
+                                <label style="display: flex; gap:5px;">Yes <input type="radio" name="cutoff" :value="true" v-model="cutoff" /></label>
+                            </div>
+                            <input type="text" placeholder="Enter kcal/hr cutoff" v-model="sessionForm.food_cutoff" :disabled="!cutoff"/>
+                        </div>
+                        <div style="display:flex; flex-direction: row;">
+                            <button @click="saveSession">Finish</button>
+                        </div>
+                    </div>
+                </div>
+                
+                
+                <div v-if="savedSession && !showSessionForm" style="display:flex; flex-direction: column; flex:1; gap:10px;">
+                    <!--
+                    
+                    -->
+                    <strong>Completed experiment metadata</strong>
+                    <div>[TODO] show experiment metadata summary</div>
+                    <div>[TODO] add form for experiment metadata</div>
+                    <div v-if="!latestExperiment">
+                        <div v-if="!loaders.uploadExperiment" style="display:flex; gap:10px">
+                            <button @click="showSessionForm = true">Edit</button>
+                            <button @click="uploadExperiment">Save Experiment</button>
+                        </div>
+                        <div v-else>
+                            <b-spinner small></b-spinner> Saving experiment
+                        </div>
+                    </div>
+                    <div v-else>
+                        <b-button variant="success" @click="getUserExperiment(userFiles[0])">See Analysis</b-button>
+                    </div>
+                </div>
+            </div>
+            <!-- this shows a preview of the converted version of an uploaded file
+            <div v-if="convertedJSON" style="overflow-x:auto">
+                <b-table
+                    :items="convertedJSON"
+                    striped
+                    hover
+                    small
+                    :per-page="5" 
+                    :current-page="convertedPage"
+                ></b-table>
+                <b-pagination v-model="convertedPage" :total-rows="convertedJSON.length" :per-page="5"></b-pagination>
+            </div>
+            -->
+        </div>
+
+        <!-- ====================== -->
+        <!-- EXPLORER VIEW          -->
+        <!-- ====================== -->
+        <div :style="`display:${tab==='analysis'?'flex':'none'}`" style="display:flex; flex-direction: column;">
+            <!-- === Plot Type Selector === -->
+            <!--
+            <div class="controls">
+                <strong>Plot Type</strong><br>
+                <select v-model="explorer.mode">
+                <option value="time">Time-Series</option>
+                <option value="dist">Distribution</option>
+                <option value="reg">Regression</option>
+                </select>
+            </div>
+            -->
+            <div v-if="publicFiles.length">
+                <strong>Public Datasets</strong>
+                <b-table
+                    :items="publicFiles"
+                    :fields="['name', 'description', 'uploaded_at', 'actions']"
+                    striped
+                    hover
+                    small
+                >
+                    <!-- Uploaded -->
+                    <template #cell(uploaded_at)="data">
+                        {{ formatDate(data.item.uploaded_at) }}
+                    </template>
+                    <!-- Actions -->
+                    <template #cell(actions)="data">
+                            <b-button size="sm" variant="link" @click="getUserExperiment(data.item)">
+                                <template v-if="data.item.loading">
+                                    <b-spinner small></b-spinner>
+                                </template>
+                                <template v-else>
+                                    📊
+                                </template>
+                            </b-button>
+                    </template>
+                </b-table>
+            </div>
+
+            <div :style="`display: ${!detailLoaded?'flex':'none'}`" style="flex-direction: column; align-items: center; justify-content: center; padding: 50px;">
+                Select a dataset to see analysis plots
+            </div>
+            
+            <div :style="`display: ${detailLoaded?'flex':'none'}`" style="flex-direction: column;">
+                <!-- === Shared Controls === -->
+                <strong v-if="primaryDataset">Dataset Info</strong>
+                <div v-if="primaryDataset" style="display:flex; flex-direction: row;">
+                    <div class="controls" style="width:300px; display:none">
+                        <!-- Primary dataset -->
+                        <div>
+                            <label>Experiment:
+                                <select v-model="primaryDataset" @change="switchPrimaryDataset">
+                                <option v-for="d in datasets" :value="d">{{d}}</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+    
+                    <div style="display: flex; gap: 10px; padding: 20px">
+                        <div  style="flex: 1">
+                            <div><strong>Experiment ID:</strong> {{ metadataForPrimary.experiment_id }}</div>
+                            <div><strong>Treatment:</strong> {{ metadataForPrimary.treatment }}</div>
+                            <div><strong>Calorimetry Date:</strong> {{ metadataForPrimary.calorimetryDate }}</div>
+                            <div><strong>EE calculation method:</strong> {{ metadataForPrimary.eeCalc }}</div>
+                            <div><strong>Enrichment</strong> {{ metadataForPrimary.enrichment }}</div>
+                            <div><strong>System:</strong> {{ metadataForPrimary.system }}</div>
+                            <div><strong>Investigator:</strong> {{ metadataForPrimary.investigator }}</div>
+                            <div><strong>Location:</strong> {{ metadataForPrimary.location }}</div>
+                        </div>
+                        <div style="flex: 1">
+                            <div><strong>Groups:</strong> {{ metadataForPrimary.groups?.join(', ') }}</div>
+                            <div><strong>Diet Manufacturer:</strong> {{ metadataForPrimary.diets?.join(', ') }}</div>
+                            <div><strong>Diet Calories:</strong> {{ metadataForPrimary.dietCalories?.join(', ') }}</div>
+                            <div><strong>Duration (hrs):</strong> {{ metadataForPrimary.durationHours }}</div>
+                            <div><strong>Temperature:</strong> {{ metadataForPrimary.temperature }}</div>
+                            <div><strong>Photoperiod:</strong> {{ metadataForPrimary.photoperied }}</div>
+                            <div><strong>Cage or Ambient Temp.:</strong> {{ metadataForPrimary.cageAmbientTemp }}</div>
+                            <div><strong>Bedding:</strong> {{ metadataForPrimary.bedding }}</div>
+                        </div>
+                        <div  style="flex: 1">
+                            <div><strong>Subjects:</strong> {{ metadataForPrimary.numSubjects }}</div>
+                            <div><strong>Species:</strong> {{ metadataForPrimary.species }}</div>
+                            <div><strong>Genetic background:</strong> {{ metadataForPrimary.geneticBackground }}</div>
+                            <div><strong>Strain and genotype:</strong> {{ metadataForPrimary.strain }}</div>
+                            <div><strong>Tissue specificity:</strong> {{ metadataForPrimary.tissue }}</div>
+                            <div><strong>Age:</strong> {{ metadataForPrimary.age }}</div>
+                            <div><strong>Sex:</strong> {{ metadataForPrimary.sex }}</div>
+                            <div><strong>Litter Size:</strong> {{ metadataForPrimary.litterSize }}</div>
+                        </div>
+                        
+                        
+                    </div>
+    
+                    <!-- Grouping -->
+                    <!--
+                    <div>
+                        <label>Group By:
+                            <select v-model="explorer.groupBy">
+                                <option value="">None</option>
+                                <option value="subject.id">Subject</option>
+                                <option value="cage">Cage</option>
+                            </select>
+                        </label>
+                    </div>
+                    -->
+                </div>
+    
+                <strong>Dataset Plots</strong>
+                <!-- === TIME-SERIES CONTROLS === v-if="explorer.mode==='time'" -->
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        <strong>Time-Series Options</strong>
+    
+                        <div>
+                            <label>Metabolic Variable:
+                                <select v-model="explorer.time.yVar">
+                                    <option v-for="col in explorerVariables" :value="col.field">{{col.label}}</option>
+                                </select>
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>
+                                <input type="checkbox" v-model="explorer.time.smoothing">
+                                Apply Smoothing
+                                <input type="range" min="1" max="50" v-model.number="explorer.time.smoothWindow">
+                                {{ explorer.time.smoothWindow }}
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>
+                                <input type="checkbox" v-model="explorer.time.showMean">
+                                Show Mean Trace
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>
+                                <input type="checkbox" v-model="explorer.time.showIndividuals">
+                                Show Individual Traces
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>
+                                <input type="checkbox" v-model="explorer.time.showDarkLight">
+                                Shade Dark/Light Periods
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>
+                                Plot Range
+                                <input type="number" 
+                                        :min="0" 
+                                        :max="explorer.time.maxHour" 
+                                        v-model.number="explorer.time.rangeStart" 
+                                />
+                                –
+                                <input type="number" 
+                                        :min="0" 
+                                        :max="explorer.time.maxHour" 
+                                        v-model.number="explorer.time.rangeEnd" 
+                                />
+                                Hours
+                            </label>
+                        </div>
+                    </div>
+    
+                    <div class="section">
+                        <div class="plot-placeholder" id="timeSeriesPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <!-- === DISTRIBUTION CONTROLS === v-if="explorer.mode==='dist'" -->
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        <strong>Distribution Options</strong>
+    
+                        <div>
+                            <label>Metabolic Variable:
+                                <select v-model="explorer.dist.var">
+                                    <option v-for="col in explorerVariables" :value="col.field">{{col.label}}</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+    
+                    <div class="section">
+                        <div class="plot-placeholder" id="distributionPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <!-- === SCATTER CONTROLS === v-if="explorer.mode==='reg'" -->
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        <strong>Regression Options</strong>
+    
+                        <div>
+                            <label>Metabolic Variable:
+                                <select v-model="explorer.reg.yVar">
+                                    <option v-for="col in regressionYVariables" :value="col.field">
+                                    {{col.label}}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+    
+                        <div>
+                            <label>Covariate:
+                                <select v-model="explorer.reg.xVar">
+                                    <option v-for="col in regressionXVariables" :value="col.field">
+                                    {{col.label}}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                        <div>
+                            <label>Time of Day:
+                                <select v-model="explorer.reg.period">
+                                    <option value="Total">Total</option>
+                                    <option value="Light">Light</option>
+                                    <option value="Dark">Dark</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                <input type="checkbox" v-model="explorer.reg.showCI">
+                                Show 95% Confidence Interval
+                            </label>
+                        </div>
+                    </div>
+    
+                    <div class="section">
+                        <div class="plot-placeholder" id="regressionPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        Quality Control
+                    </div>
+    
+                    <div class="section">
+                        <!--<pre v-if="this.qcResults" style="height:400px; background:#eee; overflow: auto;">{{this.qcResults}}</pre>-->
+                        <div class="plot-placeholder" id="qcPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        Ancova
+                    </div>
+    
+                    <div class="section">
+                        <pre v-if="this.ancovaResults" style="height:400px; background:#eee; overflow: auto;">{{this.ancovaResults}}</pre>
+                        <div v-else class="plot-placeholder" id="regressionPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        Power Calculation
+                    </div>
+    
+                    <div class="section">
+                        <!--<pre v-if="this.powerResults" style="height:400px; background:#eee; overflow: auto;">{{this.powerResults}}</pre>-->
+                        <div class="plot-placeholder" id="powerPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        Body Composition
+                    </div>
+    
+                    <div class="section">
+                        <div class="plot-placeholder" id="regressionPlot">Plot will appear here</div>
+                    </div>
+                </div>
+    
+                <div style="display:flex; gap:10x;">
+                    <div class="controls" style="width:300px">
+                        Report
+                    </div>
+    
+                    <div class="section">
+                        <div class="plot-placeholder" id="regressionPlot">Plot will appear here</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ====================== -->
+        <!-- COMPARISONS VIEW       -->
+        <!-- ====================== -->
+        <div :style="`display:${tab==='community'?'flex':'none'}`"  style="display:flex; flex-direction: column;">
+            <div class="controls" style="width:300px; align-self: flex-end; display:flex; gap:10px; flex-direction: row;">
+                <div>
+                    <strong>All Datasets</strong>
+    
+                    <div>
+                        <select multiple v-model="summaryReg.selectedExperiments" style="width: 100%;">
+                            <option v-for="v in uniqueExperiments" :value="v">{{v}}</option>
+                        </select>
+                    </div>
+    
+                    <button @click="summaryReg.selectedExperiments = [...uniqueExperiments]" >Select All</button>
+    
+                    <button @click="summaryReg.selectedExperiments = []">Clear</button>
+                </div>
+                <div>
+                    <strong>Compare Dataset</strong>
+                    <div>
+                        <select multiple v-model="summaryReg.highlightedExperiments" style="width: 100%;">
+                            <option v-for="v in summaryReg.selectedExperiments" :value="v">{{v}}</option>
+                        </select>
+                    </div>
+    
+                    <button @click="summaryReg.highlightedExperiments = []">
+                        Clear Highlights
+                    </button>
+                </div>
+            </div>
+
+            <div style="display:flex; flex-direction: row-reverse;">
+                <!-- Variables -->
+                <div class="controls" style="width:300px">
+                    <strong>Variables</strong>
+    
+                    <div>
+                        <label>
+                            X Variable:
+                            <select v-model="summaryReg.xVar">
+                                <option v-for="v in summaryVars.numeric" :value="v">{{v}}</option>
+                            </select>
+                        </label>
+                    </div>
+    
+                    <div>
+                        <label>
+                            Y Variable:
+                            <select v-model="summaryReg.yVar">
+                                <option v-for="v in summaryVars.numeric" :value="v">{{v}}</option>
+                            </select>
+                        </label>
+                    </div>
+    
+                    <div>
+                        <label>
+                            Group / Color By:
+                            <select v-model="summaryReg.groupVar">
+                                <option v-for="v in summaryVars.categorical" :value="v">{{v}}</option>
+                            </select>
+                        </label>
+                    </div>
+    
+                    <div>
+                        <label>
+                            <input type="checkbox" v-model="summaryReg.showCI">
+                            Show 95% CI Ribbon
+                        </label>
+                    </div>
+                </div>
+    
+                <div class="section">
+                    <!-- Plot -->
+                    <div class="plot-placeholder" id="summaryRegressionPlot">
+                    Summary Regression Plot
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// --- Simple CSV parser ---
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines.length === 0) return [];
+
+  // Split and strip header quotes
+  const header = lines[0]
+    .split(',')
+    .map(h => h.trim().replace(/^"(.*)"$/, '$1'));
+
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const cols = line.split(',');
+
+    const row = {};
+    header.forEach((h, idx) => {
+      let val = cols[idx] !== undefined ? cols[idx].trim() : null;
+
+      // Strip quotes from values
+      if (typeof val === "string") {
+        val = val.replace(/^"(.*)"$/, '$1');
+      }
+
+      row[h] = val;
+    });
+
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function ensureExpMinute(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return rows
+  }
+
+  // If column already exists, do nothing
+  if ('exp.minute' in rows[0]) {
+    return rows
+  }
+
+  // Detect timestamp column
+  const timeKey =
+    'Date.Time' in rows[0] ? 'Date.Time' :
+    'Time.Date' in rows[0] ? 'Time.Date' :
+    null
+
+  if (!timeKey) {
+    console.warn('No Date.Time or Time.Date column found')
+    return rows
+  }
+
+  // Parse first timestamp as t0
+  const t0 = Date.parse(rows[0][timeKey])
+  if (Number.isNaN(t0)) {
+    console.warn('Invalid timestamp format:', rows[0][timeKey])
+    return rows
+  }
+
+  // Compute exp.minute for each row
+  return rows.map(row => {
+    const t = Date.parse(row[timeKey])
+    const expMinute = Number.isNaN(t)
+      ? null
+      : Math.round((t - t0) / 60000)
+
+    return {
+      ...row,
+      'exp.minute': expMinute
+    }
+  })
+}
+
+function ensureEnviroLight(
+  rows,
+  lightStartHour,
+  darkStartHour,
+  lightValue = 5,
+  darkValue = 0
+) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return rows
+  }
+
+  // Detect time column
+  const timeKey =
+    'Date.Time' in rows[0] ? 'Date.Time' :
+    'Time.Date' in rows[0] ? 'Time.Date' :
+    null
+
+  if (!timeKey) {
+    console.warn('No Date.Time or Time.Date column found')
+    return rows
+  }
+
+  // Helper: parse hour safely
+  function getHour(ts) {
+    if (!ts || typeof ts !== 'string') return null
+    // "2024-01-15 09:00:00" → 9
+    const hour = Number(ts.slice(11, 13))
+    return Number.isNaN(hour) ? null : hour
+  }
+
+  // Helper: determine light vs dark (handles wrap-around)
+  function isLightHour(hour) {
+    if(hour >= lightStartHour && hour < darkStartHour){
+        return true;
+    }else{
+        return false;
+    }
+  }
+
+  return rows.map(row => {
+    const hour = getHour(row[timeKey])
+
+    const enviroLight =
+      hour === null
+        ? null
+        : isLightHour(hour)
+          ? lightValue
+          : darkValue
+
+    console.log(hour, enviroLight);
+
+    return {
+      ...row,
+      'enviro.light': enviroLight
+    }
+  })
+}
+
+
+function getLightDarkStartsFromData(data, threshold = 1) {
+  const transitions = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const prev = parseFloat(data[i - 1]["enviro.light"]) || 0;
+    const curr = parseFloat(data[i]["enviro.light"]) || 0;
+
+    const prevState = prev > threshold ? "light" : "dark";
+    const currState = curr > threshold ? "light" : "dark";
+
+    if (prevState !== currState) {
+      const expMin = parseFloat(data[i]["exp.minute"]);
+      const hour = (expMin / 60) % 24;
+
+      transitions.push({
+        type: currState, // this is the state we transitioned INTO
+        hour
+      });
+    }
+  }
+
+  // Separate light-on and dark-on transitions
+  const lightStarts = transitions
+    .filter(t => t.type === "light")
+    .map(t => t.hour);
+
+  const darkStarts = transitions
+    .filter(t => t.type === "dark")
+    .map(t => t.hour);
+
+  // Average to stabilize
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+  return {
+    light_hour_start: Math.round(avg(darkStarts)),
+    dark_hour_start: Math.round(avg(lightStarts))
+  };
+}
+// --- Preprocess detail dataset ---
+function preprocessDetail(rows, numericalColumns) {
+  return rows.map(r => {
+    const out = { ...r };
+
+    numericalColumns.forEach(k => {
+      if (out[k] !== undefined) {
+        const num = parseFloat(out[k]);
+        out[k] = isNaN(num) ? null : num;
+      }
+    });
+
+    // Precompute hours for plotting
+    const minute = parseFloat(out["exp.minute"]);
+    out.hour = isNaN(minute) ? null : minute / 60;
+
+    return out;
+  });
+}
+
+// --- Preprocess session dataset ---
+function preprocessSession(rows) {
+  const session = {
+    groupNames: [],
+    dietNames: [],
+    colors: [],
+    dietCal: [],
+    groups: [],
+    lightDark: []
+  }
+
+  const isNA = v =>
+    v === null ||
+    v === undefined ||
+    String(v).trim().toUpperCase() === "NA" ||
+    String(v).trim() === ""
+
+  // ---- basic column extractors ----
+  function extractArray(colName) {
+    return rows
+      .map(r => r[colName])
+      .filter(v => !isNA(v))
+      .map(v => String(v).trim())
+  }
+
+  session.groupNames = extractArray("group_names")
+  session.dietNames  = extractArray("diet_names")
+  session.colors     = extractArray("colors")
+  session.dietCal    = extractArray("dietCal").map(Number)
+  session.lightDark  = extractArray("light")
+
+  // ---- group construction ----
+
+  // Find all columns named group<number>
+  const groupCols = Object.keys(rows[0] || {})
+    .filter(k => /^group\d+$/i.test(k))
+    .sort((a, b) => {
+      const na = Number(a.replace(/\D/g, ""))
+      const nb = Number(b.replace(/\D/g, ""))
+      return na - nb
+    })
+
+  groupCols.forEach((col, idx) => {
+    session.groups[idx] = extractArray(col);
+  })
+
+  return session
+}
+
+
+// --- Preprocess summary dataset ---
+function preprocessSummary(rows) {
+  return rows.map(r => {
+    const out = { ...r };
+    for (const key in out) {
+      const num = parseFloat(out[key]);
+      if (!isNaN(num)) out[key] = num;
+    }
+    return out;
+  });
+}
+
+function smoothSeriesValues(values, windowSize) {
+  if (!windowSize || windowSize <= 1) return values;
+
+  const half = Math.floor(windowSize / 2);
+  const smoothed = [];
+
+  for (let i = 0; i < values.length; i++) {
+    let sum = 0;
+    let count = 0;
+
+    for (let j = i - half; j <= i + half; j++) {
+      if (j >= 0 && j < values.length) {
+        const v = values[j];
+        if (v != null && !isNaN(v)) {
+          sum += v;
+          count++;
+        }
+      }
+    }
+
+    if (count === 0) smoothed.push(null);
+    else smoothed.push(sum / count);
+  }
+
+  return smoothed;
+}
+
+function computeLightDarkShading(rows) {
+  const subject = rows[0]["subject.id"];
+  const subRows = rows.filter(r => r["subject.id"] === subject);
+
+  const segments = [];
+  let current = null;
+
+  const sorted = subRows.sort((a,b) => a["exp.minute"] - b["exp.minute"]);
+  const threshold = 1;
+
+  sorted.forEach((r) => {
+    const lightVal = Number(r["enviro.light"]);
+    const isDark = !isNaN(lightVal) && lightVal <= threshold;
+
+    if (isDark && !current) {
+      current = { start: r["exp.minute"] };
+    }
+    if (!isDark && current) {
+      current.end = r["exp.minute"];
+      segments.push(current);
+      current = null;
+    }
+  });
+
+  if (current) {
+    current.end = sorted[sorted.length - 1]["exp.minute"];
+    segments.push(current);
+  }
+
+  return segments;
+}
+
+function computeSubjectPeriodAverages(rows, subjectId, variable, period) {
+  const subRows = rows.filter(r => r["subject.id"] === subjectId);
+
+  let filtered;
+  if (period === "Light") {
+    filtered = subRows.filter(r => Number(r["enviro.light"]) > 1);
+  } else if (period === "Dark") {
+    filtered = subRows.filter(r => Number(r["enviro.light"]) <= 1);
+  } else {
+    filtered = subRows; // total
+  }
+
+  const vals = filtered
+    .map(r => r[variable])
+    .filter(v => v != null && !isNaN(v));
+
+  if (vals.length === 0) return null;
+
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
+}
+
+function computeOLS(x, y) {
+  const n = x.length;
+  const meanX = x.reduce((a,b)=>a+b,0) / n;
+  const meanY = y.reduce((a,b)=>a+b,0) / n;
+
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (x[i] - meanX) * (y[i] - meanY);
+    den += (x[i] - meanX)**2;
+  }
+
+  const slope = num / den;
+  const intercept = meanY - slope * meanX;
+
+  // Compute R²
+  const yPred = x.map(v => slope * v + intercept);
+  const ssRes = y.reduce((sum, yi, i) => sum + (yi - yPred[i])**2, 0);
+  const ssTot = y.reduce((sum, yi) => sum + (yi - meanY)**2, 0);
+  const r2 = 1 - ssRes / ssTot;
+
+  return { slope, intercept, r2 };
+}
+
+function computeCI(x, y, slope, intercept) {
+  const n = x.length;
+  const preds = x.map(v => slope * v + intercept);
+  const residuals = preds.map((p,i) => y[i] - p);
+
+  const rss = residuals.reduce((a,b)=>a+b*b,0);
+  const se = Math.sqrt(rss / (n - 2));
+
+  const t = 1.96; // approx 95% CI
+
+  return { se, t };
+}
+
+function hexToRGBA(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// --- Debounce helper (global) ---
+function debounce(fn, wait = 20) {
+  let t;
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+
+new Vue({
+  el: "#app",
+  data() {
+    return {
+        loaders: {
+            login: false,
+            getUserFiles: false,
+            convertFile: false,
+            uploadExperiment: false,
+            downloadFile: false,
+            downloadSession: false,
+            loadExperiment: false,
+            doQC: false,
+            doAncova: false,
+            doPower: false
+        },
+
+        testUsername: "",
+        testPassword: "",
+        loginMessage: null,
+        userToken: null,
+        userInfo: null,
+        userFiles: [],
+
+        publicFiles: [],
+
+        fileId: null,
+
+      tab: "dashboard",
+
+      userCreatingNew: false,
+
+      files: [],
+      isCalrFormat: false,
+      detectedFileFormat: "",
+      dragover: false,
+      loading: false,
+      textResponse: null,
+
+      convertedCSV: null,
+      convertedJSON: null,
+      convertedPage: 1,
+
+      cutoff: false,
+
+      //to be generated dunamically
+      subjects: {
+        "1": {
+            groupIndex: 0,
+            total_mass: null,
+            lean_mass: null,
+            fat_mass: null,
+            exc_hour: null,
+            exc_reason: null
+        },
+        "2":{
+            groupIndex: 0,
+            total_mass: null,
+            lean_mass: null,
+            fat_mass: null,
+            exc_hour: null,
+            exc_reason: null
+        },
+        "3":{
+            groupIndex: 0,
+            total_mass: null,
+            lean_mass: null,
+            fat_mass: null,
+            exc_hour: null,
+            exc_reason: null
+        },
+        "4":{
+            groupIndex: 0,
+            total_mass: null,
+            lean_mass: null,
+            fat_mass: null,
+            exc_hour: null,
+            exc_reason: null
+        }
+      },
+
+      //pre-set list of group options
+      groups: [
+        {
+            name: 'WT',
+            diet: 0
+        },{
+            name: 'KO',
+            diet: 1
+        }
+      ],
+
+      //pre-set list of diet options
+      dietOptions: [
+        {
+            name: "LabDiet 5008",
+            kcal: 3.56
+        },{
+            name: "Research Diet 60 kcal% Fat",
+            kcal: 5.21
+        }
+      ],
+
+      sessionDiets: [
+        {
+            name: "",
+            kcal: "",
+        },{
+            name: "",
+            kcal: ""
+        }
+      ],
+
+      //placeholder for user entered diets
+      customDiets: [
+        {
+            name: "",
+            kcal: "",
+        },{
+            name: "",
+            kcal: ""
+        }
+      ],
+
+      showSessionForm: false,
+
+      sessionForm: {
+        light_cycle_start: null,
+        dark_cycle_start: null,
+        hour_range: [null, null],
+        food_cutoff: 0,
+      },
+
+      savedSession: null,
+
+      latestExperiment: null,
+      currExperiment: {
+        dataCSV: null,
+        dataJSON: null,
+        dataFileId: null,
+        sessionFileId: null,
+        medataCSV: null,
+      },
+
+      qcResults: null,
+      ancovaResults: null,
+      powerResults: null,
+
+      // Available dataset IDs
+      datasets: [
+        "CalR000181", 
+        "CalR000200",
+        "CalR000202",
+        "CalR000213"
+
+      ],//, "CalR000202", "CalR000213"],
+      primaryDataset: null, //"CalR000181",
+      summaryDataset: 'calrepo_summary_v1', //'calrep_v9',
+
+      // Comparison toggles
+      enableComparison: false,
+      comparisonDatasets: [],
+
+      // Loaded data
+      detailData: null,
+      summaryData: [],  // full summary CSV
+      sessionData: {},
+
+      // Loading status
+      detailLoaded: false,
+      summaryLoaded: false,
+
+      sparklines: {
+        ee: "",
+        rer: "",
+        intake: "",
+        activity: "",
+        mass: ""
+      },
+
+      pauseExploreWatch: false,
+
+      lightDarkSegments: [],
+
+      numericalColumns: [
+        "vo2", "vco2", "ee", "ee.acc", "rer",
+        "feed", "feed.acc", "drink", "drink.acc",
+        "xytot", "xyamb", "pedmeter", "allmeter",
+        "wheel", "wheel.acc", "C13", "enviro.temp",
+        "subject.mass", "body.temp", "enviro.sound"
+      ],
+      // Explorer plot options
+      explorerVariables: [
+        {field: "vo2", label: "Oxygen Consumption (ml/hr)"}, 
+        {field: "vco2", label: "Carbon Dioxide Production (ml/hr)"}, 
+        {field: "ee", label: "Energy Expenditure (kcal/hr)"}, 
+        {field: "ee.acc", label: "Cumulative Energy Expenditure (kcal)"}, 
+        //{field: "eb", label: "Energy Balance (kcal/hr)"},
+        //{field: "eb.acc", label: "Cumulative Energy Balance (kcal)"},
+        {field: "rer", label: "Respiratory Exchange Ratio"},
+        {field: "feed", label: "Food Intake (kcal/hr)"},
+        {field: "feed.acc", label: "Cumulative Food Intake (kcal)"},
+        {field: "drink", label: "Water Intake (ml)"},
+        {field: "drink.acc", label: "Cumulative Water Intake (ml)"},
+        {field: "xytot", label: "Locomotor Activity (beam breaks)"},
+        {field: "xyamb", label: "Ambulator Activity (beam breaks)"},
+        {field: "pedmeter", label: "Pedestrian Locomotion (m)"},
+        {field: "allmeter", label: "Total Distance in cage (m)"},
+        {field: "body.temp", label: "Body Temperature (C)"},
+        {field: "wheel", label: "Wheel Running (counts)"},
+        {field: "wheel.acc", label: "Total Wheel Running (counts)"},
+        {field: "subject.mass", label: "Body Mass (g)"},
+        {field: "C13", label: "C13"},
+        {field: "enviro.temp", label: "Environmental Temperature (C)"},
+        {field: "enviro.sound", label: "Environmental Sound"},
+      ],
+
+      regressionYVariables: [
+        {field: "vo2", label: "Oxygen Consumption (ml/hr)"}, 
+        {field: "vco2", label: "Carbon Dioxide Production (ml/hr)"}, 
+        {field: "ee", label: "Energy Expenditure (kcal/hr)"}, 
+        {field: "feed", label: "Food Intake (kcal/hr)"},
+      ],
+
+      regressionXVariables: [
+        {field: "subject.mass", label: "Total Mass (g)"}, 
+        {field: "xytot", label: "Total Activity (beam breaks)"},
+      ],
+
+      explorer: {
+        mode: "time", // "time" | "dist" | "scatter"
+
+        enableComparison: false,
+        groupBy: "",
+
+        // --- Time-Series ---
+        time: {
+            yVar: "ee",
+            smoothing: true,
+            smoothWindow: 20,
+            showMean: true,
+            showIndividuals: false,
+            showDarkLight: true,
+            maxHour: 24,
+            rangeStart: 0,
+            rangeEnd: 24
+        },
+
+        // --- Distribution ---
+        dist: {
+            var: "ee",
+            style: "box",
+            groupBy: "dataset"
+        },
+
+        // --- regression ---
+        reg: {
+            xVar: "subject.mass",
+            yVar: "ee",
+            model: "ols",
+            showCI: true,
+            period: "Total"
+        }
+    },
+
+    summaryVars: {
+        numeric: [
+            "Total.Mass",
+            "Lean.Mass",
+            "Fat.Mass",
+            "Energy.Expenditure..kcal.hr.",
+            "Food.Intake..kcal.hr.",
+            "Oxygen.Consumption..ml.hr.",
+            "Carbon.Dioxide.Production..ml.hr.",
+            "Respiratory.Exchange.Ratio",
+            "Locomotor.Activity..beam.breaks.hr.",
+            "Pedestrian.Locomotion..m.hr.",
+            "Distance.in.Cage..m.hr.",
+            "Water.Intake..kcal.hr.",
+            "Energy.Balance..kcal.hr.",
+            "Total.Food..kcal.",
+            "Total.Drink..ml.",
+            "Pedestrian.Locomotion..m.",
+            "Distance.in.Cage.Locomotion..m."
+        ],
+        categorical: [
+            "experiment_id",
+            "subject.id",
+            "species",
+            "tissue",
+            "Group",
+            "diet_names",
+            "strain",
+            "genetic_background",
+            "sex",
+            "system",
+            "location",
+            "treatment",
+            "Time.of.day",
+            "investigator",
+            "bedding",
+            "ee_calc",
+            "enrich"
+        ]
+    },
+    summaryReg: {
+        xVar: "Total.Mass",
+        yVar: "Energy.Expenditure..kcal.hr.",
+        groupVar: "Time.of.day",
+        showCI: false,
+        selectedExperiments: [], // filled after loading summary
+        highlightedExperiments: []
+    },
+
+    //for 'calrep_v9' summary dataset
+    /* 
+    summaryVars: {
+        numeric: [
+            "total_mass",
+            "lean_mass",
+            "fat_mass",
+            "ee",
+            "food",
+            "vo2",
+            "vco2",
+            "rer",
+            "loco",
+            "ped",
+            "bodytemp",
+            "distance",
+            "water",
+            "eb",
+            "duration_hr",
+            "dietCal",
+            "age",
+            "temperature",
+
+        ],
+        categorical: [
+            "experiment_id",
+            "designation",
+            "tod",
+            "diet_names",
+            "strain",
+            "genetic_background",
+            "sex",
+            "system",
+            "location",
+            "investigator",
+            "treatment",
+            "group",
+
+        ]
+    },
+    summaryReg: {
+        xVar: "total_mass",
+        yVar: "ee",
+        groupVar: "group",
+        showCI: false,
+        selectedExperiments: [] // filled after loading summary
+    },
+    */
+
+    };
+  },
+
+  // ============================================================
+  // CREATED
+  // ============================================================
+  created(){
+    this.renderTimeSeriesPlot = debounce(this.renderTimeSeriesPlot.bind(this));
+    this.renderDistributionPlot = debounce(this.renderDistributionPlot.bind(this));
+    this.renderRegressionPlot = debounce(this.renderRegressionPlot.bind(this));
+  },
+
+  // ============================================================
+  // INITIAL LOAD: summary + initial detail dataset
+  // ============================================================
+  async mounted() {
+    console.log("App mounted, loading default datasets...");
+
+    this.publicFiles = await this.drFetchPublicFiles();
+
+    await this.loadSummary();
+
+    return;
+  },
+
+  // ============================================================
+  // COMPUTED
+  // ============================================================
+  computed: {
+    uniqueExperiments() {
+        if (!this.summaryLoaded) return [];
+        const exps = new Set(this.summaryData.map(r => r.experiment_id));
+        return [...exps];
+    },
+    rowsByGroup() {
+        if (!this.detailData) return {};
+            const map = {};
+            for (const r of this.detailData) {
+                const g = r.groupName || "Unknown";
+                if (!map[g]) map[g] = [];
+                map[g].push(r);
+            }
+        return map;
+    },
+    rowsBySubject() {
+        if (!this.detailData) return {};
+            const map = {};
+            for (const r of this.detailData) {
+                const sid = r["subject.id"];
+                if (!map[sid]) map[sid] = [];
+                map[sid].push(r);
+            }
+        return map;
+    },
+    metadataForPrimary() {
+        const id = this.primaryDataset;
+
+        const session = this.sessionData[id] || {};
+
+        const expRow = this.summaryData.find(r => r.experiment_id === id) || {};
+
+        const subjects = [...new Set(this.detailData?.map(r => r["subject.id"]) || [])];
+        const groups = [...new Set(this.detailData?.map(r => r.groupName) || [])];
+
+        const metadataParams = {
+            experiment_id: id,
+            numSubjects: subjects.length,
+            groups,
+            diets: session.dietNames,
+            dietCalories: session.dietCal,
+            geneticBackground: expRow.genetic_background,
+            strain: expRow.strain,
+            sex: expRow.sex,
+            species: expRow.species,
+            tissue: expRow.tissue,
+            treatment: expRow.treatment,
+            system: expRow.system,
+            location: expRow.location,
+            investigator: expRow.investigator,
+            temperature: expRow.temperature,
+            durationHours: this.explorer.time.maxHour,
+            varsAvailable: Object.keys(this.detailData?.[0] || []),
+
+            cageAmbientTemp: expRow.temperature,
+            photoperiod: expRow["Time.of.day"],
+            calorimetryDate: `${expRow.exp_time_start} - ${expRow.exp_time_end}`,
+            bedding: expRow.bedding,
+            eeCalc: expRow.ee_calc,
+            enrichment: expRow.enrich,
+            age: expRow.age,
+            litterSize: expRow.litter
+        };
+
+        console.log('metadataForPrimary', metadataParams)
+
+        return metadataParams;
+    },
+},
+
+  // ============================================================
+  // WATCHERS
+  // ============================================================
+  watch: {
+    tab(newVal) {
+        /*if (newVal === "explorer") {
+            this.$nextTick(() => {
+                this.renderExplorerPlot();
+                this.renderDistributionPlot();
+                this.renderRegressionPlot();
+            });
+        }*/
+        if (newVal === "community") {
+            this.$nextTick(() => {
+                console.log('tab', 'renderSummaryRegression')
+                this.renderSummaryRegression()
+            });
+        }
+    },
+
+    explorer: {
+        handler() {
+            if(!this.pauseExploreWatch) {
+                this.renderExplorerPlot();
+                this.renderDistributionPlot();
+                this.renderRegressionPlot();
+            }
+        },
+        deep: true
+    },
+
+    summaryReg: {
+        deep: true,
+        handler() {
+            if (this.tab === "community") {
+                console.log('summaryReg', 'renderSummaryRegression')
+                this.renderSummaryRegression();
+            }
+        }
+    },
+
+    summaryLoaded(newVal) {
+        if (newVal) {
+            this.summaryReg.selectedExperiments = this.uniqueExperiments;
+        }
+    },
+
+    comparisonDatasets() {
+        this.renderExplorerPlot();
+        }
+    },
+
+  // ============================================================
+  // METHODS
+  // ============================================================
+  methods: {
+    // ============================================================
+    // DATA REGISTRY
+    // ============================================================
+    
+    async drLogin() {
+        const u = this.testUsername;
+        const p = this.testPassword;
+        this.loginMessage = null;
+
+        if(!u.trim()) {
+            this.loginMessage = 'Missing username';
+            return;
+        }
+        if(!p.trim()){
+            this.loginMessage = 'Missing password';
+            return;
+        }
+
+        this.loaders.login = true;
+
+        try {
+            const response = await fetch(
+                'https://users.kpndataregistry.org/api/auth/login/',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: u,
+                        password: p,
+                        group: 'calr'
+                    })
+                }
+            )
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Handle 401 Unauthorized error specifically
+                    console.error('Login failed: Invalid username or password');
+                    this.loginMessage = "Login failed: Invalid username or password";
+                    return;
+                }
+                const error = await response.json();
+                throw new Error(error.message || 'Login failed');
+                this.loginMessage = "Login error"
+                return;
+            }
+
+            const data = await response.json()
+
+            console.log('drLogin', data);
+
+            this.loaders.login = false;
+
+            this.userToken = data.access;
+            this.userInfo = data;
+
+            this.loginMessage = "Success";
+            
+            this.getUserFiles();
+
+        } catch (err) {
+            console.error('Login error:', err);
+            this.loaders.login = false;
+            return null
+        }
+    },
+
+    async getUserFiles(){
+        this.loaders.getUserFiles = true;
+        const files = await this.drFetchFiles();
+        console.log({files});
+        this.loaders.getUserFiles = false;
+        this.userFiles = files;
+    },
+
+    async getUserExperiment(file){
+        const session = file.files.find(f => f.file_type === 'session')
+        const standard = file.files.find(f => f.file_type === 'standard')
+        const isPublic = file.public;
+
+        file.loading = true;
+
+        const data = await this.drFetchDataFile(standard.id, isPublic);
+        console.log({data});
+
+        const metadata = await this.drFetchMetadataFile(session.id, isPublic);
+        console.log({metadata});
+
+        file.loading = false;
+
+        if(data && metadata){
+            this.currExperiment.experiment = file;
+            this.currExperiment.dataFileId = standard.id;
+            this.currExperiment.sessionFileId = session.id;
+            this.currExperiment.dataCSV = data;
+            this.currExperiment.metadataCSV = metadata;
+            this.switchPrimaryDataset();
+        }else{
+            console.log('missing experiment data or metadata')
+        }
+    },
+
+    async drFetchFiles() {
+        const auth = `Bearer ${this.userToken}`;
+        console.log(auth);
+        try {
+            const response = await fetch(
+                `https://api.kpndataregistry.org:8000/api/calr/files`,
+                {
+                    headers: {
+                        'Authorization': auth,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            )
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json()
+            console.log('Files:', data);
+
+            const results = data?.length > 0 ? data : null;
+
+            if(results){
+                data.forEach(file => {
+                    file.loading = false;
+                });
+            }
+            
+
+            return results;
+        
+        } catch (err) {
+            console.error('File list fetch error:', err)
+            return null
+        }
+    },
+
+    async drFetchPublicFiles(){
+        try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/public`,{
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json()
+            console.log('Public Files:', data);
+
+            const results = data?.length > 0 ? data : [];
+
+            if(results){
+                data.forEach(file => {
+                    file.loading = false;
+                });
+            }
+            
+            
+            return results;
+        
+        } catch (err) {
+            console.error('File list fetch error:', err)
+            return null
+        }
+    },
+
+    async drFetchDataFile(fileId, isPublic) {
+        let headers = {};
+        if(this.userToken && !isPublic){
+            headers = {
+                'Authorization': `Bearer ${this.userToken}`
+            }
+        }
+        try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/files/${fileId}`,
+                {
+                    headers
+                }
+            )
+
+            if (!response.ok) {
+                return null
+            }
+
+            const text = await response.text();
+            const preview = text.split('\n').slice(0, 5).join('\n')
+            console.log(`File ${fileId} preview`, text);
+
+            return text;
+        } catch (err) {
+            console.error('File fetch error:', err)
+            return null
+        }
+    },
+
+    async drFetchMetadataFile(fileId, isPublic) {
+        let headers = {};
+        if(this.userToken && !isPublic){
+            headers = {
+                'Authorization': `Bearer ${this.userToken}`
+            }
+        }
+        try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/sessions/${fileId}/csv`,
+                {
+                    headers
+                }
+            )
+
+            if (!response.ok) {
+                return null
+            }
+
+            const text = await response.text();
+            console.log(`Session ${fileId} preview`, text);
+
+            return text;
+        } catch (err) {
+            console.error('File fetch error:', err)
+            return null
+        }
+    },
+
+    async uploadCalrFile() {
+        const file = new File(
+            [this.convertedCSV],
+            "calr_converted.csv",
+            { type: "text/csv" }
+        )
+
+        const form = new FormData()
+
+        form.append("standard_file", file)
+        form.append("name", `Experiment ${this.userFiles.length+1}`);
+        form.append("description", "Vehicle vs Treatment")
+        form.append("public", "false") // must be string in FormData
+
+        try {
+            const res = await fetch("https://api.kpndataregistry.org:8000/api/calr/files", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${this.userToken}`
+                },
+                body: form
+            })
+
+            if (!res.ok) {
+                throw new Error(`Upload failed: ${res.status}`)
+            }
+
+            const data = await res.json()
+            console.log("Success:", data)
+            return data;
+
+        } catch (err) {
+            console.error("Error:", err)
+            throw err
+        }
+    },
+
+    async uploadSessionFile(submission_id){
+        this.latestExperiment = null;
+        const payload = {
+            submission_id,
+            ...this.savedSession
+        }
+        try {
+            const res = await fetch("https://api.kpndataregistry.org:8000/api/calr/sessions", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${this.userToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            })
+
+            if (!res.ok) {
+                throw new Error(`Upload failed: ${res.status}`)
+            }
+
+            const data = await res.json()
+            console.log("Success:", data)
+            return data;
+
+        } catch (err) {
+            console.error("Error:", err)
+            throw err
+        }
+    },
+
+    async uploadExperiment(){
+        this.loaders.uploadExperiment = true;
+        const convertedFileUpload = await this.uploadCalrFile();
+        console.log({convertedFileUpload});
+        if(!convertedFileUpload) return;
+
+        const uploadedSession = await this.uploadSessionFile(convertedFileUpload.submission_id);
+        console.log({uploadedSession});
+        this.loaders.uploadExperiment = false;
+
+        if(convertedFileUpload && uploadedSession){
+            await this.getUserFiles();
+            const latestExperiment = this.userFiles.find(experiment => experiment.id===convertedFileUpload.submission_id)
+            if(latestExperiment){
+                this.latestExperiment = convertedFileUpload.submission_id;
+            }
+        }
+        
+    },
+    
+    async drUpdateExperimentPublicStatus(file){
+        const fileId = file.id;
+        const makePublic = !file.public;
+        try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/files/${fileId}?public=${makePublic}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Authorization": `Bearer ${this.userToken}`
+                    }
+                }
+            )
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json();
+            //console.log(data);
+
+            this.userFiles.find(file => file.id === data.submission_id).public = data.public;
+
+            //return data;
+        } catch (err) {
+            console.error('Toggle Public error:', err)
+            return null
+        }
+    },
+
+    async drDeleteExperiment(file){
+        const fileId = file.id;
+        try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/files/${fileId}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        "Authorization": `Bearer ${this.userToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            )
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json();
+            //console.log(data);
+
+            const index = this.userFiles.findIndex(file => file.id === data.submission_id);
+            if (index > -1) {
+                this.userFiles.splice(index, 1);
+            }
+
+            //return data;
+        } catch (err) {
+            console.error('File Delete error:', err)
+            return null
+        }
+    },
+
+    async drRunQC(){
+        const session_id = this.currExperiment.sessionFileId;
+        const isPublic = this.currExperiment.experiment.public;
+
+        let headers = {
+            "Content-Type": "application/json"
+        };
+        console.log('do auth?', this.currExperiment.experiment.public, this.userToken)
+        if(this.userToken && !isPublic){
+            console.log('adding QC auth')
+            headers = {
+                'Authorization': `Bearer ${this.userToken}`,
+                ...headers
+            }
+        }
+
+        const payload = {
+            session_id,
+            n_mass_measurements: 5
+        }
+         try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/analysis/qc`,{
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload)
+            })
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json()
+
+            console.log('QC',data);
+
+            this.qcResults = data;
+            this.renderQCPlot(data);
+
+            return data;
+        } catch (err) {
+            console.error('QC error:', err)
+            return null
+        }
+    },
+    
+    async drRunAncova(){
+        const session_id = this.currExperiment.sessionFileId;
+        const isPublic = this.currExperiment.experiment.public;
+
+        let headers = {
+            "Content-Type": "application/json"
+        };
+        if(this.userToken && !isPublic){
+            headers = {
+                'Authorization': `Bearer ${this.userToken}`,
+                ...headers
+            }
+        }
+
+        const payload = {
+            session_id,
+            variable: 'ee',
+            mass_variable: 'subject.mass',
+            time_of_day: 'total'
+        }
+         try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/analysis/ancova`,{
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload)
+            })
+
+            if (!response.ok) {
+                return null
+            }
+
+            const data = await response.json()
+
+            console.log('Ancova',data);
+            return data;
+        } catch (err) {
+            console.error('Ancova error:', err)
+            return null
+        }
+    },
+
+    async drRunPower(){
+        const session_id = this.currExperiment.sessionFileId;
+        const isPublic = this.currExperiment.experiment.public;
+
+        let headers = {
+            "Content-Type": "application/json"
+        };
+        if(this.userToken && !isPublic){
+            headers = {
+                'Authorization': `Bearer ${this.userToken}`,
+                ...headers
+            }
+        }
+
+        const payload = {
+            session_id,
+            variable: "ee",
+            mass_variable: "subject.mass",
+            time_of_day: "total",
+            sample_sizes: [4, 8, 12, 16, 20, 24],
+            alpha: 0.05
+        }
+         try {
+            const response = await fetch(`https://api.kpndataregistry.org:8000/api/calr/analysis/power`,{
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload)
+            })
+
+            if (!response.ok) {
+                return null
+            }
+            const data = await response.json()
+
+            console.log('Power',data);
+            this.powerResults = data;
+            this.renderPowerPlot(data);
+            return data;
+        } catch (err) {
+            console.error('Power error:', err)
+            return null
+        }
+    },
+
+    // ============================================================
+    // DATA FORM
+    // ============================================================
+    openFileDialog() {
+      this.$refs.fileInput.click()
+    },
+
+    handleFileSelect(e) {
+      this.files = Array.from(e.target.files)
+      this.checkFiles();
+    },
+
+    handleDrop(e) {
+      this.dragover = false
+      this.files = Array.from(e.dataTransfer.files)
+
+      this.checkFiles();
+    },
+
+    async checkFiles(){
+        this.files.forEach(async file => {
+            const fileFormat = await this.detectFormat(file);
+            console.log(fileFormat);
+            if(fileFormat==='calr'){
+                this.isCalrFormat = true;
+                const csvText = await file.text();
+                this.convertedCSV = csvText;
+                const convertedJSON = parseCSV(csvText);
+                this.parseCalrJsonForSessionForm(convertedJSON);
+                this.showSessionForm = true;
+            }
+            
+        })
+    },
+
+    clearDrop(){
+        this.isCalrFormat = false;
+        this.files = [];
+    },
+
+    async uploadFiles() {
+      if (this.files.length === 0) return;
+
+      if(this.files.length===1){
+        //load the file, check some col headers to see if already in calr format
+        //if no, continue with upload
+      }
+
+      //this.loading = true
+      this.loaders.convertFile = true;
+      this.textResponse = null
+
+      const form = new FormData()
+
+      this.files.forEach(file => {
+        form.append("files", file)
+      })
+
+      try {
+        const res = await fetch(
+          "https://api.kpndataregistry.org:8000/api/calr/convert",
+          {
+            method: "POST",
+            body: form
+          }
+        )
+        const contentType = res.headers.get("content-type")
+        if (contentType && contentType.includes("text/csv")) {
+            const csvText = await res.text();
+            this.convertedCSV = csvText;
+            this.convertedJSON = parseCSV(csvText);
+            this.parseCalrJsonForSessionForm(this.convertedJSON);
+            console.log({csvText, json: this.convertedJSON})
+        } else {
+            this.textResponse = await res.text()
+        }
+      } catch (err) {
+        this.textResponse = "Error: " + err
+      }
+      console.log(this.textResponse);
+      //this.loading = false
+      this.loaders.convertFile = false;
+    },
+
+    parseCalrJsonForSessionForm(data){
+        const subjects = {};
+        let minExpMin = Infinity;
+        let maxExpMin = -Infinity;
+
+        data.forEach(d => {
+            const subjectId = d["subject.id"];
+            const expMin = parseFloat(d["exp.minute"]);
+
+            // 1. Build unique subject object
+            if (!subjects[subjectId]) {
+            subjects[subjectId] = {
+                groupIndex: 0,
+                total_mass: null,
+                lean_mass: null,
+                fat_mass: null,
+                exc_hour: null,
+                exc_reason: null
+            };
+            }
+
+            // 2. Track min/max exp.minute
+            if (!isNaN(expMin)) {
+                if (expMin < minExpMin) minExpMin = expMin;
+                if (expMin > maxExpMin) maxExpMin = expMin;
+            }
+        });
+
+        // Convert minutes → hours
+        const minHour = minExpMin === Infinity ? null : minExpMin / 60;
+        const maxHour = maxExpMin === -Infinity ? null : maxExpMin / 60;
+
+        const lightDark = getLightDarkStartsFromData(data);
+
+        this.subjects = subjects;
+        this.sessionForm.hour_range = [minHour, maxHour];
+        this.sessionForm.light_cycle_start = lightDark.light_hour_start;
+        this.sessionForm.dark_cycle_start = lightDark.dark_hour_start;
+        this.groups.forEach(group => {
+            this.sessionDiets.push({
+                name: this.dietOptions[group.diet].name,
+                kcal: this.dietOptions[group.diet].kcal
+            })
+        })
+        this.showSessionForm = true;
+    },
+
+    async detectFormat(file) {
+        // Read only the first chunk (e.g., first ~10KB is plenty for 5 lines)
+        const chunk = file.slice(0, 10240);
+        const text = await chunk.text();
+
+        const lines = text.split(/\r?\n/).slice(0, 5);
+        const firstLine = lines[0] || "";
+
+        let format = "";
+
+        // Check for Oxymax
+        if (/oxymax/i.test(firstLine)) {
+            formet = "oxymax";
+        }
+
+        // Check for TSE in first 4 lines
+        for (let i = 0; i < Math.min(4, lines.length); i++) {
+            if (/TSE/.test(lines[i])) {
+            format = "tse";
+            }
+        }
+
+        // Check for Sable pattern
+        if (/Date_Time_\d/.test(firstLine)) {
+            format = "sable";
+        }
+
+        // Check for CalR format
+        if (/cage/i.test(firstLine)) {
+            format = "calr";
+        }
+
+        this.detectedFileFormat = format;
+
+        if(format.trim()) return format;
+
+        throw new Error(
+            `Unable to detect format. First line: ${firstLine.slice(0, 100)}`
+        );
+    },
+
+    downloadCsv(csvtext) {
+        if (!csvText) return
+
+        const blob = new Blob([csvText], { type: "text/csv" })
+        const url = URL.createObjectURL(blob)
+
+        const a = document.createElement("a")
+        a.href = url
+        a.download = "calr_converted.csv"
+        a.click()
+
+        URL.revokeObjectURL(url)
+    },
+
+    // ============================================================
+    // METADATA FORM
+    // ============================================================
+    addGroup(){
+        this.groups.push({
+            name: '',
+            diet: 1
+        })
+        this.sessionDiets.push({
+            name: this.dietOptions[1].name,
+            kcal: this.dietOptions[1].kcal,
+        })
+    },
+    
+    removeGroup(idx){
+        this.groups.splice(idx, 1);
+        this.sessionDiets.splice(idx, 1);
+    },
+    
+    changeDiet(e, group_idx) {
+        const idx = Number(e.target.value);
+        this.groups[group_idx].diet = idx;
+
+        if (idx === -1) {
+            // "Custom" selected
+            //this.groups[group_idx].diet = `custom_${group_idx-2}`
+            this.sessionDiets[group_idx] = {
+                name: '',
+                kcal: ''
+            }
+        } else {
+            //this.groups[group_idx].diet = idx;
+            this.sessionDiets[group_idx] = {
+                name: this.dietOptions[idx].name,
+                kcal: this.dietOptions[idx].kcal,
+            }
+        }
+    },
+    
+    removeDiet(idx){
+        this.groups[idx+2].diet = 0;
+        this.customDiets[idx].name = "";
+        this.customDiets[idx].kcal = "";
+    },
+    
+    async saveSession() {
+        const groups = this.groups.map((group, idx) => {
+            let diet_name = null
+            let diet_kcal = null
+
+            if(group.diet < 0){
+                diet_name = this.sessionDiets[idx].name,
+                diet_kcal = this.sessionDiets[idx].kcal
+            }else{
+                diet_name = this.dietOptions[group.diet].name,
+                diet_kcal = this.dietOptions[group.diet].kcal
+            }
+
+            return {
+                name: group.name,
+                diet_name,
+                diet_kcal
+            }
+        });
+            
+        const payload = {
+            groups,
+
+            subjects: Object.entries(this.subjects).map(([id, data]) => ({
+                subject: id,
+                ...data
+            })),
+
+            light_cycle_start:  this.sessionForm.light_cycle_start,
+            dark_cycle_start:   this.sessionForm.dark_cycle_start,
+            hour_range:         [0, 23],    //TODO: update these to be dynamic
+            food_cutoff:        this.sessionForm.food_cutoff,
+
+        }
+
+        console.log(payload)
+
+        this.savedSession = payload;
+        this.showSessionForm = false;
+    },
+
+    // ============================================================
+    // FETCH SUMMARY CSV FROM SAME DIRECTORY AS index.html
+    // ============================================================
+    async loadSummary() {
+      try {
+        const res = await fetch(`${this.summaryDataset}.csv`);
+        const text = await res.text();
+        const rows = parseCSV(text);
+        this.summaryData = preprocessSummary(rows);
+        this.summaryLoaded = true;
+      } catch (err) {
+        console.error("Failed to load summary CSV:", err);
+      }
+    },
+
+    // ============================================================
+    // FETCH DETAIL CSV FOR A GIVEN DATASET ID
+    // ============================================================
+    async loadDetail(datasetId) {
+        const detailFile = `data/${datasetId}_data.csv`;
+        const sessionFile = `data/${datasetId}_session.csv`;
+
+        this.pauseExploreWatch = true;
+
+        try {
+            // ---- Load detail ----
+            const detailRes = await fetch(detailFile);
+            const detailText = await detailRes.text();
+            const detailRows = parseCSV(detailText);
+
+            // ---- Load session ----
+            const sessionRes = await fetch(sessionFile);
+            const sessionText = await sessionRes.text();
+            const sessionRows = parseCSV(sessionText);
+
+            const session = preprocessSession(sessionRows);
+            this.sessionData[datasetId] = session;
+
+            console.log('session', session);
+
+            // ---- Preprocess detail + attach metadata ----
+            const processed = preprocessDetail(detailRows, this.numericalColumns).map(r => {
+                const sidString = String(r["subject.id"] || r["subject_id"]);
+                const sid = (sidString.includes('_') && session.groups[0][0].includes('_')) ? sidString : sidString.split("_")[0];
+                const groupIndex = session.groups.findIndex(group =>
+                    group.includes(sid)
+                );
+
+                r.groupName  = session.groupNames[groupIndex] || null;
+                r.diet       = session.dietNames[groupIndex] || null;
+                r.color      = session.colors[groupIndex] || "#888";
+                r.dietCal    = session.dietCal[groupIndex] || null;
+
+                return r;
+            });
+
+            this.lightDarkSegments = computeLightDarkShading(processed);
+
+            const maxMinute = Math.max(...processed.map(r => r["exp.minute"]));
+            const maxHour = Math.ceil(maxMinute / 60);
+            this.explorer.time.maxHour = maxHour;
+            // Reset visible bounds
+            this.explorer.time.rangeStart = 0;
+            this.explorer.time.rangeEnd = maxHour;
+
+            console.log(this.pauseExploreWatch, this.explorer.time.rangeEnd);
+
+            this.detailData = processed;
+            this.detailLoaded = true;
+
+            console.log("Loaded detail + session for", datasetId, processed);
+            //console.log("session for", datasetId, session);
+
+        } catch (err) {
+            console.error("Failed to load detail+session for:", datasetId, err);
+        }
+    },
+
+    async loadDetail2(datasetId) {
+        //const detailFile = `data/${datasetId}_data.csv`;
+        //const sessionFile = `data/${datasetId}_session.csv`;
+
+        this.pauseExploreWatch = true;
+
+        try {
+            // ---- Load detail ----
+            //const detailRes = await fetch(detailFile);
+            //const detailText = await detailRes.text();
+            const detailRows = parseCSV(this.currExperiment.dataCSV);
+
+            // ---- Load session ----
+            //const sessionRes = await fetch(sessionFile);
+            //const sessionText = await sessionRes.text();
+            const sessionRows = parseCSV(this.currExperiment.metadataCSV);
+
+            const session = preprocessSession(sessionRows);
+            this.sessionData[datasetId] = session;
+
+            console.log('session', session);
+
+            // ---- Preprocess detail + attach metadata ----
+            const processed = preprocessDetail(detailRows, this.numericalColumns).map(r => {
+                const sidString = String(r["subject.id"] || r["subject_id"]);
+                const sid = (sidString.includes('_') && session.groups[0][0].includes('_')) ? sidString : sidString.split("_")[0];
+                const groupIndex = session.groups.findIndex(group =>
+                    group.includes(sid)
+                );
+
+                r.groupName  = session.groupNames[groupIndex] || null;
+                r.diet       = session.dietNames[groupIndex] || null;
+                r.color      = session.colors[groupIndex] || "#888";
+                r.dietCal    = session.dietCal[groupIndex] || null;
+
+                return r;
+            });
+
+            this.lightDarkSegments = computeLightDarkShading(processed);
+
+            const maxMinute = Math.max(...processed.map(r => r["exp.minute"]));
+            const maxHour = Math.ceil(maxMinute / 60);
+            this.explorer.time.maxHour = maxHour;
+            // Reset visible bounds
+            this.explorer.time.rangeStart = 0;
+            this.explorer.time.rangeEnd = maxHour;
+
+            console.log(this.pauseExploreWatch, this.explorer.time.rangeEnd);
+
+            this.detailData = processed;
+            this.detailLoaded = true;
+
+            console.log("Loaded detail + session for", datasetId, processed);
+            //console.log("session for", datasetId, session);
+
+        } catch (err) {
+            console.error("Failed to load detail+session for:", datasetId, err);
+        }
+    },
+
+    async parseDetail(csvData){
+        this.pauseExploreWatch = true;
+        const detailRows = parseCSV(csvData);
+        const detailRowsWithTime = ensureExpMinute(detailRows);
+
+        const sessionFile = `data/default_session.csv`;
+        // ---- Load session ----
+        const sessionRes = await fetch(sessionFile);
+        const sessionText = await sessionRes.text();
+        const sessionRows = parseCSV(sessionText);
+
+        const session = preprocessSession(sessionRows);
+        this.sessionData['default'] = session;
+
+        console.log(sessionRows);
+
+        const detailRowsWithLight = ensureEnviroLight(detailRowsWithTime, sessionRows[0]['light'], sessionRows[1]['light']);
+
+        const processed = preprocessDetail(detailRowsWithLight, this.numericalColumns).map(r => {
+            const sid = String(r["subject.id"] || r["subject_id"]);
+            const [groupStr] = sid.split("_");   // "1_3" → "1"
+            const groupIndex = parseInt(groupStr) - 1;
+
+            r.groupName  = session.groupNames[groupIndex] || null;
+            r.diet       = session.dietNames[groupIndex] || null;
+            r.color      = session.colors[groupIndex] || "#888";
+            r.dietCal    = session.dietCal[groupIndex] || null;
+
+            return r;
+        });
+
+        this.lightDarkSegments = computeLightDarkShading(processed);
+
+        const maxMinute = Math.max(...processed.map(r => r["exp.minute"]));
+        const maxHour = Math.ceil(maxMinute / 60);
+        
+        this.explorer.time.maxHour = maxHour;
+        // Reset visible bounds
+        this.explorer.time.rangeStart = 0;
+        this.explorer.time.rangeEnd = maxHour;
+
+        console.log(this.pauseExploreWatch, this.explorer.time.rangeEnd);
+
+        this.detailData = processed;
+        this.detailLoaded = true;
+
+        console.log('detailData', this.detailData);
+    },
+
+    // Load a new primary dataset on demand
+    async switchPrimaryDataset() {
+      //const id = this.primaryDataset;
+      //await this.loadDetail(id);
+      this.primaryDataset = 'current';
+      this.tab = 'analysis';
+      await this.loadDetail2(this.primaryDataset);
+      this.renderExplorerPlot();
+      this.renderDistributionPlot();
+      this.renderRegressionPlot();
+      this.drRunQC();
+      this.drRunPower();
+      this.ancovaResults = await this.drRunAncova();
+    },
+
+    async renderExplorerPlot() {
+        if (this.explorer.mode === "time")   return this.renderTimeSeriesPlot();
+        if (this.explorer.mode === "dist")   return this.renderDistributionPlot();
+        if (this.explorer.mode === "reg")    return this.renderRegressionPlot();
+    },   
+
+    async renderTimeSeriesPlot() {
+        console.log('renderTime', this.detailLoaded, this.detailData);
+
+        if (!this.detailLoaded) return;
+
+        this.pauseExploreWatch = false;
+        
+        const rows = this.detailData;
+        if (!rows || rows.length === 0) return;
+
+        const yVar = this.explorer.time.yVar;
+        const yLabel = this.explorerVariables.find(x => x.field===yVar).label;
+        const showMean = this.explorer.time.showMean;
+        const showIndividuals = this.explorer.time.showIndividuals;
+        const smoothing = this.explorer.time.smoothing;
+        const showDarkLight = this.explorer.time.showDarkLight;
+        
+        //time range
+        const startHour = this.explorer.time.rangeStart;
+        const endHour = this.explorer.time.rangeEnd;
+
+        //filter out rows outside of time range
+        const timeRangeRows = rows.filter(row => row["exp.minute"] >= startHour*60 && row["exp.minute"] <= endHour*60);
+        console.log('start/end hours', startHour, endHour);
+        console.log('timeRangeRows', timeRangeRows);
+
+        // --- Group rows by groupName ---
+        const groups = {};
+        timeRangeRows.forEach(r => {
+            const g = r.groupName || "Unknown";
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(r);
+        });
+
+        const traces = [];
+        // --- 1. Individual traces ---
+        if (showIndividuals) {
+            Object.entries(groups).forEach(([groupName, gRows]) => {
+            const color = gRows[0].color || "#888";
+
+            // Per subject
+            const subjects = {};
+            gRows.forEach(r => {
+                const sid = r["subject.id"];
+                if (!subjects[sid]) subjects[sid] = [];
+                subjects[sid].push(r);
+            });
+
+            Object.entries(subjects).forEach(([sid, sRows]) => {
+                // Sort by time
+                sRows.sort((a, b) => a["exp.minute"] - b["exp.minute"]);
+
+                // Extract X and Y
+                const xvals = sRows.map(r => r["exp.minute"] / 60);
+                let yvals = sRows.map(r => r[yVar]);
+
+                // Apply smoothing ONLY to y-values
+                // better performance if no smoothing individuals
+                /*if (smoothing) {
+                    yvals = smoothSeriesValues(yvals, this.explorer.time.smoothWindow);
+                }*/
+
+                const lineCol = color;//hexToRGBA(color, 1);
+
+                traces.push({
+                    x: xvals,
+                    y: yvals,
+                    mode: "lines",
+                    line: {
+                        lineCol,
+                        width: 0.5
+                    },
+                    name: `${groupName} (individual)`,
+                    hoverinfo: "none",
+                    showlegend: false
+                });
+            });
+
+            });
+        }
+
+        // --- 2. Mean traces ---
+        if (showMean) {
+            Object.entries(groups).forEach(([groupName, gRows]) => {
+                const hex = gRows[0].color || "#888";
+
+                const ribbonColor = hexToRGBA(hex, 0.20);
+
+                // --- Group by minute index (rounded) ---
+                const byMinute = {};
+                gRows.forEach(r => {
+                    const min = Math.round(r["exp.minute"]);
+                    if (!byMinute[min]) byMinute[min] = [];
+                    const v = r[yVar];
+                    if (v != null && !isNaN(v)) byMinute[min].push(v);
+                });
+
+                const mins = Object.keys(byMinute)
+                    .map(m => parseInt(m))
+                    .sort((a, b) => a - b);
+
+                // --- Compute mean + SEM ---
+                const meanVals = [];
+                const semUpper = [];
+                const semLower = [];
+
+                mins.forEach(min => {
+                    const arr = byMinute[min].filter(v => v != null && !isNaN(v));
+
+                    if (arr.length === 0) {
+                        meanVals.push(null);
+                        semUpper.push(null);
+                        semLower.push(null);
+                        return;
+                    }
+
+                    const n = arr.length;
+                    const mean = arr.reduce((a, b) => a + b, 0) / n;
+
+                    // Single-subject case → no SEM
+                    if (n === 1) {
+                        meanVals.push(mean);
+                        semUpper.push(mean);
+                        semLower.push(mean);
+                        return;
+                    }
+
+                    const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
+                    const sd = Math.sqrt(variance);
+                    const sem = sd / Math.sqrt(n);
+
+                    meanVals.push(mean);
+                    semUpper.push(mean + sem);
+                    semLower.push(mean - sem);
+                });
+
+                let smoothMean = meanVals;
+                let smoothUpper = semUpper;
+                let smoothLower = semLower;
+
+                if (smoothing) {
+                    const w = this.explorer.time.smoothWindow;
+                    smoothMean = smoothSeriesValues(meanVals, w);
+                    smoothUpper = smoothSeriesValues(semUpper, w);
+                    smoothLower = smoothSeriesValues(semLower, w);
+                }
+
+                // Convert minutes to hours for x-axis
+                const xHours = mins.map(m => m / 60);
+
+                // --- Lower boundary trace (must go FIRST) ---
+                traces.push({
+                    x: xHours,
+                    y: smoothLower,
+                    line: { width: 0 },
+                    hoverinfo: "skip",
+                    fillcolor: ribbonColor,
+                    showlegend: false,
+                    name: `${groupName} (SEM lower)`
+                });
+
+                // --- Upper boundary trace (fill to previous) ---
+                traces.push({
+                    x: xHours,
+                    y: smoothUpper,
+                    fill: "tonexty",
+                    line: { width: 0 },
+                    fillcolor: ribbonColor,
+                    hoverinfo: "skip",
+                    showlegend: false,
+                    name: `${groupName} (SEM ribbon)`
+                });
+
+                // --- Mean line ---
+                traces.push({
+                    x: xHours,
+                    y: smoothMean,
+                    mode: "lines",
+                    line: {
+                        color: hex,
+                        width: 2
+                    },
+                    name: groupName
+                });
+
+            });
+        }
+
+
+        // --- 3. Compute dark/light shaded periods ---
+        const shapes = [];
+        if (showDarkLight) {
+            const segments = computeLightDarkShading(timeRangeRows);
+
+            console.log('segments', segments);
+
+            segments.forEach(seg => {
+                shapes.push({
+                type: "rect",
+                xref: "x",
+                yref: "paper",
+                layer: "below",
+                x0: seg.start / 60,
+                x1: seg.end / 60,
+                y0: 0.01,
+                y1: 1,
+                fillcolor: "rgba(180,180,180,0.2)",
+                line: { width: 0 }
+                });
+            });
+        }
+
+        // --- 4. Layout ---
+        const layout = {
+            shapes,
+            margin: { l: 60, r: 20, t: 20, b: 40 },
+            xaxis: {
+                title: "Time (hours)",
+                tickmode: "linear",
+                dtick: 12,  // tick label every 12 hours
+                ticks: "inside",
+                ticklen: 6,
+                range: [startHour, endHour],
+                zeroline: false
+            },
+            yaxis: {
+                title: yLabel
+            },
+            showlegend: true,
+            hovermode: "x unified"
+        };
+
+        Plotly.react("timeSeriesPlot", traces, layout, { responsive: true, scrollZoom: false });
+    },
+
+    async renderDistributionPlot() {
+        if (!this.detailLoaded) return;
+
+        const rows = this.detailData;
+        if (!rows || rows.length === 0) return;
+
+        const yVar = this.explorer.dist.var;
+        const yLabel = this.explorerVariables.find(v => v.field === yVar).label;
+
+        const traces = [];
+
+        // Utility to classify light/dark
+        const isDark = (r) => Number(r["enviro.light"]) <= 1;
+
+        // Group rows by groupName
+        const groups = {};
+        rows.forEach(r => {
+            const g = r.groupName || "Unknown";
+            //console.log(g, r);
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(r);
+        });
+
+        console.log('groups', groups)
+
+        // For each group (Vehicle, T3, etc)
+        Object.entries(groups).forEach(([groupName, gRows]) => {
+            const color = gRows[0].color || "#888";
+
+            // Group rows by subject
+            const subjects = {};
+            gRows.forEach(r => {
+                const sid = r["subject.id"];
+                if (!subjects[sid]) subjects[sid] = [];
+                subjects[sid].push(r);
+            });
+
+            const totals = [];
+            const lights = [];
+            const darks = [];
+
+            // Compute subject-level means
+            Object.values(subjects).forEach(subRows => {
+                const yVals = subRows.map(r => r[yVar]).filter(v => v != null && !isNaN(v));
+                if (yVals.length === 0) return;
+
+                const totalMean = yVals.reduce((a, b) => a + b, 0) / yVals.length;
+                totals.push(totalMean);
+
+                const darkRows = subRows.filter(r => isDark(r));
+                if (darkRows.length > 0) {
+                    const dVals = darkRows.map(r => r[yVar]).filter(v => v != null && !isNaN(v));
+                    const dMean = dVals.reduce((a, b) => a + b, 0) / dVals.length;
+                    darks.push(dMean);
+                }
+
+                const lightRows = subRows.filter(r => !isDark(r));
+                if (lightRows.length > 0) {
+                    const lVals = lightRows.map(r => r[yVar]).filter(v => v != null && !isNaN(v));
+                    const lMean = lVals.reduce((a, b) => a + b, 0) / lVals.length;
+                    lights.push(lMean);
+                }
+            });
+
+            // Build a boxplot trace
+            traces.push({
+                y: [...totals, ...darks, ...lights],
+                x: [
+                    ...Array(totals.length).fill("Total"),
+                    ...Array(darks.length).fill("Dark"),
+                    ...Array(lights.length).fill("Light")
+                ],
+                type: "box",
+                name: groupName,
+                marker: { color },
+                line: { color },
+                offsetgroup: groupName,
+                boxpoints: false
+            });
+
+            // Add individual subject points
+            traces.push({
+                y: [...totals, ...darks, ...lights],
+                x: [
+                    ...Array(totals.length).fill("Total"),
+                    ...Array(darks.length).fill("Dark"),
+                    ...Array(lights.length).fill("Light")
+                ],
+                mode: "markers",
+                type: "box",             // <-- Trick: use a box trace for points
+                marker: {
+                    color,
+                    size: 6,
+                    opacity: 0.7
+                },
+                jitter: 0.2,            // horizontal jitter
+                pointpos: -1.3,          // left of box (tweakable)
+                offsetgroup: groupName,  // aligns with its own box
+                name: groupName + " (pts)",
+                showlegend: false,
+                boxpoints: "all"         // required for dot rendering
+            });
+        });
+
+        const layout = {
+            margin: { l: 60, r: 20, t: 20, b: 40 },
+            yaxis: { title: yLabel },
+            xaxis: {
+                title: "Photoperiod Averages",
+                categoryorder: "array",
+                categoryarray: ["Total", "Dark", "Light"]
+            },
+            boxmode: "group"
+        };
+
+        Plotly.react("distributionPlot", traces, layout, { responsive: true });
+    },
+
+    async renderRegressionPlot() {
+        if (!this.detailLoaded) return;
+
+        const rows = this.detailData;
+        if (!rows || rows.length === 0) return;
+
+        const xVar = this.explorer.reg.xVar;
+        const yVar = this.explorer.reg.yVar;
+        const showCI = this.explorer.reg.showCI;
+        const doOLS = this.explorer.reg.model === "ols";
+
+        // ----------- 1. Compute subject-level means -----------
+        const subjects = {};
+        rows.forEach(r => {
+            const sid = r["subject.id"];
+            if (!subjects[sid]) subjects[sid] = {
+                x: r[xVar],
+                yValues: [],
+                group: r.groupName,
+                color: r.color || "#888"
+            };
+            if (r[yVar] != null && !isNaN(r[yVar])) {
+                subjects[sid].yValues.push(r[yVar]);
+            }
+        });
+
+        const data = Object.entries(subjects)
+        .map(([sid, obj]) => ({
+            sid,
+            x: computeSubjectPeriodAverages(rows, sid, xVar, this.explorer.reg.period),
+            y: obj.yValues.reduce((a,b)=>a+b,0) / obj.yValues.length,
+            group: obj.group,
+            color: obj.color
+        }))
+        .filter(d => d.x != null && !isNaN(d.x)); 
+
+        // Group by groupName (WT/KO/HFD/LFD)
+        const groups = {};
+        data.forEach(d => {
+            if (!groups[d.group]) groups[d.group] = [];
+            groups[d.group].push(d);
+        });
+
+        const traces = [];
+
+        // ----------- 2. Plot points per group -----------
+        Object.entries(groups).forEach(([groupName, gdata]) => {
+            traces.push({
+            x: gdata.map(d => d.x),
+            y: gdata.map(d => d.y),
+            mode: "markers",
+            type: "scatter",
+            name: groupName,
+            marker: {
+                color: gdata[0].color,
+                size: 9,
+                opacity: 0.9
+            },
+            customdata: gdata,
+            hovertemplate:
+                "<b>Subject:</b> %{customdata.sid}<br>" +
+                "<b>Mass:</b> %{x:.2f} g<br>" +
+                `<b>${this.explorerVariables.find(v => v.field===yVar).label}:</b> %{y:.4f}<br>` +
+                "<b>Group:</b> %{customdata.group}<extra></extra>"
+            });
+        });
+
+        // ----------- 3. Regression lines -----------
+        if (doOLS) {
+            Object.entries(groups).forEach(([groupName, gdata]) => {
+            const xs = gdata.map(d => d.x);
+            const ys = gdata.map(d => d.y);
+
+            const { slope, intercept, r2 } = computeOLS(xs, ys);
+
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+
+            const lineX = [minX, maxX];
+            const lineY = [slope*minX + intercept, slope*maxX + intercept];
+
+            const midX = (minX + maxX) / 2;
+            const midY = slope * midX + intercept;
+
+            // ----- CI Ribbon -----
+            if (showCI) {
+                const { se, t } = computeCI(xs, ys, slope, intercept);
+
+                const lower = lineY.map(v => v - t * se);
+                const upper = lineY.map(v => v + t * se);
+
+                traces.push({
+                    x: lineX,
+                    y: lower,
+                    mode: "lines",
+                    line: { width: 0 },
+                    showlegend: false,
+                    hoverinfo: "skip"
+                });
+
+                traces.push({
+                    x: lineX,
+                    y: upper,
+                    mode: "lines",
+                    fill: "tonexty",
+                    fillcolor: hexToRGBA(gdata[0].color, 0.2),
+                    line: { width: 0 },
+                    name: `${groupName} CI`,
+                    hoverinfo: "skip"
+                });
+            }
+
+            // ----- Regression line -----
+            traces.push({
+                x: [minX, midX, maxX],
+                y: [lineY[0], midY, lineY[1]],
+                type: "scatter",
+                mode: "lines+markers",
+                marker: { size: 5, opacity: 0 },
+                name: `${groupName} (OLS)`,
+                line: { color: gdata[0].color, width: 2 },
+
+                hovertemplate:
+                    `<b>${groupName} OLS Regression</b><br>` +
+                    `Slope: ${slope.toFixed(4)}<br>` +
+                    `Intercept: ${intercept.toFixed(4)}<br>` +
+                    `R²: ${r2.toFixed(4)}<extra></extra>`
+            });
+
+            
+            });
+        }
+
+        // ----------- 4. Layout -----------
+        const xLabel = `Body Mass (g) at Time of Day: ${this.explorer.reg.period}`;
+        const yLabel = this.explorerVariables.find(v => v.field===yVar).label;
+
+        const layout = {
+            margin: { l: 60, r: 20, t: 30, b: 50 },
+            xaxis: { title: xLabel, zeroline: false },
+            yaxis: { title: yLabel, zeroline: false },
+            hovermode: "closest",
+            showlegend: true
+        };
+
+        Plotly.react("regressionPlot", traces, layout, { responsive: true });
+    },
+    
+    async renderQCPlot(data) {
+        const groups = [...new Set(data.subjects.map(s => s.group))]
+        const palette = [
+            '#2ca02c', // green
+            '#ff7f0e', // orange
+            '#1f77b4', // blue
+            '#d62728', // red
+            '#9467bd', // purple
+            '#8c564b'  // brown
+        ]
+
+        const colors = {}
+            groups.forEach((g, i) => {
+            colors[g] = palette[i % palette.length]
+        })
+
+        // --- Scatter traces ---
+        const scatterTraces = groups.map(group => {
+            const subset = data.subjects.filter(s => s.group === group)
+
+            return {
+                x: subset.map(d => d.mass_delta),
+                y: subset.map(d => d.total_eb),
+                mode: 'markers',
+                type: 'scatter',
+                name: group,
+                marker: {
+                size: 10,
+                color: colors[group]
+                }
+            }
+        })
+
+        // --- Regression lines ---
+        const allX = data.subjects.map(d => d.mass_delta)
+        const xMin = Math.min(...allX)
+        const xMax = Math.max(...allX)
+
+        const regressionTraces = groups
+        .filter(group => data.group_regressions[group]) // safety check
+        .map(group => {
+            const reg = data.group_regressions[group]
+
+            const xVals = [xMin, xMax]
+            const yVals = xVals.map(x => reg.slope * x + reg.intercept)
+
+            return {
+                x: xVals,
+                y: yVals,
+                mode: 'lines',
+                type: 'scatter',
+                name: `${group} fit`,
+                line: {
+                    color: colors[group],
+                    width: 2
+                },
+                showlegend: false
+            }
+        })
+
+        // --- Overall regression ---
+        const overall = data.overall_regression
+        const overallTrace = {
+            x: [xMin, xMax],
+            y: [xMin, xMax].map(x => overall.slope * x + overall.intercept),
+            mode: 'lines',
+            type: 'scatter',
+            name: 'Overall fit',
+            line: {
+                color: 'purple',
+                width: 3,
+                dash: 'dot'
+            }
+        }
+
+        // --- Layout ---
+        const layout = {
+            xaxis: {
+                title: 'Change in Mass (g)',
+                zeroline: true
+            },
+            yaxis: {
+                title: 'Total Energy Balance (kcal)'
+            },
+            shapes: [
+                {
+                    type: 'line',
+                    x0: 0,
+                    x1: 0,
+                    y0: Math.min(...data.subjects.map(d => d.total_eb)),
+                    y1: Math.max(...data.subjects.map(d => d.total_eb)),
+                    line: {
+                        color: 'black',
+                        width: 1
+                    }
+                }
+            ]
+        }
+
+        const traces = [...scatterTraces, ...regressionTraces, overallTrace];
+
+        Plotly.react("qcPlot", traces, layout, { responsive: true });
+
+        /*
+        Plotly.newPlot(
+        this.$refs.plot,
+        [...scatterTraces, ...regressionTraces, overallTrace],
+        layout
+        )
+        */
+    },
+
+    async renderPowerPlot(data) {
+        const curve = data.power_curve
+
+        const x = curve.map(d => d.n_per_group)
+        const y = curve.map(d => d.power)
+
+        // --- color palette for points ---
+        const palette = [
+            '#ff7f0e', '#d62728', '#8c564b',
+            '#7f7f7f', '#17becf', '#bcbd22',
+            '#e377c2', '#1f77b4'
+        ]
+
+        // --- Main line (black) ---
+        const lineTrace = {
+            x,
+            y,
+            mode: 'lines',
+            type: 'scatter',
+            name: 'Power curve',
+            line: {
+                color: 'black',
+                width: 2
+            },
+            hoverinfo: 'skip'
+        }
+
+        // --- Individual colored points (with legend entries) ---
+        const pointTraces = curve.map((d, i) => ({
+            x: [d.n_per_group],
+            y: [d.power],
+            mode: 'markers',
+            type: 'scatter',
+            name: String(d.n_per_group),
+            marker: {
+                size: 10,
+                color: palette[i % palette.length]
+            }
+        }))
+
+        const layout = {
+            //title: `Power Analysis (${data.method.toUpperCase()})`,
+            xaxis: {
+                title: 'Sample Size (per group)'
+            },
+            yaxis: {
+                title: 'Power',
+                range: [0, 1] // keeps scale consistent with typical power plots
+            },
+            showlegend: true,
+            legend: {
+                title: {
+                text: 'n per group'
+                }
+            }
+        }
+
+        const traces = [lineTrace, ...pointTraces];
+
+        Plotly.react("powerPlot", traces, layout, { responsive: true });
+
+        /*Plotly.newPlot(
+        this.$refs.powerPlot,
+        [lineTrace, ...pointTraces],
+        layout
+        )*/
+    },
+
+
+    renderSummaryRegression() {
+        if (this.tab !== "community" || !this.summaryLoaded) return;
+
+        console.log('renderSummaryRegression')
+
+        const el = document.getElementById("summaryRegressionPlot");
+        if (!el) return;
+
+        const rows = this.summaryData.filter(r =>
+            this.summaryReg.selectedExperiments.includes(r.experiment_id)
+        );
+
+        const xVar = this.summaryReg.xVar;
+        const yVar = this.summaryReg.yVar;
+        const gVar = this.summaryReg.groupVar;
+
+        const highlighting = this.summaryReg.highlightedExperiments.length > 0;
+
+        // --- Group structure: { [groupValue]: { highlighted: [], normal: [] } }
+        const groups = {};
+
+        rows.forEach(r => {
+            const gVal = r[gVar];
+            if (!groups[gVal]) groups[gVal] = { highlighted: [], normal: [] };
+
+            const expId = r.experiment_id;
+            const isHighlighted = this.summaryReg.highlightedExperiments.includes(expId);
+
+            if (isHighlighted) groups[gVal].highlighted.push(r);
+            else groups[gVal].normal.push(r);
+        });
+
+        const palette = [
+            "#1f77b4","#ff7f0e","#2ca02c",
+            "#d62728","#9467bd","#8c564b",
+            "#e377c2","#7f7f7f","#bcbd22","#17becf"
+        ];
+
+        const gNames = Object.keys(groups);
+        const colorMap = {};
+        gNames.forEach((g, i) => colorMap[g] = palette[i % palette.length]);
+
+        const normalScatter = [];
+        const highlightedScatter = [];
+        const referenceLines = [];
+        const highlightedLines = [];
+
+        // Utility: compute OLS slope+intercept
+        function OLS(xs, ys) {
+            const n = xs.length;
+            const meanX = xs.reduce((a,b)=>a+b,0)/n;
+            const meanY = ys.reduce((a,b)=>a+b,0)/n;
+
+            let num=0, den=0;
+            for (let i=0;i<n;i++) {
+                num += (xs[i]-meanX)*(ys[i]-meanY);
+                den += (xs[i]-meanX)**2;
+            }
+            const slope = num/den;
+            const intercept = meanY - slope*meanX;
+            return { slope, intercept };
+        }
+
+        const legendTraces = [];
+
+        // Build scatter + regressions
+        gNames.forEach(gVal => {
+            const color = colorMap[gVal];
+            const hRows = groups[gVal].highlighted;
+            const nRows = groups[gVal].normal;
+
+            // Legend item for group
+            legendTraces.push({
+                x: [null], y: [null],
+                mode: "markers",
+                name: gVal,
+                marker: { color: colorMap[gVal], size: 10 },
+                showlegend: true,
+                hoverinfo: "skip"
+            });
+
+            // --- Scatter: NON highlighted datasets ---
+            nRows.forEach(r => {
+
+            const expId = r.experiment_id;
+            const isHighlighted = this.summaryReg.highlightedExperiments.includes(expId);
+
+            let pointColor, pointLine, pointSize;
+
+            // ---- CASE 1: No datasets highlighted → all full color ----
+            if (!highlighting) {
+                pointColor = color;        
+                pointLine = { width: 0 };
+                pointSize = 9;
+            }
+            // ---- CASE 2: Highlighting active ----
+            else {
+                // Non-highlighted dataset
+                pointColor = "#FFFFFF";
+                pointLine = { width: 1, color };
+                pointSize = 5;
+            }
+
+            normalScatter.push({
+                x: [r[xVar]],
+                y: [r[yVar]],
+                mode: "markers",
+                type: "scatter",
+                marker: {
+                    color: pointColor,
+                    size: pointSize,
+                    opacity: 1.0,
+                    line: pointLine
+                },
+                hovertemplate:
+                    `<b>${gVar}: ${gVal}</b><br>` +
+                    `<b>${xVar}:</b> %{x:.3f}<br>` +
+                    `<b>${yVar}:</b> %{y:.3f}<br>` +
+                    `<b>Experiment:</b> ${r.experiment_id}<extra></extra>`,
+                showlegend: false
+            });
+        });
+
+
+        // --- Scatter: highlighted datasets ---
+        hRows.forEach(r => {
+
+            let pointColor = color;
+            let pointLine = { width: 0 };
+            let pointSize = 10;
+
+            highlightedScatter.push({
+                x: [r[xVar]],
+                y: [r[yVar]],
+                mode: "markers",
+                type: "scatter",
+                marker: {
+                    color: pointColor,
+                    size: pointSize,
+                    opacity: 1.0,
+                    line: pointLine
+                },
+                hovertemplate:
+                    `<b>${gVar}: ${gVal}</b><br>` +
+                    `<b>${xVar}:</b> %{x:.3f}<br>` +
+                    `<b>${yVar}:</b> %{y:.3f}<br>` +
+                    `<b>Experiment:</b> ${r.experiment_id}<extra></extra>`,
+                showlegend: false
+            });
+        });
+
+            // --- 1. Reference regression (non-highlighted only) ---
+            if (nRows.length > 1) {
+                const xs = nRows.map(r => r[xVar]);
+                const ys = nRows.map(r => r[yVar]);
+                const { slope, intercept } = OLS(xs, ys);
+
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+
+                referenceLines.push({
+                    x: [minX, maxX],
+                    y: [slope*minX + intercept, slope*maxX + intercept],
+                    mode: "lines",
+                    line: { color, width: 1 },
+                    hoverinfo: "skip",
+                    showlegend: false,
+                    hovertemplate:
+                        `<b>${gVal} Regression</b><br>` +
+                        `slope = ${slope.toFixed(4)}<br>` +
+                        `intercept = ${intercept.toFixed(4)}<extra></extra>`
+                });
+                
+            }
+
+            // --- 2. Highlight regression (highlighted datasets only) ---
+            if (hRows.length > 1) {
+                const xs = hRows.map(r => r[xVar]);
+                const ys = hRows.map(r => r[yVar]);
+                const { slope, intercept } = OLS(xs, ys);
+
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+
+                highlightedLines.push({
+                    x: [minX, maxX],
+                    y: [slope*minX + intercept, slope*maxX + intercept],
+                    mode: "lines",
+                    line: { color, width: 4 },
+                    hoverinfo: "skip",
+                    showlegend: false,
+                    hovertemplate:
+                        `<b>${gVal} Regression</b><br>` +
+                        `slope = ${slope.toFixed(4)}<br>` +
+                        `intercept = ${intercept.toFixed(4)}<extra></extra>`
+                });
+            }
+        });
+
+        const layout = {
+            margin: { l:60, r:20, t:30, b:50 },
+            xaxis: { title: xVar },
+            yaxis: { title: yVar },
+            hovermode: "closest",
+            showlegend: true
+        };
+
+        const traces = [
+            ...legendTraces,       // legend appears once
+            ...normalScatter,      // white-outline points
+            ...highlightedScatter, // colored points
+            ...referenceLines,     // thin lines
+            ...highlightedLines    // thick lines on top
+        ];
+
+        Plotly.react("summaryRegressionPlot", traces, layout, { responsive: true });
+    },
+
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    formatDate(dateStr) {
+        const d = new Date(dateStr)
+        return d.toLocaleString()
+    },
+
+    formatFileSize(bytes) {
+        const mb = bytes / (1024 * 1024)
+        return `${mb.toFixed(2)} MB`
+    }
+    /*
+    renderSummaryRegression() {
+        if (this.tab !== "comparisons") return;     // <-- Prevent premature rendering
+        if (!this.summaryLoaded) return;
+
+        const el = document.getElementById("summaryRegressionPlot");
+        if (!el) return;
+
+        const rows = this.summaryData.filter(r =>
+            this.summaryReg.selectedExperiments.includes(r.experiment_id)
+        );
+
+        const xVar = this.summaryReg.xVar;
+        const yVar = this.summaryReg.yVar;
+        const gVar = this.summaryReg.groupVar;
+        const showCI = this.summaryReg.showCI;
+
+        // group data by selected categorical variable
+        const groups = {};
+        rows.forEach(r => {
+            const groupValue = r[gVar];
+            if (!groups[groupValue]) groups[groupValue] = [];
+            const x = parseFloat(r[xVar]);
+            const y = parseFloat(r[yVar]);
+            if (!isNaN(x) && !isNaN(y)) {
+            groups[groupValue].push({
+                x,
+                y,
+                row: r
+            });
+            }
+        });
+
+        const traces = [];
+
+        // color palette
+        const palette = [
+            "#1f77b4","#ff7f0e","#2ca02c","#d62728",
+            "#9467bd","#8c564b","#e377c2","#7f7f7f",
+            "#bcbd22","#17becf"
+        ];
+        const groupNames = Object.keys(groups);
+
+        // mapping group -> color
+        const groupColor = {};
+        groupNames.forEach((g, i) => groupColor[g] = palette[i % palette.length]);
+
+        // compute OLS for a group
+        function computeOLS(xs, ys) {
+            const n = xs.length;
+            const meanX = xs.reduce((a,b)=>a+b,0)/n;
+            const meanY = ys.reduce((a,b)=>a+b,0)/n;
+
+            let num=0, den=0;
+            for (let i=0; i<n; i++) {
+            num += (xs[i]-meanX)*(ys[i]-meanY);
+            den += (xs[i]-meanX)*(xs[i]-meanX);
+            }
+            const slope = num/den;
+            const intercept = meanY - slope*meanX;
+
+            const preds = xs.map(x => slope*x + intercept);
+            let ssRes=0, ssTot=0;
+            for (let i=0; i<n; i++) {
+            ssRes += (ys[i] - preds[i])**2;
+            ssTot += (ys[i] - meanY)**2;
+            }
+            const r2 = 1 - ssRes/ssTot;
+
+            return { slope, intercept, r2 };
+        }
+
+        // compute CI shading
+        function computeCI(xs, ys, slope, intercept) {
+            const n = xs.length;
+            const preds = xs.map(x => slope*x + intercept);
+            const residuals = preds.map((p,i) => ys[i] - p);
+            const rss = residuals.reduce((a,b)=>a+b*b,0);
+            const se = Math.sqrt(rss/(n-2));
+            const t = 1.96;
+            return { se, t };
+        }
+
+        // build scatter + regression traces per group
+        groupNames.forEach(groupName => {
+            const gData = groups[groupName];
+            const xs = gData.map(d => d.x);
+            const ys = gData.map(d => d.y);
+
+            const color = groupColor[groupName];
+
+            // Determine if highlighting mode is active
+            const highlighting = this.summaryReg.highlightedExperiments.length > 0;
+
+            const expId = gData[0].row.experiment_id;
+            const isHighlighted = this.summaryReg.highlightedExperiments.includes(expId);
+
+            // COLOR LOGIC
+            let pointColor, pointLine, pointSize;
+
+            // A. No highlights → full color for all
+            if (!highlighting) {
+                pointColor = color;
+                pointLine = { width: 0 };
+                pointSize = 9;
+            }
+
+            // B. Highlight mode → special styling
+            else {
+                if (isHighlighted) {
+                    // highlighted dataset
+                    pointColor = color;  // solid color
+                    pointLine = { width: 0 };
+                    pointSize = 10;
+                } else {
+                    // non-highlighted dataset
+                    pointColor = "#FFFFFF";  // white fill
+                    pointLine = {
+                        width: 1,
+                        color: color
+                    };
+                    pointSize = 5;
+                }
+            }
+
+            traces.push({
+                x: xs,
+                y: ys,
+                mode: "markers",
+                type: "scatter",
+                name: `${groupName} (n=${xs.length})`,
+                legendgroup: groupName,
+                marker: {
+                    color: pointColor,
+                    size: pointSize,
+                    opacity: 1.0,
+                    line: pointLine
+                },
+            });
+
+            // regression line
+            const { slope, intercept, r2 } = computeOLS(xs, ys);
+
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const lineX = [minX, maxX];
+            const lineY = lineX.map(x => slope * x + intercept);
+
+            traces.push({
+                x: lineX,
+                y: lineY,
+                mode: "lines",
+                line: { color, width: (!highlighting || isHighlighted) ? 4 : 1 },
+                color,
+                name: `${groupName} OLS (R²=${r2.toFixed(3)})`,
+                hoverinfo: "skip",
+                showlegend: false,
+                legendgroup: groupName, 
+            });
+
+            // CI ribbon
+            if (showCI) {
+                const { se, t } = computeCI(xs, ys, slope, intercept);
+                const lower = lineY.map(v => v - t*se);
+                const upper = lineY.map(v => v + t*se);
+
+                traces.push({
+                    x: lineX,
+                    y: lower,
+                    mode: "lines",
+                    line: { width: 0 },
+                    hoverinfo: "skip",
+                    showlegend: false,
+                    legendgroup: groupName, 
+                    
+                });
+
+                traces.push({
+                    x: lineX,
+                    y: upper,
+                    mode: "lines",
+                    fill: "tonexty",
+                    fillcolor: (!highlighting || isHighlighted)
+                        ? hexToRGBA(color, 0.2)
+                        : hexToRGBA(color, 0.05),
+                    line: { width: 0 },
+                    hoverinfo: "skip",
+                    name: `${groupName} 95% CI`,
+                    showlegend: false,
+                    legendgroup: groupName, 
+                });
+            }
+        });
+
+        // --- layout ---
+        const layout = {
+            margin: { l: 60, r: 20, t: 30, b: 50 },
+            xaxis: { title: xVar },
+            yaxis: { title: yVar },
+            hovermode: "closest",
+            showlegend: true,
+        };
+
+        Plotly.react("summaryRegressionPlot", traces, layout, { responsive: true });
+    }
+    */
+
+},
+
+  
+
+});
+</script>
+
+
+
+</body>
+</html>

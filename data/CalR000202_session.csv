@@ -1,0 +1,33 @@
+"","group1","group2","group_names","diet_names","dietCal","colors","xrange","outliers","mri","light","exc","Total.Mass","id"
+"1","1","2","GFP","LabDiet 5008 3.56kcal/g","3.56","#3B73C7","18","Yes","No","6","95","32.65","1"
+"2","4","3","Irisin","LabDiet 5008 3.56kcal/g","3.56","#ED5F00","89",NA,NA,"18","95","36.65","2"
+"3","5","6",NA,NA,NA,NA,NA,NA,NA,NA,"95","32.15","3"
+"4","8","7",NA,NA,NA,NA,NA,NA,NA,NA,"95","30.6","4"
+"5","9","10",NA,NA,NA,NA,NA,NA,NA,NA,"95","31.05","5"
+"6","12","11",NA,NA,NA,NA,NA,NA,NA,NA,"95","30.05","6"
+"7","13","14",NA,NA,NA,NA,NA,NA,NA,NA,"95","30.1","7"
+"8","16","15",NA,NA,NA,NA,NA,NA,NA,NA,"95","34.7","8"
+"9",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","36.7","9"
+"10",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","30.45","10"
+"11",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","32.3","11"
+"12",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","32.55","12"
+"13",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"0","32.1","13"
+"14",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","29.45","14"
+"15",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","34.4","15"
+"16",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"95","30.95","16"
+"17",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"18",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"19",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"20",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"21",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"22",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"23",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"24",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"25",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"26",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"27",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"28",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"29",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"sick mouse",NA,NA
+"30",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"31",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
+"32",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,"",NA,NA
