@@ -96,6 +96,14 @@ export async function fetchSessionFile(fileId, token, isPublic = false) {
   return parseTextResponse(response)
 }
 
+export async function fetchSessionConfig(fileId, token, isPublic = false) {
+  const response = await fetch(`${API_BASE}/sessions/${fileId}`, {
+    headers: isPublic ? {} : createHeaders(token),
+  })
+
+  return parseJsonResponse(response)
+}
+
 export async function updateExperimentPublicStatus(fileId, makePublic, token) {
   const response = await fetch(`${API_BASE}/files/${fileId}?public=${makePublic}`, {
     method: 'PATCH',
@@ -114,6 +122,21 @@ export async function deleteExperiment(fileId, token) {
   })
 
   return parseJsonResponse(response)
+}
+
+export async function convertInstrumentFiles(files) {
+  const form = new FormData()
+
+  files.forEach((file) => {
+    form.append('files', file)
+  })
+
+  const response = await fetch(`${API_BASE}/convert`, {
+    method: 'POST',
+    body: form,
+  })
+
+  return parseTextResponse(response)
 }
 
 export async function uploadCalrFile(convertedCSV, experimentName, description, token, isPublic = false) {
@@ -146,6 +169,33 @@ export async function uploadSessionFile(submissionId, sessionPayload, token) {
       submission_id: submissionId,
       ...sessionPayload,
     }),
+  })
+
+  return parseJsonResponse(response)
+}
+
+export async function updateSessionFile(sessionId, submissionId, sessionPayload, token) {
+  const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+    method: 'PUT',
+    headers: createHeaders(token, {
+      'Content-Type': 'application/json',
+    }),
+    body: JSON.stringify({
+      submission_id: submissionId,
+      ...sessionPayload,
+    }),
+  })
+
+  return parseJsonResponse(response)
+}
+
+export async function updateExperimentMetadata(submissionId, metadataPayload, token) {
+  const response = await fetch(`${API_BASE}/submissions/${submissionId}/metadata`, {
+    method: 'PATCH',
+    headers: createHeaders(token, {
+      'Content-Type': 'application/json',
+    }),
+    body: JSON.stringify(metadataPayload),
   })
 
   return parseJsonResponse(response)

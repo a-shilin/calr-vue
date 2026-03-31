@@ -258,6 +258,226 @@ a {
   margin-bottom: 6px;
 }
 
+.session-builder,
+.session-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-builder {
+  gap: 20px;
+}
+
+.session-step {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.session-step__header {
+  align-items: flex-start;
+}
+
+.session-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.session-subsection__header {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.dropzone {
+  border: 2px dashed #94a3b8;
+  border-radius: 8px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone.dragover {
+  border-color: #2563eb;
+  background: #f8fbff;
+}
+
+.dropzone--compact {
+  padding: 18px 16px;
+}
+
+.dropzone-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upload-summary-grid,
+.group-editor-grid,
+.session-settings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.session-import-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.custom-diet-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #fff;
+  align-items: end;
+}
+
+.custom-diet-editor__actions {
+  align-items: end;
+}
+
+.upload-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.group-editor-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.metadata-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.metadata-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.metadata-grid--display {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.metadata-card {
+  padding: 16px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.metadata-card__header {
+  margin-bottom: 12px;
+}
+
+.metadata-card__files {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metadata-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metadata-display-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.metadata-display-field__label {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.group-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.group-editor-card__header {
+  gap: 12px;
+}
+
+.session-subject-table {
+  min-width: 860px;
+}
+
+.session-subject-table th,
+.session-subject-table td {
+  white-space: nowrap;
+}
+
+.session-subject-table th {
+  text-align: center;
+}
+
+.session-subject-table td:first-child,
+.session-subject-table th:first-child {
+  text-align: left;
+}
+
+.session-radio-cell {
+  text-align: center;
+}
+
+.session-settings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.review-grid .control-stack:last-child {
+  align-self: end;
+}
+
+.session-settings-grid__checkbox {
+  min-height: 38px;
+}
+
 .message-text,
 .muted-copy {
   color: #667085;
@@ -320,5 +540,21 @@ a {
   .controls-panel--tight,
   .login-form {
     width: 100%;
+  }
+
+  .upload-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-diet-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metadata-columns {
+    grid-template-columns: 1fr;
   }
 }

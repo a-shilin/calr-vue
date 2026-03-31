@@ -564,8 +564,14 @@ export default {
       }
     }
 
+    if (this.store.experiment.current && this.store.experiment.sessionRows.length) {
+      this.initializeGroupColors(this.sessionMetadata)
+      this.resetAnalysisControlsForDataset()
+      await this.runInitialAnalyses()
+    }
+
     this.renderPlots()
-    },
+  },
   methods: {
     formatDate,
     async openPublicExperiment(file) {
