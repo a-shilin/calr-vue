@@ -315,10 +315,7 @@ export function inferSessionPayloadFromCalrData(rows) {
     : { lightCycleStart: DEFAULT_LIGHT_CYCLE_START, darkCycleStart: DEFAULT_DARK_CYCLE_START }
 
   return normalizeSessionPayload({
-    groups: [
-      { name: 'WT', diet_name: 'LabDiet 5008', diet_kcal: 3.56 },
-      { name: 'KO', diet_name: 'Research Diet 60 kcal% Fat', diet_kcal: 5.21 },
-    ],
+    groups: [],
     subjects: sortSubjects([...subjects.keys()]).map((subject) => subjects.get(subject)),
     light_cycle_start: cycleStarts.lightCycleStart,
     dark_cycle_start: cycleStarts.darkCycleStart,

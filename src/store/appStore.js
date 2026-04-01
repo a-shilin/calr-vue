@@ -41,10 +41,7 @@ export const appStore = reactive({
     dark_cycle_start: null,
     food_cutoff: 0,
     subjects: {},
-    groups: [
-      { name: 'WT', diet: 0 },
-      { name: 'KO', diet: 1 },
-    ],
+    groups: [],
     dietOptions: [
       { name: 'LabDiet 5008', kcal: 3.56 },
       { name: 'Research Diet 60 kcal% Fat', kcal: 5.21 },
