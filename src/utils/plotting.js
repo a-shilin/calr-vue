@@ -1,4 +1,17 @@
-import Plotly from 'plotly.js-dist-min'
+let plotlyPromise = null
+
+async function getPlotly() {
+  if (!plotlyPromise) {
+    plotlyPromise = import('plotly.js-cartesian-dist-min').then((module) => module.default)
+  }
+
+  return plotlyPromise
+}
+
+async function renderPlot(target, traces, layout, config) {
+  const Plotly = await getPlotly()
+  await Plotly.react(target, traces, layout, config)
+}
 
 function smoothValues(values, windowSize) {
   if (!windowSize || windowSize <= 1) {
@@ -334,7 +347,7 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
     })
   }
 
-  await Plotly.react(
+  await renderPlot(
     target,
     traces,
     {
@@ -468,7 +481,7 @@ export async function renderDistributionPlot(target, rows, variable) {
     })
   })
 
-  await Plotly.react(
+  await renderPlot(
     target,
     traces,
     {
@@ -616,7 +629,7 @@ export async function renderRegressionPlot(target, rows, options, explorerVariab
     })
   })
 
-  await Plotly.react(
+  await renderPlot(
     target,
     traces,
     {
@@ -708,7 +721,7 @@ export async function renderQcPlot(target, qcResults, options = {}) {
       }
     : null
 
-  await Plotly.react(
+  await renderPlot(
     target,
     overallTrace ? [...scatterTraces, ...regressionTraces, overallTrace] : [...scatterTraces, ...regressionTraces],
     {
@@ -751,7 +764,7 @@ export async function renderPowerPlot(target, powerResults, options = {}) {
   const y = curve.map((item) => item.power)
   const palette = ['#ff7f0e', '#d62728', '#8c564b', '#7f7f7f', '#17becf', '#bcbd22', '#e377c2', '#1f77b4']
 
-  await Plotly.react(
+  await renderPlot(
     target,
     [
       {
@@ -875,7 +888,7 @@ export async function renderWeightPlot(target, rows, options = {}) {
     }
   })
 
-  await Plotly.react(
+  await renderPlot(
     target,
     traces,
     {
@@ -1036,7 +1049,7 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
     }
   })
 
-  await Plotly.react(
+  await renderPlot(
     target,
     [
       ...legendTraces,

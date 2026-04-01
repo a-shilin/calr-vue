@@ -1,11 +1,19 @@
 <template>
   <div class="page-column">
     <section class="panel panel--spaced">
-      <strong>Public Datasets</strong>
+      <div v-if="store.auth.token" class="card-tabs">
+        <button class="card-tab" :class="{ active: datasetSourceTab === 'public' }" @click="datasetSourceTab = 'public'">
+          Public Datasets
+        </button>
+        <button class="card-tab" :class="{ active: datasetSourceTab === 'private' }" @click="datasetSourceTab = 'private'">
+          Your Datasets
+        </button>
+      </div>
+      <strong>{{ datasetTableTitle }}</strong>
       <div v-if="loadingPublicFiles" class="empty-state">
         <BSpinner small />
       </div>
-      <BTable v-else-if="store.account.publicFiles.length" :items="store.account.publicFiles" :fields="publicFields" small hover striped>
+      <BTable v-else-if="datasetTableItems.length" :items="datasetTableItems" :fields="publicFields" small hover striped>
         <template #cell(name)="slot">
           {{ slot.item.name || slot.item.title || slot.item.id }}
         </template>
@@ -17,13 +25,20 @@
         </template>
         <template #cell(actions)="slot">
           <BBadge v-if="isSelectedDataset(slot.item)" variant="success">Selected</BBadge>
-          <BButton v-else size="sm" variant="primary" @click="openPublicExperiment(slot.item)">
+          <BButton
+            v-else
+            size="sm"
+            variant="primary"
+            @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
+          >
             <BSpinner v-if="slot.item.loading" small />
             <span v-else>Open</span>
           </BButton>
         </template>
       </BTable>
-      <div v-else class="empty-state">No public datasets found.</div>
+      <div v-else class="empty-state">
+        {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
+      </div>
     </section>
 
     <div v-if="!store.experiment.current" class="empty-state panel">
@@ -307,7 +322,7 @@
       <section class="plot-row">
         <aside class="controls-panel">
           <strong>Ancova</strong>
-          <div class="muted-copy">Backend ANCOVA output is shown as raw JSON for now.</div>
+          <div class="muted-copy">ANCOVA and ANOVA summaries are generated from the backend response.</div>
           <BButton size="sm" variant="outline-secondary" :disabled="store.loaders.doAncova || !analysisDirty.ancova" @click="runAncova">
             <BSpinner v-if="store.loaders.doAncova" small />
             <span v-else>Run Ancova</span>
@@ -316,7 +331,90 @@
           <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <pre v-if="store.experiment.ancovaResults" class="result-pre">{{ prettyAncova }}</pre>
+          <div v-if="store.experiment.ancovaResults" class="ancova-report">
+            <div>
+              <div v-if="ancovaMassVariableLabel" class="ancova-report__meta">
+                Mass effect: {{ ancovaMassVariableLabel }}
+              </div>
+              <div class="ancova-report__meta">
+                Signif. codes: &lt;0.001 `***`, &lt;0.01 `**`, &lt;0.05 `*`
+              </div>
+            </div>
+
+            <section v-if="ancovaSummaryRows.length" class="ancova-block">
+              <h3 class="ancova-block__title">ANCOVA / GLM</h3>
+              <div class="table-wrap">
+                <table class="data-table ancova-table">
+                  <thead>
+                    <tr>
+                      <th rowspan="2" class="ancova-table__effect-header">Effect</th>
+                      <th v-for="period in ancovaPeriods" :key="`ancova-period-${period}`" :colspan="ancovaEffects.length" class="txt-center">
+                        {{ formatAnalysisPeriodLabel(period) }}
+                      </th>
+                    </tr>
+                    <tr>
+                      <template v-for="period in ancovaPeriods" :key="`ancova-columns-${period}`">
+                        <th v-for="effect in ancovaEffects" :key="`ancova-${period}-${effect}`" class="txt-center">
+                          {{ formatAnalysisEffectLabel(effect) }}
+                        </th>
+                      </template>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in ancovaSummaryRows" :key="`ancova-row-${row.variable}`">
+                      <td class="ancova-table__effect-label">{{ row.label }}</td>
+                      <template v-for="period in ancovaPeriods" :key="`ancova-values-${row.variable}-${period}`">
+                        <td
+                          v-for="effect in ancovaEffects"
+                          :key="`ancova-value-${row.variable}-${period}-${effect}`"
+                          class="txt-center"
+                        >
+                          {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
+                        </td>
+                      </template>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section v-if="anovaSummaryRows.length" class="ancova-block">
+              <h3 class="ancova-block__title">ANOVA</h3>
+              <div class="table-wrap">
+                <table class="data-table ancova-table">
+                  <thead>
+                    <tr>
+                      <th rowspan="2" class="ancova-table__effect-header">Effect</th>
+                      <th v-for="period in anovaPeriods" :key="`anova-period-${period}`" :colspan="anovaEffects.length" class="txt-center">
+                        {{ formatAnalysisPeriodLabel(period) }}
+                      </th>
+                    </tr>
+                    <tr>
+                      <template v-for="period in anovaPeriods" :key="`anova-columns-${period}`">
+                        <th v-for="effect in anovaEffects" :key="`anova-${period}-${effect}`" class="txt-center">
+                          {{ formatAnalysisEffectLabel(effect) }}
+                        </th>
+                      </template>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in anovaSummaryRows" :key="`anova-row-${row.variable}`">
+                      <td class="ancova-table__effect-label">{{ row.label }}</td>
+                      <template v-for="period in anovaPeriods" :key="`anova-values-${row.variable}-${period}`">
+                        <td
+                          v-for="effect in anovaEffects"
+                          :key="`anova-value-${row.variable}-${period}-${effect}`"
+                          class="txt-center"
+                        >
+                          {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
+                        </td>
+                      </template>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
           <div v-else class="plot-placeholder">Run Ancova to populate this section.</div>
         </div>
       </section>
@@ -328,7 +426,7 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchDataFile, fetchPublicFiles, fetchSessionFile, runAnalysis } from '../services/registryService'
+import { fetchDataFile, fetchPublicFiles, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { attachSessionMetadata, ensureExpMinute, parseCsv, preprocessDetail, preprocessSession } from '../utils/csv'
 import { formatDate } from '../utils/format'
 import { renderDistributionPlot, renderPowerPlot, renderQcPlot, renderRegressionPlot, renderTimeSeriesPlot, renderWeightPlot } from '../utils/plotting'
@@ -345,6 +443,7 @@ export default {
     return {
       store: appStore,
       publicFields: ['name', 'description', 'uploaded_at', 'actions'],
+      datasetSourceTab: 'public',
       explorerVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
@@ -448,8 +547,31 @@ export default {
       const availableColumns = new Set(Object.keys(this.store.experiment.detailRows[0] || {}))
       return this.explorerVariables.filter((variable) => availableColumns.has(variable.field))
     },
-    prettyAncova() {
-      return JSON.stringify(this.store.experiment.ancovaResults, null, 2)
+    ancovaMassVariableLabel() {
+      const massVariable = this.store.experiment.ancovaResults?.mass_variable
+      if (!massVariable) {
+        return ''
+      }
+
+      return this.lookupVariableLabel(massVariable)
+    },
+    ancovaPeriods() {
+      return this.collectAnalysisPeriods(this.store.experiment.ancovaResults?.ancova || [])
+    },
+    ancovaEffects() {
+      return this.collectAnalysisEffects(this.store.experiment.ancovaResults?.ancova || [])
+    },
+    ancovaSummaryRows() {
+      return this.normalizeAnalysisRows(this.store.experiment.ancovaResults?.ancova || [], this.ancovaPeriods)
+    },
+    anovaPeriods() {
+      return this.collectAnalysisPeriods(this.store.experiment.ancovaResults?.anova || [])
+    },
+    anovaEffects() {
+      return this.collectAnalysisEffects(this.store.experiment.ancovaResults?.anova || [])
+    },
+    anovaSummaryRows() {
+      return this.normalizeAnalysisRows(this.store.experiment.ancovaResults?.anova || [], this.anovaPeriods)
     },
     powerGroupTableRows() {
       const result = this.store.experiment.powerResults
@@ -480,6 +602,12 @@ export default {
     },
     powerCurveTableColumns() {
       return this.powerCurveTableRows.length ? ['sample.size', 'power'] : []
+    },
+    datasetTableItems() {
+      return this.datasetSourceTab === 'private' ? this.store.account.userFiles : this.store.account.publicFiles
+    },
+    datasetTableTitle() {
+      return this.datasetSourceTab === 'private' ? 'Your Private Datasets' : 'Public Datasets'
     },
   },
   watch: {
@@ -552,8 +680,16 @@ export default {
         this.renderPlots()
       },
     },
+    'store.experiment.current': {
+      deep: true,
+      handler() {
+        this.syncDatasetSourceTab()
+      },
+    },
   },
   async mounted() {
+    this.syncDatasetSourceTab()
+
     if (!this.store.account.publicFiles.length) {
       this.loadingPublicFiles = true
       try {
@@ -564,9 +700,15 @@ export default {
       }
     }
 
+    if (this.store.auth.token && !this.store.account.userFiles.length) {
+      await this.loadPrivateFiles()
+    }
+
     if (this.store.experiment.current && this.store.experiment.sessionRows.length) {
+      this.ensureExperimentAnalysisCache()
       this.initializeGroupColors(this.sessionMetadata)
       this.resetAnalysisControlsForDataset()
+      this.syncAnalysisDirtyWithStoredResults()
       await this.runInitialAnalyses()
     }
 
@@ -574,7 +716,133 @@ export default {
   },
   methods: {
     formatDate,
-    async openPublicExperiment(file) {
+    syncDatasetSourceTab() {
+      if (this.store.auth.token && this.store.experiment.current && !this.store.experiment.current.public) {
+        this.datasetSourceTab = 'private'
+        return
+      }
+
+      this.datasetSourceTab = 'public'
+    },
+    async loadPrivateFiles() {
+      const files = await fetchUserFiles(this.store.auth.token)
+      this.store.account.userFiles = files.map((file) => ({ ...file, loading: false }))
+    },
+    lookupVariableLabel(variable) {
+      const labelMaps = [
+        ...this.explorerVariables,
+        ...this.regressionYVariables,
+        ...this.regressionXVariables,
+      ]
+
+      return labelMaps.find((entry) => entry.field === variable)?.label || variable
+    },
+    collectAnalysisPeriods(rows) {
+      const periods = new Set()
+
+      rows.forEach((row) => {
+        Object.entries(row || {}).forEach(([key, value]) => {
+          if (key !== 'variable' && key !== 'label' && value && typeof value === 'object' && !Array.isArray(value)) {
+            periods.add(key)
+          }
+        })
+      })
+
+      const preferredOrder = ['full_day', 'light', 'dark']
+      return [...periods].sort((left, right) => {
+        const leftIndex = preferredOrder.indexOf(left)
+        const rightIndex = preferredOrder.indexOf(right)
+
+        if (leftIndex === -1 && rightIndex === -1) {
+          return left.localeCompare(right)
+        }
+
+        if (leftIndex === -1) {
+          return 1
+        }
+
+        if (rightIndex === -1) {
+          return -1
+        }
+
+        return leftIndex - rightIndex
+      })
+    },
+    collectAnalysisEffects(rows) {
+      const effects = new Set()
+
+      rows.forEach((row) => {
+        Object.values(row || {}).forEach((value) => {
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            Object.keys(value).forEach((effect) => effects.add(effect))
+          }
+        })
+      })
+
+      const preferredOrder = ['mass', 'group', 'interaction']
+      return [...effects].sort((left, right) => {
+        const leftIndex = preferredOrder.indexOf(left)
+        const rightIndex = preferredOrder.indexOf(right)
+
+        if (leftIndex === -1 && rightIndex === -1) {
+          return left.localeCompare(right)
+        }
+
+        if (leftIndex === -1) {
+          return 1
+        }
+
+        if (rightIndex === -1) {
+          return -1
+        }
+
+        return leftIndex - rightIndex
+      })
+    },
+    normalizeAnalysisRows(rows, periods) {
+      return rows.map((row, index) => ({
+        variable: row.variable || `row-${index}`,
+        label: row.label || this.lookupVariableLabel(row.variable) || `Effect ${index + 1}`,
+        periods: periods.reduce((accumulator, period) => {
+          accumulator[period] = row[period] || {}
+          return accumulator
+        }, {}),
+      }))
+    },
+    formatAnalysisPeriodLabel(period) {
+      return `${period}`.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+    },
+    formatAnalysisEffectLabel(effect) {
+      return `${effect}`.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+    },
+    formatAnalysisPValue(value) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return ''
+      }
+
+      const numericValue = Number(value)
+      const stars = numericValue < 0.001 ? ' ***' : numericValue < 0.01 ? ' **' : numericValue < 0.05 ? ' *' : ''
+      return `${numericValue.toFixed(4)}${stars}`
+    },
+    getCurrentSessionId() {
+      return this.store.experiment.current?.files?.find((file) => file.file_type === 'session')?.id ?? null
+    },
+    ensureExperimentAnalysisCache() {
+      const sessionId = this.getCurrentSessionId()
+      if (!sessionId) {
+        return
+      }
+
+      if (this.store.experiment.analysisSessionId === sessionId) {
+        return
+      }
+
+      this.store.experiment.analysisSessionId = sessionId
+      this.store.experiment.qcResults = null
+      this.store.experiment.powerResults = null
+      this.store.experiment.ancovaResults = null
+    },
+    async openExperimentForAnalysis(file, isPublic) {
       const session = file.files.find((item) => item.file_type === 'session')
       const standard = file.files.find((item) => item.file_type === 'standard')
 
@@ -585,8 +853,8 @@ export default {
       file.loading = true
       try {
         const [dataCsv, sessionCsv] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, true),
-          fetchSessionFile(session.id, this.store.auth.token, true),
+          fetchDataFile(standard.id, this.store.auth.token, isPublic),
+          fetchSessionFile(session.id, this.store.auth.token, isPublic),
         ])
 
         const detailRows = preprocessDetail(ensureExpMinute(parseCsv(dataCsv)), numericalColumns)
@@ -595,13 +863,22 @@ export default {
         this.store.experiment.current = file
         this.store.experiment.detailRows = detailRows
         this.store.experiment.sessionRows = parsedSessionRows
+        this.syncDatasetSourceTab()
+        this.ensureExperimentAnalysisCache()
         this.initializeGroupColors(preprocessSession(parsedSessionRows))
         this.resetAnalysisControlsForDataset()
+        this.syncAnalysisDirtyWithStoredResults()
         this.powerViewTab = 'plot'
         await this.runInitialAnalyses()
       } finally {
         file.loading = false
       }
+    },
+    async openPublicExperiment(file) {
+      await this.openExperimentForAnalysis(file, true)
+    },
+    async openPrivateExperiment(file) {
+      await this.openExperimentForAnalysis(file, false)
     },
     renderPlots() {
       this.$nextTick(() => {
@@ -842,12 +1119,29 @@ export default {
         this.suppressAnalysisDirtyWatch = false
       })
     },
+    syncAnalysisDirtyWithStoredResults() {
+      this.analysisDirty.qc = !this.store.experiment.qcResults
+      this.analysisDirty.power = !this.store.experiment.powerResults
+      this.analysisDirty.ancova = !this.store.experiment.ancovaResults
+    },
     async runInitialAnalyses() {
-      await Promise.all([
-        this.runQc(),
-        this.runPower(),
-        this.runAncova(),
-      ])
+      const pendingRuns = []
+
+      if (!this.store.experiment.qcResults) {
+        pendingRuns.push(this.runQc())
+      }
+
+      if (!this.store.experiment.powerResults) {
+        pendingRuns.push(this.runPower())
+      }
+
+      if (!this.store.experiment.ancovaResults) {
+        pendingRuns.push(this.runAncova())
+      }
+
+      if (pendingRuns.length) {
+        await Promise.all(pendingRuns)
+      }
     },
   },
 }

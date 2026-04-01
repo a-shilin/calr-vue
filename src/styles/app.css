@@ -150,6 +150,7 @@ a {
 }
 
 .controls-panel {
+  min-width: 300px;
   width: 300px;
   padding: 16px;
   display: flex;
@@ -171,7 +172,7 @@ a {
 }
 
 .result-pre {
-  min-height: 420px;
+  height: 420px;
   margin: 0;
   overflow: auto;
   background: #f8fafc;
@@ -186,6 +187,58 @@ a {
   justify-content: center;
   color: #667085;
   min-height: 200px;
+}
+
+.ancova-report {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 420px;
+  padding: 8px 0;
+}
+
+.ancova-report__meta {
+  text-align: center;
+  color: #334155;
+}
+
+.ancova-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ancova-block__title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.8rem;
+  letter-spacing: 0.03em;
+}
+
+.ancova-table {
+  width: 100%;
+}
+
+.ancova-table th,
+.ancova-table td {
+  padding: 0 5px !important;
+  vertical-align: bottom !important;
+}
+
+.ancova-table thead th {
+  background: #fff;
+  border-top: none;
+}
+
+.ancova-table__effect-header,
+.ancova-table__effect-label {
+    font-style: italic;
+    text-align: right;
+}
+
+.ancova-table__effect-label {
+  white-space: nowrap;
+  text-align: right;
 }
 
 .control-stack {
@@ -245,21 +298,76 @@ a {
 
 .card-tabs {
   display: flex;
-  gap: 8px;
-  padding: 12px 12px 0;
+  gap: 5px;
+  border-bottom: 1px solid #ccc;
 }
 
 .card-tab {
-  padding: 6px 10px;
+  padding: 10px 20px;
   border: 1px solid #cbd5e1;
   border-bottom: none;
   border-radius: 6px 6px 0 0;
-  background: #f8fafc;
+  background: #ddd;
 }
 
 .card-tab.active {
   background: #ffffff;
   font-weight: 600;
+  border-bottom: 1px solid white;
+  margin-bottom: -1px;
+}
+
+.card-tab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.accordion-step {
+  border: 1px solid #d5d9dd;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.accordion-step + .accordion-step {
+  margin-top: 0;
+}
+
+.accordion-step__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 0;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.accordion-step--open .accordion-step__toggle {
+  background: #eef3f8;
+}
+
+.accordion-step__body {
+  padding: 16px;
+}
+
+.builder-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.builder-fieldset:disabled {
+  opacity: 0.65;
+}
+
+.session-step__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .power-tables {
@@ -288,11 +396,10 @@ a {
 }
 
 .session-builder {
-  gap: 20px;
+  gap: 10px;
 }
 
 .session-step {
-  padding: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   background: #fafbfc;
@@ -565,7 +672,7 @@ a {
 }
 
 .table-card {
-    padding: 0 12px;
+    padding: 0 12px 12px 12px;
     border: 1px solid #d8dee6;
     border-radius: 6px;
     display: flex;
@@ -593,6 +700,9 @@ a {
 .txt-center{
   text-align: center;
 }
+.txt-right{
+  text-align: right;
+}
 .relative{
   position: relative;
 }
@@ -615,6 +725,42 @@ a {
     height: stretch;
 }
 
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 24px;
+}
+
+.confirm-dialog {
+  width: min(480px, 100%);
+  background: #fff;
+  border: 1px solid #d5d9dd;
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.confirm-dialog__body {
+  color: #475467;
+  line-height: 1.5;
+}
+
+.confirm-dialog__actions {
+  justify-content: flex-end;
+}
+
+.btn-info{
+  color:white;
+}
+
 .app-content input,
 .app-content select,
 .app-content textarea,
@@ -631,6 +777,7 @@ a {
   background: #fff;
 }
 
+/*
 @media (max-width: 960px) {
   .page-grid--two,
   .dataset-grid,
@@ -664,3 +811,4 @@ a {
     grid-template-columns: 1fr;
   }
 }
+*/

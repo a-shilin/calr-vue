@@ -12,7 +12,7 @@
     "bootstrap": "^5.3.3",
     "bootstrap-vue-next": "^0.24.23",
     "papaparse": "^5.4.1",
-    "plotly.js-dist-min": "^3.0.1",
+    "plotly.js-cartesian-dist-min": "^3.4.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

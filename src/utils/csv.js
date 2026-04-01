@@ -235,6 +235,11 @@ export function preprocessSession(rows) {
 }
 
 export function normalizeSessionPayload(payload = {}) {
+  const normalizeHourValue = (value, fallback) => {
+    const parsed = toNullableNumber(value)
+    return parsed === null ? fallback : Math.floor(parsed)
+  }
+
   const groups = (Array.isArray(payload.groups) && payload.groups.length
     ? payload.groups
     : [
@@ -274,8 +279,8 @@ export function normalizeSessionPayload(payload = {}) {
     dark_cycle_start: toNullableNumber(payload.dark_cycle_start) ?? DEFAULT_DARK_CYCLE_START,
     hour_range: Array.isArray(payload.hour_range) && payload.hour_range.length === 2
       ? [
-          toNullableNumber(payload.hour_range[0]) ?? 0,
-          toNullableNumber(payload.hour_range[1]) ?? 24,
+          normalizeHourValue(payload.hour_range[0], 0),
+          normalizeHourValue(payload.hour_range[1], 24),
         ]
       : [0, 24],
     food_cutoff: toNullableNumber(payload.food_cutoff) ?? 0,
