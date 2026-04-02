@@ -169,6 +169,33 @@ function sumValues(values) {
   return values.reduce((sum, value) => sum + value, 0)
 }
 
+function standardDeviation(values) {
+  if (values.length <= 1) {
+    return 0
+  }
+
+  const avg = mean(values)
+  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1)
+  return Math.sqrt(variance)
+}
+
+function quantile(sortedValues, q) {
+  if (!sortedValues.length) {
+    return null
+  }
+
+  const position = (sortedValues.length - 1) * q
+  const lowerIndex = Math.floor(position)
+  const upperIndex = Math.ceil(position)
+
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex]
+  }
+
+  const weight = position - lowerIndex
+  return sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight
+}
+
 function mode(values) {
   if (!values.length) {
     return null
@@ -260,14 +287,14 @@ function aggregateBucketVariable(variable, values, per) {
     return null
   }
 
-  const useSum = ['feed', 'drink', 'eb'].includes(variable)
+  const useSum = ['feed', 'drink'].includes(variable)
   const useMax = ['feed.acc', 'drink.acc', 'ee.acc', 'eb.acc', 'pedmeter', 'allmeter', 'wheel.acc'].includes(variable)
 
   if (useMax) {
     return maxValue(numericValues)
   }
 
-  if (useSum && (per === 'day' || per === 'light')) {
+  if (useSum) {
     return sumValues(numericValues)
   }
 
@@ -350,6 +377,63 @@ export function fillAccumulatorColumns(rows) {
   })
 
   return completedRows
+}
+
+function applyDefaultOutlierRemoval(detailRows) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  const rmColumns = ['vo2', 'vco2', 'ee', 'rer', 'body.temp']
+  const stats = {}
+
+  rmColumns.forEach((column) => {
+    const values = detailRows
+      .map((row) => toNullableNumber(row[column]))
+      .filter((value) => value !== null)
+
+    stats[column] = {
+      mean: mean(values),
+      sd: standardDeviation(values),
+    }
+  })
+
+  const cleaned = detailRows.map((row) => {
+    const nextRow = { ...row }
+
+    rmColumns.forEach((column) => {
+      const value = toNullableNumber(nextRow[column])
+      const columnMean = stats[column].mean
+      const columnSd = stats[column].sd
+
+      if (value === null || columnMean === null || !columnSd) {
+        return
+      }
+
+      const isOutlier = value > (Math.abs(columnMean) + (3 * columnSd)) || value < (Math.abs(columnMean) - (3 * columnSd))
+
+      if (isOutlier) {
+        nextRow[column] = null
+      }
+    })
+
+    const hasPrimaryNa =
+      nextRow.vo2 === null
+      || nextRow.vco2 === null
+      || nextRow.ee === null
+      || nextRow.rer === null
+
+    if (hasPrimaryNa) {
+      nextRow.vo2 = null
+      nextRow.vco2 = null
+      nextRow.ee = null
+      nextRow.rer = null
+    }
+
+    return nextRow
+  })
+
+  return fillAccumulatorColumns(cleaned)
 }
 
 export function ensureExpMinute(rows) {
@@ -813,6 +897,130 @@ export function buildTimeSeriesDataset(detailRows) {
     groupedRows,
     subjectRows,
   }
+}
+
+export function buildBoxPlotDataset(detailRows, variable) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  const outlierHandledRows = applyDefaultOutlierRemoval(detailRows)
+  const hourlyVariables = variable === 'eb' ? ['feed', 'ee'] : [variable]
+
+  const hourlyRows = aggregateDetailRows(outlierHandledRows, {
+    per: 'hour',
+    grp: false,
+    variables: hourlyVariables,
+  })
+
+  const subjectPeriods = new Map()
+
+  hourlyRows.forEach((row) => {
+    const subjectId = row['subject.id']
+    const baseKey = `${subjectId}::${row.groupName || 'Unknown'}`
+    const periodBuckets = [
+      { period: 'Total', include: true },
+      { period: 'Dark', include: Number(row.light) === 0 },
+      { period: 'Light', include: Number(row.light) === 1 },
+    ]
+
+    periodBuckets.forEach(({ period, include }) => {
+      if (!include) {
+        return
+      }
+
+      const key = `${baseKey}::${period}`
+      const value = variable === 'eb'
+        ? (row.feed === null || row.ee === null ? null : row.feed - row.ee)
+        : row[variable]
+
+      if (value === null || Number.isNaN(value)) {
+        return
+      }
+
+      if (!subjectPeriods.has(key)) {
+        subjectPeriods.set(key, {
+          period,
+          groupName: row.groupName || 'Unknown',
+          color: row.color || '#888',
+          subjectId,
+          values: [],
+        })
+      }
+
+      subjectPeriods.get(key).values.push(value)
+    })
+  })
+
+  const periodOrder = ['Total', 'Dark', 'Light']
+  const subjectEntries = [...subjectPeriods.values()]
+    .map((entry) => ({
+      period: entry.period,
+      groupName: entry.groupName,
+      color: entry.color,
+      'subject.id': entry.subjectId,
+      value: mean(entry.values),
+    }))
+    .filter((entry) => entry.value !== null && !Number.isNaN(entry.value))
+
+  const buckets = new Map()
+
+  subjectEntries.forEach((entry) => {
+    const key = `${entry.groupName}::${entry.period}`
+    if (!buckets.has(key)) {
+      buckets.set(key, [])
+    }
+    buckets.get(key).push(entry.value)
+  })
+
+  const thresholds = new Map()
+
+  buckets.forEach((values, key) => {
+    if (values.length < 5) {
+      thresholds.set(key, null)
+      return
+    }
+
+    const sorted = [...values].sort((left, right) => left - right)
+    const q1 = quantile(sorted, 0.25)
+    const q3 = quantile(sorted, 0.75)
+
+    if (q1 === null || q3 === null) {
+      thresholds.set(key, null)
+      return
+    }
+
+    const iqr = q3 - q1
+
+    thresholds.set(key, {
+      lower: q1 - (1.5 * iqr),
+      upper: q3 + (1.5 * iqr),
+    })
+  })
+
+  return subjectEntries
+    .filter((entry) => {
+      const threshold = thresholds.get(`${entry.groupName}::${entry.period}`)
+
+      if (!threshold) {
+        return true
+      }
+
+      return entry.value >= threshold.lower && entry.value <= threshold.upper
+    })
+    .sort((left, right) => {
+      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
+      if (periodDiff) {
+        return periodDiff
+      }
+
+      const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
+      if (groupDiff) {
+        return groupDiff
+      }
+
+      return String(left['subject.id']).localeCompare(String(right['subject.id']))
+    })
 }
 
 export function normalizeSessionPayload(payload = {}) {

@@ -133,7 +133,7 @@
           <label class="control-stack">
             Metabolic Variable
             <select v-model="distributionVariable">
-              <option v-for="variable in explorerVariables" :key="variable.field" :value="variable.field">
+              <option v-for="variable in boxPlotVariables" :key="variable.field" :value="variable.field">
                 {{ variable.label }}
               </option>
             </select>
@@ -430,8 +430,9 @@ import { fetchDataFile, fetchPublicFiles, fetchSessionFile, fetchUserFiles, runA
 import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
 import { fillAccumulatorColumns, preprocessSession, processDetail } from '../utils/process'
+import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { renderTimeSeriesPlot } from '../utils/plotting/time-series'
-import { renderDistributionPlot, renderPowerPlot, renderQcPlot, renderRegressionPlot, renderWeightPlot } from '../utils/plotting'
+import { renderPowerPlot, renderQcPlot, renderRegressionPlot, renderWeightPlot } from '../utils/plotting'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -479,6 +480,19 @@ export default {
         { field: 'allmeter', label: 'Distance in Cage (m)' },
         { field: 'body.temp', label: 'Body Temperature (C)' },
         { field: 'subject.mass', label: 'Body Mass (g)' },
+      ],
+      boxPlotVariables: [
+        { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
+        { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
+        { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
+        { field: 'eb', label: 'Energy Balance (kcal/hr)' },
+        { field: 'rer', label: 'Respiratory Exchange Ratio' },
+        { field: 'feed', label: 'Food Intake (kcal/hr)' },
+        { field: 'drink', label: 'Water Intake (ml)' },
+        { field: 'xytot', label: 'Locomotor Activity (beam breaks)' },
+        { field: 'pedmeter', label: 'Pedestrian Locomotion (m)' },
+        { field: 'allmeter', label: 'Distance in Cage (m)' },
+        { field: 'body.temp', label: 'Body Temperature (C)' },
       ],
       regressionYVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
@@ -924,8 +938,8 @@ export default {
       )
     },
     async renderDistribution() {
-      const yLabel = this.explorerVariables.find((variable) => variable.field === this.distributionVariable)?.label || this.distributionVariable
-      await renderDistributionPlot(this.$refs.distributionPlot, this.detailRowsWithGroups, this.distributionVariable, {
+      const yLabel = this.boxPlotVariables.find((variable) => variable.field === this.distributionVariable)?.label || this.distributionVariable
+      await renderBoxPlot(this.$refs.distributionPlot, this.detailRowsWithGroups, this.distributionVariable, {
         yLabel,
       })
     },
