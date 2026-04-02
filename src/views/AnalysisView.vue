@@ -1017,11 +1017,8 @@ export default {
       const stars = numericValue < 0.001 ? ' ***' : numericValue < 0.01 ? ' **' : numericValue < 0.05 ? ' *' : ''
       return `${numericValue.toFixed(4)}${stars}`
     },
-    getCurrentSessionId() {
-      return this.store.experiment.current?.files?.find((file) => file.file_type === 'session')?.id ?? null
-    },
     ensureExperimentAnalysisCache() {
-      const sessionId = this.getCurrentSessionId()
+      const sessionId = this.store.experiment.current?.files?.find((file) => file.file_type === 'session')?.id ?? null
       if (!sessionId) {
         return
       }
@@ -1150,7 +1147,7 @@ export default {
         statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
         xLabel,
         yLabel,
-      }, this.explorerVariables)
+      })
     },
     async runQc() {
       if (!this.store.experiment.current) {
