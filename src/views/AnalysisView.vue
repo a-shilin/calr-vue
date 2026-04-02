@@ -75,7 +75,7 @@
           <label class="control-stack">
             Metabolic Variable
             <select v-model="timeOptions.yVar">
-              <option v-for="variable in explorerVariables" :key="variable.field" :value="variable.field">
+              <option v-for="variable in timeSeriesVariables" :key="variable.field" :value="variable.field">
                 {{ variable.label }}
               </option>
             </select>
@@ -427,9 +427,11 @@
 <script>
 import { appStore } from '../store/appStore'
 import { fetchDataFile, fetchPublicFiles, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
-import { attachSessionMetadata, ensureExpMinute, parseCsv, preprocessDetail, preprocessSession } from '../utils/csv'
+import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
-import { renderDistributionPlot, renderPowerPlot, renderQcPlot, renderRegressionPlot, renderTimeSeriesPlot, renderWeightPlot } from '../utils/plotting'
+import { fillAccumulatorColumns, preprocessSession, processDetail } from '../utils/process'
+import { renderTimeSeriesPlot } from '../utils/plotting/time-series'
+import { renderDistributionPlot, renderPowerPlot, renderQcPlot, renderRegressionPlot, renderWeightPlot } from '../utils/plotting'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -448,10 +450,6 @@ export default {
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
         { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
-        { field: 'ee.acc', label: 'Cumulative Energy Expenditure (kcal)' },
-        { field: 'rer', label: 'Respiratory Exchange Ratio' },
-        { field: 'feed', label: 'Food Intake (kcal/hr)' },
-        { field: 'feed.acc', label: 'Cumulative Food Intake (kcal)' },
         { field: 'drink', label: 'Water Intake (ml)' },
         { field: 'drink.acc', label: 'Cumulative Water Intake (ml)' },
         { field: 'xytot', label: 'Locomotor Activity (beam breaks)' },
@@ -463,6 +461,24 @@ export default {
         { field: 'wheel.acc', label: 'Total Wheel Running (counts)' },
         { field: 'subject.mass', label: 'Body Mass (g)' },
         { field: 'enviro.temp', label: 'Environmental Temperature (C)' },
+      ],
+      timeSeriesVariables: [
+        { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
+        { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
+        { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
+        { field: 'ee.acc', label: 'Cumulative Energy Expenditure (kcal)' },
+        { field: 'eb', label: 'Energy Balance (kcal/hr)' },
+        { field: 'eb.acc', label: 'Cumulative Energy Balance (kcal)' },
+        { field: 'rer', label: 'Respiratory Exchange Ratio' },
+        { field: 'feed', label: 'Food Intake (kcal/hr)' },
+        { field: 'feed.acc', label: 'Cumulative Food Intake (kcal)' },
+        { field: 'drink', label: 'Water Intake (ml)' },
+        { field: 'drink.acc', label: 'Cumulative Water Intake (ml)' },
+        { field: 'xytot', label: 'Locomotor Activity (beam breaks)' },
+        { field: 'pedmeter', label: 'Pedestrian Locomotion (m)' },
+        { field: 'allmeter', label: 'Distance in Cage (m)' },
+        { field: 'body.temp', label: 'Body Temperature (C)' },
+        { field: 'subject.mass', label: 'Body Mass (g)' },
       ],
       regressionYVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
@@ -525,7 +541,7 @@ export default {
       return hours.length ? Math.ceil(Math.max(...hours)) : 24
     },
     detailRowsWithGroups() {
-      return attachSessionMetadata(this.store.experiment.detailRows, this.sessionMetadata).map((row) => ({
+      return fillAccumulatorColumns(this.store.experiment.detailRows).map((row) => ({
         ...row,
         color: this.groupColors[row.groupName] || row.color,
       }))
@@ -857,8 +873,13 @@ export default {
           fetchSessionFile(session.id, this.store.auth.token, isPublic),
         ])
 
-        const detailRows = preprocessDetail(ensureExpMinute(parseCsv(dataCsv)), numericalColumns)
         const parsedSessionRows = parseCsv(sessionCsv)
+        const sessionMetadata = preprocessSession(parsedSessionRows)
+        const detailRows = processDetail(parseCsv(dataCsv), {
+          numericalColumns,
+          session: sessionMetadata,
+          sessionRows: parsedSessionRows,
+        })
 
         this.store.experiment.current = file
         this.store.experiment.detailRows = detailRows
@@ -899,7 +920,7 @@ export default {
           ...this.timeOptions,
           rangeEnd: Math.min(this.timeOptions.rangeEnd, this.maxHour),
         },
-        this.explorerVariables,
+        this.timeSeriesVariables,
       )
     },
     async renderDistribution() {

@@ -725,6 +725,10 @@ import {
   uploadSessionFile,
 } from '../services/registryService'
 import {
+  parseCsv,
+} from '../utils/csv'
+import { formatDate, formatFileSize } from '../utils/format'
+import {
   DEFAULT_GROUP_COLORS,
   ensureEnviroLight,
   ensureExpMinute,
@@ -732,10 +736,8 @@ import {
   inferSessionPayloadFromCalrData,
   mergeSessionCsvIntoPayload,
   normalizeSessionPayload,
-  parseCsv,
-  preprocessDetail,
-} from '../utils/csv'
-import { formatDate, formatFileSize } from '../utils/format'
+  processDetail,
+} from '../utils/process'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -1605,17 +1607,14 @@ export default {
           fetchSessionFile(session.id, this.store.auth.token, file.public),
         ])
 
-        let detailRows = parseCsv(dataCsv)
-        detailRows = ensureExpMinute(detailRows)
-
         const sessionRows = parseCsv(sessionCsv)
-        const cycleStarts = getSessionCycleStartsFromRows(sessionRows)
-        if (!detailRows[0]?.['enviro.light']) {
-          detailRows = ensureEnviroLight(detailRows, cycleStarts.lightCycleStart, cycleStarts.darkCycleStart)
-        }
+        const detailRows = processDetail(parseCsv(dataCsv), {
+          numericalColumns,
+          sessionRows,
+        })
 
         this.store.experiment.current = file
-        this.store.experiment.detailRows = preprocessDetail(detailRows, numericalColumns)
+        this.store.experiment.detailRows = detailRows
         this.store.experiment.sessionRows = sessionRows
         if (this.store.experiment.analysisSessionId !== session.id) {
           this.store.experiment.analysisSessionId = session.id

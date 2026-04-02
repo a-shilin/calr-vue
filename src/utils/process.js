@@ -1,0 +1,1041 @@
+const DEFAULT_LIGHT_CYCLE_START = 7
+const DEFAULT_DARK_CYCLE_START = 19
+
+export const DEFAULT_GROUP_COLORS = ['#3B73C7', '#ED5F00', '#2F9E44', '#7A52A5']
+
+function isBlank(value) {
+  return value === null || value === undefined || `${value}`.trim() === '' || `${value}`.trim().toUpperCase() === 'NA'
+}
+
+function toNullableNumber(value) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  const number = Number(value)
+  return Number.isNaN(number) ? null : number
+}
+
+function sortSubjects(subjects) {
+  return [...subjects].sort((left, right) =>
+    String(left).localeCompare(String(right), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    }),
+  )
+}
+
+function normalizeSubjectIdentifier(value) {
+  if (isBlank(value)) {
+    return ''
+  }
+
+  return `${value}`.trim()
+}
+
+function subjectIdentifierCandidates(value) {
+  const normalized = normalizeSubjectIdentifier(value)
+
+  if (!normalized) {
+    return []
+  }
+
+  const candidates = [normalized]
+
+  if (normalized.includes('_')) {
+    const parts = normalized.split('_')
+    const suffix = parts[parts.length - 1]
+    if (suffix && suffix !== normalized) {
+      candidates.push(suffix)
+    }
+  }
+
+  return [...new Set(candidates)]
+}
+
+function setMapValueList(map, key, value) {
+  if (!key) {
+    return
+  }
+
+  if (!map.has(key)) {
+    map.set(key, [])
+  }
+
+  map.get(key).push(value)
+}
+
+function getBestMappedValue(map, value) {
+  const candidates = subjectIdentifierCandidates(value)
+
+  for (const candidate of candidates) {
+    const matches = map.get(candidate)
+    if (Array.isArray(matches) && matches.length) {
+      return matches[0]
+    }
+    if (matches !== undefined) {
+      return matches
+    }
+  }
+
+  return undefined
+}
+
+function findTimeKey(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return null
+  }
+
+  if (rows[0]['Date.Time'] !== undefined) {
+    return 'Date.Time'
+  }
+
+  if (rows[0]['Time.Date'] !== undefined) {
+    return 'Time.Date'
+  }
+
+  return null
+}
+
+function resolveSubjectGroupIndex(subjectIdValue, session) {
+  const firstGroupValue = session.groups?.[0]?.[0]
+  const useCompoundSubjectId = typeof firstGroupValue === 'string' && firstGroupValue.includes('_')
+  const normalizedValue = normalizeSubjectIdentifier(subjectIdValue)
+
+  if (!normalizedValue) {
+    return -1
+  }
+
+  const targetId = useCompoundSubjectId ? normalizedValue : normalizedValue.split('_')[0]
+  return session.groups.findIndex((group) => group.includes(targetId))
+}
+
+function computeClockHour(expMinute) {
+  if (expMinute === null) {
+    return null
+  }
+
+  return ((expMinute / 60) % 24 + 24) % 24
+}
+
+function computeCycleDay(expMinute, lightCycleStart) {
+  if (expMinute === null) {
+    return null
+  }
+
+  return Math.floor((expMinute / 60 - lightCycleStart) / 24)
+}
+
+function applySessionFieldFallbacks(row, subjectSession = {}) {
+  return {
+    ...row,
+    'subject.mass': row['subject.mass'] ?? subjectSession.total_mass ?? null,
+    'subject.lean.mass': row['subject.lean.mass'] ?? subjectSession.lean_mass ?? row['Lean.Mass'] ?? null,
+    'subject.fat.mass': row['subject.fat.mass'] ?? subjectSession.fat_mass ?? row['Fat.Mass'] ?? null,
+  }
+}
+
+function mean(values) {
+  if (!values.length) {
+    return null
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function sampleSem(values) {
+  if (values.length <= 1) {
+    return 0
+  }
+
+  const avg = mean(values)
+  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1)
+  return Math.sqrt(variance) / Math.sqrt(values.length)
+}
+
+function maxValue(values) {
+  if (!values.length) {
+    return null
+  }
+
+  return values.reduce((current, value) => (current === null || value > current ? value : current), null)
+}
+
+function sumValues(values) {
+  if (!values.length) {
+    return null
+  }
+
+  return values.reduce((sum, value) => sum + value, 0)
+}
+
+function mode(values) {
+  if (!values.length) {
+    return null
+  }
+
+  const counts = new Map()
+  let bestValue = values[0]
+  let bestCount = 0
+
+  values.forEach((value) => {
+    const count = (counts.get(value) || 0) + 1
+    counts.set(value, count)
+
+    if (count > bestCount) {
+      bestCount = count
+      bestValue = value
+    }
+  })
+
+  return bestValue
+}
+
+function computeMinuteBin(detailRows) {
+  const minutes = detailRows
+    .map((row) => toNullableNumber(row['exp.minute']))
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right)
+
+  if (minutes.length < 2) {
+    return 1
+  }
+
+  const diffs = []
+
+  for (let index = 1; index < minutes.length; index += 1) {
+    const diffMinutes = minutes[index] - minutes[index - 1]
+    if (diffMinutes > 0) {
+      diffs.push(diffMinutes)
+    }
+  }
+
+  const modeDiffMinutes = mode(diffs)
+
+  if (!modeDiffMinutes) {
+    return 1
+  }
+
+  return 60 / modeDiffMinutes
+}
+
+function bucketDescriptor(row, per) {
+  if (per === 'day') {
+    return {
+      key: `${row['subject.id']}::${row.day}`,
+      label: row.day,
+      fields: { day: row.day },
+    }
+  }
+
+  if (per === 'light') {
+    return {
+      key: `${row['subject.id']}::${row.day}::${row.light}`,
+      label: `${row.day}:${row.light}`,
+      fields: { day: row.day, light: row.light },
+    }
+  }
+
+  if (per === 'hour') {
+    const hourBucket = row['exp.hour'] === null ? null : Math.floor(row['exp.hour'])
+    return {
+      key: `${row['subject.id']}::${hourBucket}`,
+      label: hourBucket,
+      fields: { hour: hourBucket, light: row.light, day: row.day },
+    }
+  }
+
+  const minuteBucket = row['exp.minute'] === null ? null : Math.round(row['exp.minute'])
+  return {
+    key: `${row['subject.id']}::${minuteBucket}`,
+    label: minuteBucket,
+    fields: { minute: minuteBucket, hour: row['exp.hour'], light: row.light, day: row.day },
+  }
+}
+
+function aggregateBucketVariable(variable, values, per) {
+  const numericValues = values.filter((value) => value !== null && !Number.isNaN(value))
+
+  if (!numericValues.length) {
+    return null
+  }
+
+  const useSum = ['feed', 'drink', 'eb'].includes(variable)
+  const useMax = ['feed.acc', 'drink.acc', 'ee.acc', 'eb.acc', 'pedmeter', 'allmeter', 'wheel.acc'].includes(variable)
+
+  if (useMax) {
+    return maxValue(numericValues)
+  }
+
+  if (useSum && (per === 'day' || per === 'light')) {
+    return sumValues(numericValues)
+  }
+
+  return mean(numericValues)
+}
+
+function convertFeedColumns(row) {
+  const dietCal = toNullableNumber(row.dietCal)
+
+  if (dietCal === null) {
+    return row
+  }
+
+  return {
+    ...row,
+    feed: row.feed === null || row.feed === undefined ? row.feed : row.feed * dietCal,
+    'feed.acc': row['feed.acc'] === null || row['feed.acc'] === undefined ? row['feed.acc'] : row['feed.acc'] * dietCal,
+  }
+}
+
+export function fillAccumulatorColumns(rows) {
+  const rowsBySubject = new Map()
+  const minuteBin = computeMinuteBin(rows)
+
+  rows.forEach((row) => {
+    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
+
+    if (!rowsBySubject.has(subjectId)) {
+      rowsBySubject.set(subjectId, [])
+    }
+
+    rowsBySubject.get(subjectId).push(row)
+  })
+
+  const completedRows = []
+
+  rowsBySubject.forEach((subjectRows) => {
+    subjectRows.sort((left, right) => {
+      const minuteDiff = (toNullableNumber(left['exp.minute']) ?? 0) - (toNullableNumber(right['exp.minute']) ?? 0)
+      if (minuteDiff) {
+        return minuteDiff
+      }
+
+      return String(left['Date.Time'] || left['Time.Date'] || '').localeCompare(String(right['Date.Time'] || right['Time.Date'] || ''))
+    })
+
+    let eeAccRunning = 0
+    let ebAccRunning = 0
+
+    subjectRows.forEach((row) => {
+      const eeValue = toNullableNumber(row.ee)
+      const feedValue = toNullableNumber(row.feed)
+      const explicitEeAcc = toNullableNumber(row['ee.acc'])
+      const explicitFeedAcc = toNullableNumber(row['feed.acc'])
+      const explicitEb = toNullableNumber(row.eb)
+      const eeAccIncrement = eeValue === null ? null : eeValue / minuteBin
+      const nextEeAcc = explicitEeAcc ?? (eeAccIncrement === null ? null : eeAccRunning + eeAccIncrement)
+
+      if (nextEeAcc !== null) {
+        eeAccRunning = nextEeAcc
+      }
+
+      const nextEb = explicitEb ?? (feedValue === null || eeValue === null ? null : feedValue - eeValue)
+      const ebAccIncrement = feedValue === null || eeAccIncrement === null ? null : feedValue - eeAccIncrement
+      const nextEbAcc = explicitFeedAcc === null || nextEeAcc === null
+        ? (ebAccIncrement === null ? null : ebAccRunning + ebAccIncrement)
+        : explicitFeedAcc - nextEeAcc
+
+      if (nextEbAcc !== null) {
+        ebAccRunning = nextEbAcc
+      }
+
+      completedRows.push({
+        ...row,
+        'ee.acc': nextEeAcc,
+        eb: nextEb,
+        'eb.acc': nextEbAcc,
+      })
+    })
+  })
+
+  return completedRows
+}
+
+export function ensureExpMinute(rows) {
+  if (!Array.isArray(rows) || !rows.length || rows[0]['exp.minute'] !== undefined) {
+    return rows
+  }
+
+  const timeKey = findTimeKey(rows)
+
+  if (!timeKey) {
+    return rows
+  }
+
+  const start = Date.parse(rows[0][timeKey])
+
+  if (Number.isNaN(start)) {
+    return rows
+  }
+
+  return rows.map((row) => {
+    const current = Date.parse(row[timeKey])
+    return {
+      ...row,
+      'exp.minute': Number.isNaN(current) ? null : Math.round((current - start) / 60000),
+    }
+  })
+}
+
+export function ensureEnviroLight(rows, lightStartHour, darkStartHour, lightValue = 5, darkValue = 0) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return rows
+  }
+
+  const timeKey = findTimeKey(rows)
+
+  if (!timeKey) {
+    return rows
+  }
+
+  return rows.map((row) => {
+    const hour = Number(String(row[timeKey] || '').slice(11, 13))
+    const isLight = !Number.isNaN(hour) && hour >= Number(lightStartHour) && hour < Number(darkStartHour)
+
+    return {
+      ...row,
+      'enviro.light': isLight ? lightValue : darkValue,
+    }
+  })
+}
+
+export function getSessionCycleStartsFromRows(rows) {
+  const values = rows
+    .map((row) => toNullableNumber(row.light))
+    .filter((value) => value !== null)
+
+  const lightCycleStart = values[0] ?? DEFAULT_LIGHT_CYCLE_START
+  const darkCycleStart = values[1] ?? ((lightCycleStart + 12) % 24 || DEFAULT_DARK_CYCLE_START)
+
+  return {
+    lightCycleStart,
+    darkCycleStart,
+  }
+}
+
+export function getLightDarkStartsFromData(rows, threshold = 1) {
+  const transitions = []
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = Number(rows[index - 1]['enviro.light']) || 0
+    const current = Number(rows[index]['enviro.light']) || 0
+    const previousState = previous > threshold ? 'light' : 'dark'
+    const currentState = current > threshold ? 'light' : 'dark'
+
+    if (previousState !== currentState) {
+      const expMinute = Number(rows[index]['exp.minute'])
+      if (!Number.isNaN(expMinute)) {
+        transitions.push({
+          type: currentState,
+          hour: ((expMinute / 60) % 24 + 24) % 24,
+        })
+      }
+    }
+  }
+
+  const average = (hours) => (hours.length ? Math.round(hours.reduce((sum, hour) => sum + hour, 0) / hours.length) : null)
+  let lightCycleStart = average(transitions.filter((item) => item.type === 'light').map((item) => item.hour))
+  let darkCycleStart = average(transitions.filter((item) => item.type === 'dark').map((item) => item.hour))
+
+  if (lightCycleStart === null && darkCycleStart !== null) {
+    lightCycleStart = (darkCycleStart + 12) % 24
+  }
+
+  if (darkCycleStart === null && lightCycleStart !== null) {
+    darkCycleStart = (lightCycleStart + 12) % 24
+  }
+
+  return {
+    lightCycleStart: lightCycleStart ?? DEFAULT_LIGHT_CYCLE_START,
+    darkCycleStart: darkCycleStart ?? DEFAULT_DARK_CYCLE_START,
+  }
+}
+
+export function preprocessSession(rows) {
+  const extract = (column) => rows.map((row) => row[column]).filter((value) => !isBlank(value)).map((value) => `${value}`.trim())
+
+  const session = {
+    groupNames: extract('group_names'),
+    dietNames: extract('diet_names'),
+    colors: extract('colors'),
+    dietCal: extract('dietCal').map((value) => Number(value)),
+    lightDark: extract('light'),
+    groups: [],
+  }
+
+  const groupColumns = Object.keys(rows[0] || {})
+    .filter((key) => /^group\d+$/i.test(key))
+    .sort((left, right) => Number(left.replace(/\D/g, '')) - Number(right.replace(/\D/g, '')))
+
+  groupColumns.forEach((column, index) => {
+    session.groups[index] = extract(column)
+  })
+
+  return session
+}
+
+export function preprocessDetail(rows, numericalColumns) {
+  return rows.map((row) => {
+    const parsed = { ...row }
+
+    numericalColumns.forEach((column) => {
+      if (parsed[column] !== undefined) {
+        parsed[column] = toNullableNumber(parsed[column])
+      }
+    })
+
+    const minute = toNullableNumber(parsed['exp.minute'])
+    parsed['exp.minute'] = minute
+    parsed.hour = minute === null ? null : minute / 60
+    parsed['exp.hour'] = parsed.hour
+    return parsed
+  })
+}
+
+export function attachSessionMetadata(detailRows, session) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  return detailRows.map((row) => {
+    const groupIndex = resolveSubjectGroupIndex(row['subject.id'] || row.subject_id, session)
+
+    return {
+      ...row,
+      groupName: session.groupNames[groupIndex] || 'Unknown',
+      groupIndex,
+      diet: session.dietNames[groupIndex] || null,
+      color: session.colors[groupIndex] || '#888',
+      dietCal: session.dietCal[groupIndex] || null,
+    }
+  })
+}
+
+export function enrichDetailRows(detailRows, session) {
+  const sessionSubjects = new Map((session.subjects || []).map((subject) => [subject.subject, subject]))
+
+  return attachSessionMetadata(detailRows, session).map((row) => {
+    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
+    const subjectSession = sessionSubjects.get(subjectId) || {}
+    const expMinute = toNullableNumber(row['exp.minute'])
+    const enviroLight = toNullableNumber(row['enviro.light'])
+    const clockHour = computeClockHour(expMinute)
+    const lightFlag = enviroLight === null
+      ? (clockHour !== null && clockHour >= session.light_cycle_start && clockHour < session.dark_cycle_start ? 1 : 0)
+      : (enviroLight > 1 ? 1 : 0)
+
+    const enrichedRow = convertFeedColumns(applySessionFieldFallbacks({
+      ...row,
+      'exp.minute': expMinute,
+      hour: expMinute === null ? null : expMinute / 60,
+      'exp.hour': expMinute === null ? null : expMinute / 60,
+      'enviro.light': enviroLight,
+      light: lightFlag,
+      dark: lightFlag === null ? null : lightFlag === 1 ? 0 : 1,
+      day: computeCycleDay(expMinute, session.light_cycle_start),
+      'exp.day': computeCycleDay(expMinute, session.light_cycle_start),
+      clockHour,
+      subjectSession,
+    }, subjectSession))
+
+    const feedValue = toNullableNumber(enrichedRow.feed)
+    const eeValue = toNullableNumber(enrichedRow.ee)
+    const feedAccValue = toNullableNumber(enrichedRow['feed.acc'])
+    const eeAccValue = toNullableNumber(enrichedRow['ee.acc'])
+
+    return {
+      ...enrichedRow,
+      eb: feedValue === null || eeValue === null ? null : feedValue - eeValue,
+      'eb.acc': feedAccValue === null || eeAccValue === null ? null : feedAccValue - eeAccValue,
+    }
+  })
+}
+
+export function applyExclusions(detailRows, session) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  const subjectMap = new Map((session.subjects || []).map((subject) => [subject.subject, subject]))
+
+  return detailRows.filter((row) => {
+    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
+    const subject = subjectMap.get(subjectId)
+    const expHour = toNullableNumber(row['exp.hour'] ?? row.hour)
+
+    if (!subject || subject.exc_hour === null || expHour === null) {
+      return true
+    }
+
+    return expHour < subject.exc_hour
+  })
+}
+
+export function cropDetailRows(detailRows, hourRange) {
+  if (!Array.isArray(detailRows) || !detailRows.length || !Array.isArray(hourRange) || hourRange.length !== 2) {
+    return detailRows
+  }
+
+  const [startHour, endHour] = hourRange
+
+  return detailRows.filter((row) => {
+    const expHour = toNullableNumber(row['exp.hour'] ?? row.hour)
+
+    if (expHour === null) {
+      return false
+    }
+
+    return expHour >= startHour && expHour <= endHour
+  })
+}
+
+export function processDetail(rows, {
+  numericalColumns = [],
+  sessionRows = [],
+  session = null,
+  applySessionExclusions = true,
+  hourRange = null,
+} = {}) {
+  const normalizedSession = session || preprocessSession(sessionRows)
+  const cycleStarts = {
+    lightCycleStart: normalizedSession.light_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).lightCycleStart,
+    darkCycleStart: normalizedSession.dark_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).darkCycleStart,
+  }
+
+  let processedRows = ensureExpMinute(rows)
+
+  if (processedRows.length && processedRows.every((row) => isBlank(row['enviro.light']))) {
+    processedRows = ensureEnviroLight(processedRows, cycleStarts.lightCycleStart, cycleStarts.darkCycleStart)
+  }
+
+  const sessionPayload = normalizedSession.groups
+    ? normalizedSession
+    : {
+        ...normalizedSession,
+        light_cycle_start: cycleStarts.lightCycleStart,
+        dark_cycle_start: cycleStarts.darkCycleStart,
+      }
+
+  processedRows = preprocessDetail(processedRows, numericalColumns)
+  processedRows = enrichDetailRows(processedRows, sessionPayload)
+  processedRows = fillAccumulatorColumns(processedRows)
+
+  if (applySessionExclusions) {
+    processedRows = applyExclusions(processedRows, sessionPayload)
+  }
+
+  if (hourRange) {
+    processedRows = cropDetailRows(processedRows, hourRange)
+  }
+
+  return processedRows
+}
+
+export function aggregateDetailRows(detailRows, {
+  per = 'min',
+  grp = true,
+  variables = null,
+} = {}) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  const minuteBin = computeMinuteBin(detailRows)
+  const aggregateVariables = variables || Object.keys(detailRows[0]).filter((key) => {
+    if (['subject.id', 'groupName', 'groupIndex', 'diet', 'dietCal', 'color', 'subjectSession', 'Date.Time', 'Time.Date'].includes(key)) {
+      return false
+    }
+
+    return detailRows.some((row) => typeof row[key] === 'number' && !Number.isNaN(row[key]))
+  })
+
+  const subjectBuckets = new Map()
+
+  detailRows.forEach((row) => {
+    const descriptor = bucketDescriptor(row, per)
+
+    if (descriptor.label === null) {
+      return
+    }
+
+    if (!subjectBuckets.has(descriptor.key)) {
+      subjectBuckets.set(descriptor.key, {
+        meta: {
+          'subject.id': row['subject.id'],
+          groupName: row.groupName || 'Unknown',
+          groupIndex: row.groupIndex ?? -1,
+          diet: row.diet ?? null,
+          dietCal: row.dietCal ?? null,
+          color: row.color || '#888',
+          light: row.light ?? null,
+          day: row.day ?? null,
+          hour: row['exp.hour'] ?? row.hour ?? null,
+          'exp.hour': row['exp.hour'] ?? row.hour ?? null,
+          minute: row['exp.minute'] ?? null,
+          'exp.minute': row['exp.minute'] ?? null,
+          ...descriptor.fields,
+        },
+        values: {},
+      })
+    }
+
+    const bucket = subjectBuckets.get(descriptor.key)
+
+    aggregateVariables.forEach((variable) => {
+      const value = row[variable]
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        return
+      }
+
+      if (!bucket.values[variable]) {
+        bucket.values[variable] = []
+      }
+
+      bucket.values[variable].push(value)
+    })
+  })
+
+  const subjectRows = [...subjectBuckets.values()].map((bucket) => {
+    const aggregated = { ...bucket.meta }
+
+    aggregateVariables.forEach((variable) => {
+      aggregated[variable] = aggregateBucketVariable(variable, bucket.values[variable] || [], per)
+    })
+
+    if (per === 'min') {
+      if (aggregated.feed !== null) {
+        aggregated.feed *= minuteBin
+      }
+
+      if (aggregated['ee.acc'] !== null) {
+        aggregated['ee.acc'] /= minuteBin
+      }
+    }
+
+    if (aggregated.feed !== null && aggregated.ee !== null) {
+      aggregated.eb = aggregated.feed - aggregated.ee
+    }
+
+    if (aggregated['feed.acc'] !== null && aggregated['ee.acc'] !== null) {
+      aggregated['eb.acc'] = aggregated['feed.acc'] - aggregated['ee.acc']
+    }
+
+    return aggregated
+  })
+
+  if (!grp) {
+    return subjectRows.sort((left, right) => {
+      const timeDiff = (left['exp.minute'] ?? 0) - (right['exp.minute'] ?? 0)
+      return timeDiff || String(left['subject.id']).localeCompare(String(right['subject.id']))
+    })
+  }
+
+  const groupBuckets = new Map()
+
+  subjectRows.forEach((row) => {
+    const groupKeyParts = [row.groupName || 'Unknown']
+
+    if (per === 'day') {
+      groupKeyParts.push(`${row.day}`)
+    } else if (per === 'light') {
+      groupKeyParts.push(`${row.day}`, `${row.light}`)
+    } else if (per === 'hour') {
+      groupKeyParts.push(`${Math.floor(row['exp.hour'] ?? row.hour ?? 0)}`)
+    } else {
+      groupKeyParts.push(`${Math.round(row['exp.minute'] ?? 0)}`)
+    }
+
+    const groupKey = groupKeyParts.join('::')
+
+    if (!groupBuckets.has(groupKey)) {
+      groupBuckets.set(groupKey, {
+        meta: {
+          groupName: row.groupName || 'Unknown',
+          groupIndex: row.groupIndex ?? -1,
+          color: row.color || '#888',
+          diet: row.diet ?? null,
+          dietCal: row.dietCal ?? null,
+          light: row.light ?? null,
+          day: row.day ?? null,
+          hour: row['exp.hour'] ?? row.hour ?? null,
+          'exp.hour': row['exp.hour'] ?? row.hour ?? null,
+          minute: row['exp.minute'] ?? null,
+          'exp.minute': row['exp.minute'] ?? null,
+        },
+        values: {},
+      })
+    }
+
+    const bucket = groupBuckets.get(groupKey)
+
+    aggregateVariables.concat(['eb', 'eb.acc']).forEach((variable) => {
+      const value = row[variable]
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        return
+      }
+
+      if (!bucket.values[variable]) {
+        bucket.values[variable] = []
+      }
+
+      bucket.values[variable].push(value)
+    })
+  })
+
+  return [...groupBuckets.values()]
+    .map((bucket) => {
+      const aggregated = { ...bucket.meta, n: 0 }
+
+      Object.entries(bucket.values).forEach(([variable, values]) => {
+        aggregated[`${variable}.x`] = mean(values)
+        aggregated[`${variable}.y`] = sampleSem(values)
+        aggregated.n = Math.max(aggregated.n, values.length)
+      })
+
+      return aggregated
+    })
+    .sort((left, right) => {
+      const timeDiff = (left['exp.minute'] ?? 0) - (right['exp.minute'] ?? 0)
+      if (timeDiff) {
+        return timeDiff
+      }
+
+      return String(left.groupName).localeCompare(String(right.groupName))
+    })
+}
+
+export function buildTimeSeriesDataset(detailRows) {
+  const groupedRows = aggregateDetailRows(detailRows, { per: 'min', grp: true })
+  const subjectRows = aggregateDetailRows(detailRows, { per: 'min', grp: false })
+
+  return {
+    groupedRows,
+    subjectRows,
+  }
+}
+
+export function normalizeSessionPayload(payload = {}) {
+  const normalizeHourValue = (value, fallback) => {
+    const parsed = toNullableNumber(value)
+    return parsed === null ? fallback : Math.floor(parsed)
+  }
+
+  const groups = (Array.isArray(payload.groups) && payload.groups.length
+    ? payload.groups
+    : [
+        { name: 'WT', diet_name: 'LabDiet 5008', diet_kcal: 3.56 },
+        { name: 'KO', diet_name: 'Research Diet 60 kcal% Fat', diet_kcal: 5.21 },
+      ]).map((group, index) => ({
+    name: `${group?.name || `Group ${index + 1}`}`.trim(),
+    diet_name: group?.diet_name ? `${group.diet_name}`.trim() : '',
+    diet_kcal: toNullableNumber(group?.diet_kcal),
+    color: payload.group_colors?.[group?.name] || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length],
+  }))
+
+  const groupColors = groups.reduce((accumulator, group, index) => {
+    accumulator[group.name] = group.color || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length]
+    return accumulator
+  }, {})
+
+  const subjects = sortSubjects(
+    (Array.isArray(payload.subjects) ? payload.subjects : []).map((subject) => subject.subject).filter((subject) => !isBlank(subject)),
+  ).map((subjectId) => {
+    const subject = payload.subjects.find((item) => `${item.subject}` === `${subjectId}`) || {}
+    return {
+      subject: `${subjectId}`,
+      groupIndex: Number.isInteger(subject.groupIndex) ? subject.groupIndex : Math.max(Number(subject.groupIndex) || 0, 0),
+      total_mass: toNullableNumber(subject.total_mass),
+      lean_mass: toNullableNumber(subject.lean_mass),
+      fat_mass: toNullableNumber(subject.fat_mass),
+      exc_hour: toNullableNumber(subject.exc_hour),
+      exc_reason: subject.exc_reason ? `${subject.exc_reason}` : '',
+    }
+  })
+
+  return {
+    groups,
+    subjects,
+    light_cycle_start: toNullableNumber(payload.light_cycle_start) ?? DEFAULT_LIGHT_CYCLE_START,
+    dark_cycle_start: toNullableNumber(payload.dark_cycle_start) ?? DEFAULT_DARK_CYCLE_START,
+    hour_range: Array.isArray(payload.hour_range) && payload.hour_range.length === 2
+      ? [
+          normalizeHourValue(payload.hour_range[0], 0),
+          normalizeHourValue(payload.hour_range[1], 24),
+        ]
+      : [0, 24],
+    food_cutoff: toNullableNumber(payload.food_cutoff) ?? 0,
+    remove_outliers: Boolean(payload.remove_outliers),
+    group_colors: groupColors,
+  }
+}
+
+export function inferSessionPayloadFromCalrData(rows) {
+  const subjects = new Map()
+  let minExpMinute = Infinity
+  let maxExpMinute = -Infinity
+
+  rows.forEach((row) => {
+    const subjectId = row['subject.id']
+    if (!isBlank(subjectId) && !subjects.has(`${subjectId}`)) {
+      subjects.set(`${subjectId}`, {
+        subject: `${subjectId}`,
+        groupIndex: 0,
+        total_mass: null,
+        lean_mass: null,
+        fat_mass: null,
+        exc_hour: null,
+        exc_reason: '',
+      })
+    }
+
+    const expMinute = Number(row['exp.minute'])
+    if (!Number.isNaN(expMinute)) {
+      minExpMinute = Math.min(minExpMinute, expMinute)
+      maxExpMinute = Math.max(maxExpMinute, expMinute)
+    }
+  })
+
+  const cycleStarts = rows.some((row) => !isBlank(row['enviro.light']))
+    ? getLightDarkStartsFromData(rows)
+    : { lightCycleStart: DEFAULT_LIGHT_CYCLE_START, darkCycleStart: DEFAULT_DARK_CYCLE_START }
+
+  return normalizeSessionPayload({
+    groups: [],
+    subjects: sortSubjects([...subjects.keys()]).map((subject) => subjects.get(subject)),
+    light_cycle_start: cycleStarts.lightCycleStart,
+    dark_cycle_start: cycleStarts.darkCycleStart,
+    hour_range: [
+      minExpMinute === Infinity ? 0 : minExpMinute / 60,
+      maxExpMinute === -Infinity ? 24 : maxExpMinute / 60,
+    ],
+    food_cutoff: 0,
+    remove_outliers: false,
+  })
+}
+
+export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
+  const basePayload = normalizeSessionPayload(fallbackPayload)
+  const stackedSubjectCount = basePayload.subjects.length
+  const groupColumns = Object.keys(rows[0] || {})
+    .filter((key) => /^group\d+$/i.test(key))
+    .sort((left, right) => Number(left.replace(/\D/g, '')) - Number(right.replace(/\D/g, '')))
+
+  const groupNames = rows
+    .map((row) => row.group_names)
+    .filter((value) => !isBlank(value))
+    .map((value) => `${value}`.trim())
+
+  const dietNames = rows
+    .map((row) => row.diet_names)
+    .filter((value) => !isBlank(value))
+    .map((value) => `${value}`.trim())
+
+  const dietCalories = rows
+    .map((row) => toNullableNumber(row.dietCal))
+    .filter((value) => value !== null)
+
+  const colors = rows
+    .map((row) => row.colors)
+    .filter((value) => !isBlank(value))
+    .map((value) => `${value}`.trim())
+
+  const groups = (groupColumns.length ? groupColumns : basePayload.groups.map((_, index) => `group${index + 1}`))
+    .map((_, index) => ({
+      name: groupNames[index] || basePayload.groups[index]?.name || `Group ${index + 1}`,
+      diet_name: dietNames[index] || basePayload.groups[index]?.diet_name || '',
+      diet_kcal: dietCalories[index] ?? basePayload.groups[index]?.diet_kcal ?? null,
+      color: colors[index] || basePayload.groups[index]?.color || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length],
+    }))
+
+  const groupsBySubject = new Map()
+  groupColumns.forEach((column, groupIndex) => {
+    rows.forEach((row) => {
+      const subjectId = row[column]
+      if (!isBlank(subjectId)) {
+        subjectIdentifierCandidates(subjectId).forEach((candidate) => {
+          if (!groupsBySubject.has(candidate)) {
+            groupsBySubject.set(candidate, [groupIndex])
+          }
+        })
+      }
+    })
+  })
+
+  const rowBySubject = new Map()
+  const stackedExclusionReasons = new Map()
+
+  if (stackedSubjectCount > 0 && rows.length >= stackedSubjectCount * 2) {
+    for (let index = 0; index < stackedSubjectCount; index += 1) {
+      const subjectRow = rows[index]
+      const reasonRow = rows[index + stackedSubjectCount]
+      const subjectId = normalizeSubjectIdentifier(subjectRow?.id)
+      const reasonValue = reasonRow?.exc
+
+      if (
+        subjectId &&
+        !isBlank(reasonValue) &&
+        toNullableNumber(reasonValue) === null &&
+        isBlank(reasonRow?.id) &&
+        isBlank(reasonRow?.['Total.Mass'])
+      ) {
+        stackedExclusionReasons.set(subjectId, `${reasonValue}`.trim())
+      }
+    }
+  }
+
+  rows.forEach((row) => {
+    const subjectId = !isBlank(row.id) ? normalizeSubjectIdentifier(row.id) : null
+    if (subjectId) {
+      setMapValueList(rowBySubject, subjectId, row)
+      subjectIdentifierCandidates(subjectId).forEach((candidate) => {
+        setMapValueList(rowBySubject, candidate, row)
+      })
+    }
+  })
+
+  const subjectIds = basePayload.subjects.length
+    ? basePayload.subjects.map((subject) => subject.subject)
+    : sortSubjects([...new Set([...groupsBySubject.keys(), ...rowBySubject.keys()])])
+
+  const subjects = sortSubjects(subjectIds).map((subjectId) => {
+    const baseSubject = basePayload.subjects.find((subject) => subject.subject === subjectId) || {
+      subject: subjectId,
+      groupIndex: 0,
+      total_mass: null,
+      lean_mass: null,
+      fat_mass: null,
+      exc_hour: null,
+      exc_reason: '',
+    }
+    const sourceRow = getBestMappedValue(rowBySubject, subjectId) || {}
+    const exclusionValue = sourceRow.exc
+    const exclusionNumber = toNullableNumber(exclusionValue)
+    const stackedReason = getBestMappedValue(stackedExclusionReasons, subjectId) || ''
+
+    return {
+      ...baseSubject,
+      subject: subjectId,
+      groupIndex: getBestMappedValue(groupsBySubject, subjectId) ?? baseSubject.groupIndex ?? 0,
+      total_mass: toNullableNumber(sourceRow['Total.Mass']) ?? baseSubject.total_mass,
+      lean_mass: toNullableNumber(sourceRow['Lean.Mass']) ?? baseSubject.lean_mass,
+      fat_mass: toNullableNumber(sourceRow['Fat.Mass']) ?? baseSubject.fat_mass,
+      exc_hour: exclusionNumber ?? baseSubject.exc_hour,
+      exc_reason: exclusionNumber === null && !isBlank(exclusionValue)
+        ? `${exclusionValue}`.trim()
+        : (!baseSubject.exc_reason && (exclusionNumber ?? baseSubject.exc_hour) !== null && stackedReason)
+            ? stackedReason
+        : baseSubject.exc_reason,
+    }
+  })
+
+  const cycleStarts = getSessionCycleStartsFromRows(rows)
+
+  return normalizeSessionPayload({
+    ...basePayload,
+    groups,
+    subjects,
+    light_cycle_start: cycleStarts.lightCycleStart ?? basePayload.light_cycle_start,
+    dark_cycle_start: cycleStarts.darkCycleStart ?? basePayload.dark_cycle_start,
+  })
+}
