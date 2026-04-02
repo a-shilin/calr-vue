@@ -58,7 +58,8 @@
 <script>
 import { appStore } from '../store/appStore'
 import { parseCsv, preprocessSummary } from '../utils/csv'
-import { renderSummaryRegressionPlot } from '../utils/plotting'
+import { purgePlot } from '../utils/plotting/core'
+import { renderSummaryRegressionPlot } from '../utils/plotting/summary-regression'
 
 export default {
   name: 'CommunityView',
@@ -130,6 +131,9 @@ export default {
 
     this.selectedExperiments = [...this.uniqueExperiments]
     this.renderPlot()
+  },
+  async beforeUnmount() {
+    await purgePlot(this.$refs.summaryPlot)
   },
   methods: {
     renderPlot() {

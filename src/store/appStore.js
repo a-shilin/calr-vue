@@ -56,6 +56,7 @@ export const appStore = reactive({
     current: null,
     detailRows: [],
     sessionRows: [],
+    analysisData: null,
     analysisSessionId: null,
     qcResults: null,
     ancovaResults: null,

@@ -729,6 +729,7 @@ import {
 } from '../utils/csv'
 import { formatDate, formatFileSize } from '../utils/format'
 import {
+  clearProcessCaches,
   DEFAULT_GROUP_COLORS,
   ensureEnviroLight,
   ensureExpMinute,
@@ -736,8 +737,8 @@ import {
   inferSessionPayloadFromCalrData,
   mergeSessionCsvIntoPayload,
   normalizeSessionPayload,
-  processDetail,
 } from '../utils/process'
+import { prepForAnalysis } from '../utils/prep-for-analysis'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -1602,6 +1603,7 @@ export default {
       file.loading = true
 
       try {
+        clearProcessCaches()
         const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
           fetchDataFile(standard.id, this.store.auth.token, file.public),
           fetchSessionFile(session.id, this.store.auth.token, file.public),
@@ -1609,16 +1611,16 @@ export default {
         ])
 
         const sessionRows = parseCsv(sessionCsv)
-        const sessionPayload = mergeSessionCsvIntoPayload(sessionRows, sessionConfig)
-        const detailRows = processDetail(parseCsv(dataCsv), {
+        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
           numericalColumns,
-          session: sessionPayload,
           sessionRows,
+          sessionConfig,
         })
 
         this.store.experiment.current = file
-        this.store.experiment.detailRows = detailRows
+        this.store.experiment.detailRows = analysisData.rows
         this.store.experiment.sessionRows = sessionRows
+        this.store.experiment.analysisData = analysisData
         if (this.store.experiment.analysisSessionId !== session.id) {
           this.store.experiment.analysisSessionId = session.id
           this.store.experiment.qcResults = null

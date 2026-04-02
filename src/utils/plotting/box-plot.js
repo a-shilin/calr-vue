@@ -1,29 +1,8 @@
-import { buildBoxPlotDataset } from '../process'
-
-let plotlyPromise = null
-
-async function getPlotly() {
-  if (!plotlyPromise) {
-    plotlyPromise = import('plotly.js-cartesian-dist-min').then((module) => module.default)
-  }
-
-  return plotlyPromise
-}
-
-async function renderPlot(target, traces, layout, config) {
-  const Plotly = await getPlotly()
-  await Plotly.react(target, traces, layout, config)
-}
-
-function axisTitle(text) {
-  return {
-    text,
-    standoff: 12,
-    font: {
-      size: 16,
-    },
-  }
-}
+// Box-plot rendering.
+// This file takes analysis-ready rows, computes photoperiod summaries for one
+// variable, and builds the Plotly box plot configuration.
+import { aggregateDetailRows, applyDefaultOutlierRemoval } from '../process'
+import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function resolveGroupOrder(rows, preferredOrder = []) {
   const seen = new Set()
@@ -47,7 +26,170 @@ function resolveGroupOrder(rows, preferredOrder = []) {
   return ordered
 }
 
-export async function renderBoxPlot(target, rows, variable, options = {}) {
+function mean(values) {
+  if (!values.length) {
+    return null
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function quantile(sortedValues, q) {
+  if (!sortedValues.length) {
+    return null
+  }
+
+  const position = (sortedValues.length - 1) * q
+  const lowerIndex = Math.floor(position)
+  const upperIndex = Math.ceil(position)
+
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex]
+  }
+
+  const weight = position - lowerIndex
+  return sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight
+}
+
+function buildBoxPlotDataset(rows, variable, options = {}) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return []
+  }
+
+  const removeOutliers = options.removeOutliers ?? true
+  const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
+  const hourlyVariables = variable === 'eb' ? ['feed', 'ee'] : [variable]
+  const hourlyRows = aggregateDetailRows(outlierHandledRows, {
+    per: 'hour',
+    grp: false,
+    variables: hourlyVariables,
+  })
+  const subjectPeriods = new Map()
+
+  hourlyRows.forEach((row) => {
+    const subjectId = row['subject.id']
+    const baseKey = `${subjectId}::${row.groupName || 'Unknown'}`
+    const periodBuckets = [
+      { period: 'Total', include: true },
+      { period: 'Dark', include: Number(row.light) === 0 },
+      { period: 'Light', include: Number(row.light) === 1 },
+    ]
+
+    periodBuckets.forEach(({ period, include }) => {
+      if (!include) {
+        return
+      }
+
+      const key = `${baseKey}::${period}`
+      const value = variable === 'eb'
+        ? (row.feed === null || row.ee === null ? null : row.feed - row.ee)
+        : row[variable]
+
+      if (value === null || Number.isNaN(value)) {
+        return
+      }
+
+      if (!subjectPeriods.has(key)) {
+        subjectPeriods.set(key, {
+          period,
+          groupName: row.groupName || 'Unknown',
+          color: row.color || '#888',
+          subjectId,
+          values: [],
+        })
+      }
+
+      subjectPeriods.get(key).values.push(value)
+    })
+  })
+
+  const periodOrder = ['Total', 'Dark', 'Light']
+  const subjectEntries = [...subjectPeriods.values()]
+    .map((entry) => ({
+      period: entry.period,
+      groupName: entry.groupName,
+      color: entry.color,
+      'subject.id': entry.subjectId,
+      value: mean(entry.values),
+    }))
+    .filter((entry) => entry.value !== null && !Number.isNaN(entry.value))
+
+  if (!removeOutliers) {
+    return subjectEntries.sort((left, right) => {
+      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
+      if (periodDiff) {
+        return periodDiff
+      }
+
+      const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
+      if (groupDiff) {
+        return groupDiff
+      }
+
+      return String(left['subject.id']).localeCompare(String(right['subject.id']))
+    })
+  }
+
+  const buckets = new Map()
+  subjectEntries.forEach((entry) => {
+    const key = `${entry.groupName}::${entry.period}`
+    if (!buckets.has(key)) {
+      buckets.set(key, [])
+    }
+    buckets.get(key).push(entry.value)
+  })
+
+  const thresholds = new Map()
+  buckets.forEach((values, key) => {
+    if (values.length < 5) {
+      thresholds.set(key, null)
+      return
+    }
+
+    const sorted = [...values].sort((left, right) => left - right)
+    const q1 = quantile(sorted, 0.25)
+    const q3 = quantile(sorted, 0.75)
+
+    if (q1 === null || q3 === null) {
+      thresholds.set(key, null)
+      return
+    }
+
+    const iqr = q3 - q1
+    thresholds.set(key, {
+      lower: q1 - (1.5 * iqr),
+      upper: q3 + (1.5 * iqr),
+    })
+  })
+
+  return subjectEntries
+    .filter((entry) => {
+      const threshold = thresholds.get(`${entry.groupName}::${entry.period}`)
+
+      if (!threshold) {
+        return true
+      }
+
+      return entry.value >= threshold.lower && entry.value <= threshold.upper
+    })
+    .sort((left, right) => {
+      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
+      if (periodDiff) {
+        return periodDiff
+      }
+
+      const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
+      if (groupDiff) {
+        return groupDiff
+      }
+
+      return String(left['subject.id']).localeCompare(String(right['subject.id']))
+    })
+}
+
+export async function renderBoxPlot(target, analysisData, variable, options = {}) {
+  const rows = analysisData?.rows || []
+
   if (!target || !rows.length) {
     return
   }
@@ -65,7 +207,7 @@ export async function renderBoxPlot(target, rows, variable, options = {}) {
 
   groups.forEach((groupName) => {
     const groupRows = boxRows.filter((row) => row.groupName === groupName)
-    const color = groupRows[0]?.color || '#888'
+    const color = resolveGroupColor(groupName, options.groupColors, groupRows[0]?.color || '#888')
 
     traces.push({
       x: groupRows.map((row) => row.period),

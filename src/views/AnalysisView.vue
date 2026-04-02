@@ -454,12 +454,15 @@ import { appStore } from '../store/appStore'
 import { fetchDataFile, fetchPublicFiles, fetchSessionConfig, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
-import { fillAccumulatorColumns, mergeSessionCsvIntoPayload, processDetail } from '../utils/process'
+import { clearProcessCaches } from '../utils/process'
+import { buildAnalysisSession, prepForAnalysis } from '../utils/prep-for-analysis'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
+import { purgePlot } from '../utils/plotting/core'
+import { renderPowerPlot } from '../utils/plotting/power'
+import { renderQcPlot } from '../utils/plotting/qc'
 import { renderRegressionPlot } from '../utils/plotting/regression'
 import { renderTimeSeriesPlot } from '../utils/plotting/time-series'
 import { renderWeightPlot } from '../utils/plotting/weight'
-import { renderPowerPlot, renderQcPlot } from '../utils/plotting'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -580,6 +583,8 @@ export default {
         power: true,
         ancova: true,
       },
+      pendingPlotRenders: new Set(),
+      plotRenderFlushScheduled: false,
       suppressAnalysisDirtyWatch: false,
       groupColors: {},
       powerViewTab: 'plot',
@@ -587,38 +592,31 @@ export default {
     }
   },
   computed: {
-    sessionMetadata() {
-      const payload = mergeSessionCsvIntoPayload(this.store.experiment.sessionRows)
-      return {
-        groupNames: payload.groups.map((group) => group.name),
-        dietNames: payload.groups.map((group) => group.diet_name),
-        dietCal: payload.groups.map((group) => group.diet_kcal),
-        colors: payload.groups.map((group) => group.color),
-        subjects: payload.subjects,
-        light_cycle_start: payload.light_cycle_start,
-        dark_cycle_start: payload.dark_cycle_start,
-        hour_range: payload.hour_range,
+    analysisData() {
+      return this.store.experiment.analysisData || {
+        rows: this.store.experiment.detailRows,
+        session: buildAnalysisSession(this.store.experiment.sessionRows),
       }
     },
+    sessionMetadata() {
+      return this.analysisData.session
+    },
     maxHour() {
-      const hours = this.store.experiment.detailRows.map((row) => row.hour).filter((hour) => hour !== null)
+      const hours = this.analysisData.rows.map((row) => row.hour).filter((hour) => hour !== null)
       return hours.length ? Math.ceil(Math.max(...hours)) : 24
     },
-    detailRowsWithGroups() {
-      return fillAccumulatorColumns(this.store.experiment.detailRows).map((row) => ({
-        ...row,
-        color: this.groupColors[row.groupName] || row.color,
-      }))
+    analysisRows() {
+      return this.analysisData.rows
     },
     metadata() {
       const orderedGroups = (this.sessionMetadata.groupNames || []).filter(Boolean)
-      const fallbackGroups = [...new Set(this.detailRowsWithGroups.map((row) => row.groupName).filter(Boolean))]
+      const fallbackGroups = [...new Set(this.analysisRows.map((row) => row.groupName).filter(Boolean))]
       return {
         experimentId: this.store.experiment.current?.name || this.store.experiment.current?.id || 'Current experiment',
         groups: orderedGroups.length ? orderedGroups : fallbackGroups,
         diets: this.sessionMetadata.dietNames,
         dietCalories: this.sessionMetadata.dietCal,
-        subjects: new Set(this.store.experiment.detailRows.map((row) => row['subject.id'])).size,
+        subjects: new Set(this.analysisData.rows.map((row) => row['subject.id'])).size,
       }
     },
     weightHasCompositionData() {
@@ -626,7 +624,7 @@ export default {
         subject.lean_mass != null
         || subject.fat_mass != null,
       )
-      const detailRowsHaveComposition = this.detailRowsWithGroups.some((row) =>
+      const detailRowsHaveComposition = this.analysisRows.some((row) =>
         row['subject.lean.mass'] != null
         || row['subject.fat.mass'] != null
         || row.subjectSession?.lean_mass != null
@@ -635,7 +633,7 @@ export default {
       return sessionHasComposition || detailRowsHaveComposition
     },
     timeSeriesVariables() {
-      if (!this.detailRowsWithGroups.length) {
+      if (!this.analysisRows.length) {
         return this.timeSeriesVariableCatalog
       }
 
@@ -645,7 +643,7 @@ export default {
           return true
         }
 
-        const values = this.detailRowsWithGroups
+        const values = this.analysisRows
           .map((row) => row[variable.field])
           .filter((value) => value !== null && value !== undefined && value !== '')
 
@@ -653,7 +651,7 @@ export default {
       })
     },
     boxPlotVariables() {
-      if (!this.detailRowsWithGroups.length) {
+      if (!this.analysisRows.length) {
         return this.boxPlotVariableCatalog
       }
 
@@ -663,7 +661,7 @@ export default {
           return true
         }
 
-        const values = this.detailRowsWithGroups
+        const values = this.analysisRows
           .map((row) => row[variable.field])
           .filter((value) => value !== null && value !== undefined && value !== '')
 
@@ -671,11 +669,11 @@ export default {
       })
     },
     powerVariableOptions() {
-      if (!this.store.experiment.detailRows.length) {
+      if (!this.analysisData.rows.length) {
         return this.explorerVariables
       }
 
-      const availableColumns = new Set(Object.keys(this.store.experiment.detailRows[0] || {}))
+      const availableColumns = new Set(Object.keys(this.analysisData.rows[0] || {}))
       return this.explorerVariables.filter((variable) => availableColumns.has(variable.field))
     },
     ancovaMassVariableLabel() {
@@ -778,28 +776,25 @@ export default {
     },
   },
   watch: {
-    detailRowsWithGroups: {
-      deep: true,
-      handler() {
-        this.renderPlots()
-      },
+    analysisRows() {
+      this.schedulePlotRenders(['time', 'distribution', 'regression', 'weight'])
     },
     timeOptions: {
       deep: true,
       handler() {
         this.normalizeTimeRange()
         this.ensureValidTimeSeriesVariable()
-        this.renderTimeSeries()
+        this.schedulePlotRenders(['time'])
       },
     },
     distributionVariable() {
       this.ensureValidDistributionVariable()
-      this.renderDistribution()
+      this.schedulePlotRenders(['distribution'])
     },
     regressionOptions: {
       deep: true,
       handler() {
-        this.renderRegression()
+        this.schedulePlotRenders(['regression'])
       },
     },
     'regressionOptions.xVar'() {
@@ -814,7 +809,8 @@ export default {
     analysisOptions: {
       deep: true,
       handler() {
-        this.renderPlots()
+        clearProcessCaches()
+        this.schedulePlotRenders(['time', 'distribution', 'regression'])
       },
     },
     qcOptions: {
@@ -833,30 +829,20 @@ export default {
     },
     powerViewTab(value) {
       if (value === 'plot') {
-        this.$nextTick(() => {
-          this.renderPower()
-        })
+        this.schedulePlotRenders(['power'])
       }
     },
     weightViewTab() {
-      this.$nextTick(() => {
-        this.renderWeight()
-      })
+      this.schedulePlotRenders(['weight'])
     },
     'store.experiment.qcResults'() {
-      this.$nextTick(() => {
-        this.renderQc()
-      })
+      this.schedulePlotRenders(['qc'])
     },
     'store.experiment.powerResults'() {
-      this.$nextTick(() => {
-        this.renderPower()
-      })
+      this.schedulePlotRenders(['power'])
     },
     'store.experiment.ancovaResults'() {
-      this.$nextTick(() => {
-        this.renderRegression()
-      })
+      this.schedulePlotRenders(['regression'])
     },
     maxHour: {
       immediate: true,
@@ -870,7 +856,7 @@ export default {
     groupColors: {
       deep: true,
       handler() {
-        this.renderPlots()
+        this.schedulePlotRenders(['time', 'distribution', 'regression', 'qc', 'weight'])
       },
     },
     'store.experiment.current': {
@@ -898,6 +884,7 @@ export default {
     }
 
     if (this.store.experiment.current && this.store.experiment.sessionRows.length) {
+      clearProcessCaches()
       this.ensureExperimentAnalysisCache()
       this.initializeGroupColors(this.sessionMetadata)
       this.resetAnalysisControlsForDataset()
@@ -905,7 +892,17 @@ export default {
       await this.runInitialAnalyses()
     }
 
-    this.renderPlots()
+    this.schedulePlotRenders(['time', 'distribution', 'regression', 'qc', 'power', 'weight'])
+  },
+  async beforeUnmount() {
+    await Promise.all([
+      purgePlot(this.$refs.timePlot),
+      purgePlot(this.$refs.distributionPlot),
+      purgePlot(this.$refs.regressionPlot),
+      purgePlot(this.$refs.weightPlot),
+      purgePlot(this.$refs.qcPlot),
+      purgePlot(this.$refs.powerPlot),
+    ])
   },
   methods: {
     formatDate,
@@ -1045,6 +1042,7 @@ export default {
 
       file.loading = true
       try {
+        clearProcessCaches()
         const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
           fetchDataFile(standard.id, this.store.auth.token, isPublic),
           fetchSessionFile(session.id, this.store.auth.token, isPublic),
@@ -1052,16 +1050,16 @@ export default {
         ])
 
         const parsedSessionRows = parseCsv(sessionCsv)
-        const sessionMetadata = mergeSessionCsvIntoPayload(parsedSessionRows, sessionConfig)
-        const detailRows = processDetail(parseCsv(dataCsv), {
+        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
           numericalColumns,
-          session: sessionMetadata,
           sessionRows: parsedSessionRows,
+          sessionConfig,
         })
 
         this.store.experiment.current = file
-        this.store.experiment.detailRows = detailRows
+        this.store.experiment.detailRows = analysisData.rows
         this.store.experiment.sessionRows = parsedSessionRows
+        this.store.experiment.analysisData = analysisData
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
         this.initializeGroupColors(this.sessionMetadata)
@@ -1079,25 +1077,48 @@ export default {
     async openPrivateExperiment(file) {
       await this.openExperimentForAnalysis(file, false)
     },
-    renderPlots() {
+    schedulePlotRenders(plotKeys = []) {
+      plotKeys.forEach((key) => this.pendingPlotRenders.add(key))
+
+      if (this.plotRenderFlushScheduled) {
+        return
+      }
+
+      this.plotRenderFlushScheduled = true
       this.$nextTick(() => {
-        this.renderTimeSeries()
-        this.renderDistribution()
-        this.renderRegression()
-        this.renderQc()
-        this.renderPower()
-        this.renderWeight()
+        this.flushPlotRenders()
       })
+    },
+    async flushPlotRenders() {
+      this.plotRenderFlushScheduled = false
+      const plotKeys = [...this.pendingPlotRenders]
+      this.pendingPlotRenders.clear()
+
+      for (const key of plotKeys) {
+        if (key === 'time') {
+          await this.renderTimeSeries()
+        } else if (key === 'distribution') {
+          await this.renderDistribution()
+        } else if (key === 'regression') {
+          await this.renderRegression()
+        } else if (key === 'qc') {
+          await this.renderQc()
+        } else if (key === 'power') {
+          await this.renderPower()
+        } else if (key === 'weight') {
+          await this.renderWeight()
+        }
+      }
     },
     async renderTimeSeries() {
       this.ensureValidTimeSeriesVariable()
       await renderTimeSeriesPlot(
         this.$refs.timePlot,
-        this.detailRowsWithGroups,
-        this.sessionMetadata,
+        this.analysisData,
         {
           ...this.timeOptions,
           groupOrder: this.sessionMetadata.groupNames,
+          groupColors: this.groupColors,
           removeOutliers: this.analysisOptions.removeOutliers,
           rangeEnd: Math.min(this.timeOptions.rangeEnd, this.maxHour),
         },
@@ -1107,8 +1128,9 @@ export default {
     async renderDistribution() {
       this.ensureValidDistributionVariable()
       const yLabel = this.boxPlotVariables.find((variable) => variable.field === this.distributionVariable)?.label || this.distributionVariable
-      await renderBoxPlot(this.$refs.distributionPlot, this.detailRowsWithGroups, this.distributionVariable, {
+      await renderBoxPlot(this.$refs.distributionPlot, this.analysisData, this.distributionVariable, {
         groupOrder: this.sessionMetadata.groupNames,
+        groupColors: this.groupColors,
         yLabel,
         removeOutliers: this.analysisOptions.removeOutliers,
       })
@@ -1116,9 +1138,10 @@ export default {
     async renderRegression() {
       const xLabel = this.regressionXVariables.find((variable) => variable.field === this.regressionOptions.xVar)?.label || this.regressionOptions.xVar
       const yLabel = this.regressionYVariables.find((variable) => variable.field === this.regressionOptions.yVar)?.label || this.regressionOptions.yVar
-      await renderRegressionPlot(this.$refs.regressionPlot, this.detailRowsWithGroups, {
+      await renderRegressionPlot(this.$refs.regressionPlot, this.analysisData, {
         ...this.regressionOptions,
         groupOrder: this.sessionMetadata.groupNames,
+        groupColors: this.groupColors,
         removeOutliers: this.analysisOptions.removeOutliers,
         hourRange: this.sessionMetadata.hour_range,
         statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
@@ -1228,13 +1251,14 @@ export default {
       const mode = this.weightHasCompositionData ? this.weightViewTab : 'total'
       const labelsByMode = {
         total: { yLabel: 'Mean (g)' },
-        composition: { yLabel: 'Mean (g)' },
+        composition: { yLabel: 'Mass (g)' },
         compositionPercent: { yLabel: 'Mean Composition of Total Mass (%)' },
       }
 
-      await renderWeightPlot(this.$refs.weightPlot, this.detailRowsWithGroups, {
+      await renderWeightPlot(this.$refs.weightPlot, this.analysisData, {
         mode,
         groupOrder: this.sessionMetadata.groupNames,
+        groupColors: this.groupColors,
         ...labelsByMode[mode],
       })
     },

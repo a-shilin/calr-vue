@@ -1,19 +1,8 @@
-import { applyDefaultOutlierRemoval, buildTimeSeriesDataset } from '../process'
-
-let plotlyPromise = null
-
-async function getPlotly() {
-  if (!plotlyPromise) {
-    plotlyPromise = import('plotly.js-cartesian-dist-min').then((module) => module.default)
-  }
-
-  return plotlyPromise
-}
-
-async function renderPlot(target, traces, layout, config) {
-  const Plotly = await getPlotly()
-  await Plotly.react(target, traces, layout, config)
-}
+// Time-series plot rendering.
+// This file takes analysis-ready rows, applies time-series-specific shaping,
+// and produces Plotly traces/layout for the analysis time plot.
+import { aggregateDetailRows, applyDefaultOutlierRemoval } from '../process'
+import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function smoothValues(values, windowSize) {
   if (!windowSize || windowSize <= 1) {
@@ -42,16 +31,6 @@ function hexToRGBA(hex, alpha) {
   const g = Number.parseInt(hex.slice(3, 5), 16)
   const b = Number.parseInt(hex.slice(5, 7), 16)
   return `rgba(${r},${g},${b},${alpha})`
-}
-
-function axisTitle(text) {
-  return {
-    text,
-    standoff: 12,
-    font: {
-      size: 16,
-    },
-  }
 }
 
 function resolveGroupOrder(rows, preferredOrder = []) {
@@ -100,6 +79,13 @@ function buildFiniteSeries(xValues, yValues) {
   return { x, y }
 }
 
+function buildTimeSeriesDataset(rows) {
+  return {
+    groupedRows: aggregateDetailRows(rows, { per: 'min', grp: true }),
+    subjectRows: aggregateDetailRows(rows, { per: 'min', grp: false }),
+  }
+}
+
 function computeLightDarkShading(rows) {
   const subject = rows[0]?.['subject.id']
   const subjectRows = rows
@@ -131,7 +117,10 @@ function computeLightDarkShading(rows) {
   return segments
 }
 
-export async function renderTimeSeriesPlot(target, rows, session, options, explorerVariables) {
+export async function renderTimeSeriesPlot(target, analysisData, options, explorerVariables) {
+  const rows = analysisData?.rows || []
+  const session = analysisData?.session || {}
+
   if (!target || !rows.length) {
     return
   }
@@ -156,8 +145,8 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
 
     Object.values(subjects).forEach((subjectSeries) => {
       subjectSeries.sort((left, right) => left['exp.minute'] - right['exp.minute'])
-      const color = subjectSeries[0]?.color || '#888'
       const groupName = subjectSeries[0]?.groupName || 'Unknown'
+      const color = resolveGroupColor(groupName, options.groupColors, subjectSeries[0]?.color || '#888')
 
       traces.push({
         x: subjectSeries.map((row) => row['exp.minute'] / 60),
@@ -185,7 +174,7 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
         return
       }
 
-      const color = groupSeries[0]?.color || '#888'
+      const color = resolveGroupColor(groupName, options.groupColors, groupSeries[0]?.color || '#888')
       const xHours = groupSeries.map((row) => row['exp.minute'] / 60)
       const meanValues = groupSeries.map((row) => row[`${options.yVar}.x`] ?? null)
       const semLower = meanValues.map((value, index) => {

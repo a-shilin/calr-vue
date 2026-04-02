@@ -1,29 +1,7 @@
-import { buildWeightDataset } from '../process'
-
-let plotlyPromise = null
-
-async function getPlotly() {
-  if (!plotlyPromise) {
-    plotlyPromise = import('plotly.js-cartesian-dist-min').then((module) => module.default)
-  }
-
-  return plotlyPromise
-}
-
-async function renderPlot(target, traces, layout, config) {
-  const Plotly = await getPlotly()
-  await Plotly.react(target, traces, layout, config)
-}
-
-function axisTitle(text) {
-  return {
-    text,
-    standoff: 12,
-    font: {
-      size: 16,
-    },
-  }
-}
+// Weight plot rendering.
+// This file takes analysis-ready rows, derives total/composition summaries,
+// and builds the Plotly weight plot variants.
+import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function resolveGroupOrder(rows, preferredOrder = []) {
   const seen = new Set()
@@ -47,7 +25,159 @@ function resolveGroupOrder(rows, preferredOrder = []) {
   return ordered
 }
 
-export async function renderWeightPlot(target, rows, options = {}) {
+function toNullableNumber(value) {
+  if (value === null || value === undefined || `${value}`.trim() === '' || `${value}`.trim().toUpperCase() === 'NA') {
+    return null
+  }
+
+  const number = Number(value)
+  return Number.isNaN(number) ? null : number
+}
+
+function mean(values) {
+  if (!values.length) {
+    return null
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function sampleSem(values) {
+  if (values.length <= 1) {
+    return 0
+  }
+
+  const avg = mean(values)
+  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1)
+  return Math.sqrt(variance) / Math.sqrt(values.length)
+}
+
+function buildWeightDataset(rows, {
+  mode = 'total',
+} = {}) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return []
+  }
+
+  const subjects = new Map()
+  rows.forEach((row) => {
+    const subjectId = row['subject.id']
+    if (!subjectId) {
+      return
+    }
+
+    if (!subjects.has(subjectId)) {
+      subjects.set(subjectId, {
+        'subject.id': subjectId,
+        groupName: row.groupName || 'Unknown',
+        color: row.color || '#888',
+        totalValues: [],
+        leanValues: [],
+        fatValues: [],
+        subjectSession: row.subjectSession || {},
+      })
+    }
+
+    const subject = subjects.get(subjectId)
+    const totalValue = toNullableNumber(row['subject.mass'])
+    const leanValue = toNullableNumber(row['subject.lean.mass'])
+    const fatValue = toNullableNumber(row['subject.fat.mass'])
+
+    if (totalValue !== null) {
+      subject.totalValues.push(totalValue)
+    }
+    if (leanValue !== null) {
+      subject.leanValues.push(leanValue)
+    }
+    if (fatValue !== null) {
+      subject.fatValues.push(fatValue)
+    }
+  })
+
+  const subjectEntries = [...subjects.values()].map((subject) => {
+    const totalMass = toNullableNumber(subject.subjectSession.total_mass) ?? mean(subject.totalValues)
+    const leanMass = toNullableNumber(subject.subjectSession.lean_mass) ?? mean(subject.leanValues)
+    const fatMass = toNullableNumber(subject.subjectSession.fat_mass) ?? mean(subject.fatValues)
+
+    return {
+      'subject.id': subject['subject.id'],
+      groupName: subject.groupName,
+      color: subject.color,
+      totalMass,
+      leanMass,
+      fatMass,
+    }
+  })
+
+  const metricsByMode = {
+    total: [{ key: 'totalMass', label: 'Total' }],
+    composition: [
+      { key: 'fatMass', label: 'Fat' },
+      { key: 'leanMass', label: 'Lean' },
+      { key: 'totalMass', label: 'Total' },
+    ],
+    compositionPercent: [
+      { key: 'fatPercent', label: 'Fat' },
+      { key: 'leanPercent', label: 'Lean' },
+    ],
+  }
+
+  const entriesWithPercents = subjectEntries.map((entry) => ({
+    ...entry,
+    fatPercent: entry.totalMass && entry.fatMass !== null ? (entry.fatMass / entry.totalMass) * 100 : null,
+    leanPercent: entry.totalMass && entry.leanMass !== null ? (entry.leanMass / entry.totalMass) * 100 : null,
+  }))
+
+  const metrics = metricsByMode[mode] || metricsByMode.total
+  const grouped = new Map()
+
+  entriesWithPercents.forEach((entry) => {
+    if (!grouped.has(entry.groupName)) {
+      grouped.set(entry.groupName, {
+        color: entry.color,
+        metrics: new Map(),
+      })
+    }
+
+    const group = grouped.get(entry.groupName)
+    metrics.forEach(({ key, label }) => {
+      const value = toNullableNumber(entry[key])
+      if (value === null) {
+        return
+      }
+
+      if (!group.metrics.has(label)) {
+        group.metrics.set(label, [])
+      }
+
+      group.metrics.get(label).push(value)
+    })
+  })
+
+  return [...grouped.entries()].flatMap(([groupName, group]) =>
+    metrics
+      .map(({ label }) => {
+        const values = group.metrics.get(label) || []
+        if (!values.length) {
+          return null
+        }
+
+        return {
+          groupName,
+          color: group.color,
+          metric: label,
+          mean: mean(values),
+          sem: sampleSem(values),
+          n: values.length,
+        }
+      })
+      .filter(Boolean),
+  )
+}
+
+export async function renderWeightPlot(target, analysisData, options = {}) {
+  const rows = analysisData?.rows || []
+
   if (!target || !rows.length) {
     return
   }
@@ -63,7 +193,7 @@ export async function renderWeightPlot(target, rows, options = {}) {
   const traces = groups.map((groupName) => {
     const groupRows = weightRows.filter((row) => row.groupName === groupName)
     const byMetric = new Map(groupRows.map((row) => [row.metric, row]))
-    const color = groupRows[0]?.color || '#888'
+    const color = resolveGroupColor(groupName, options.groupColors, groupRows[0]?.color || '#888')
 
     return {
       x: metricOrder,
