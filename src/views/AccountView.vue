@@ -1602,13 +1602,14 @@ export default {
       file.loading = true
 
       try {
-        const [dataCsv, sessionCsv] = await Promise.all([
+        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
           fetchDataFile(standard.id, this.store.auth.token, file.public),
           fetchSessionFile(session.id, this.store.auth.token, file.public),
+          fetchSessionConfig(session.id, this.store.auth.token, file.public),
         ])
 
         const sessionRows = parseCsv(sessionCsv)
-        const sessionPayload = mergeSessionCsvIntoPayload(sessionRows)
+        const sessionPayload = mergeSessionCsvIntoPayload(sessionRows, sessionConfig)
         const detailRows = processDetail(parseCsv(dataCsv), {
           numericalColumns,
           session: sessionPayload,

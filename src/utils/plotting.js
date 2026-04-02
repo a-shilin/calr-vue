@@ -148,6 +148,27 @@ function axisTitle(text) {
   }
 }
 
+function resolveGroupOrder(values, preferredOrder = []) {
+  const seen = new Set()
+  const ordered = []
+
+  preferredOrder.forEach((groupName) => {
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  values.forEach((groupName) => {
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  return ordered
+}
+
 function filterOutliersByMad(rows, variable) {
   const groupedValues = {}
 
@@ -656,7 +677,10 @@ export async function renderQcPlot(target, qcResults, options = {}) {
     return
   }
 
-  const groups = [...new Set(qcResults.subjects.map((subject) => subject.group))]
+  const groups = resolveGroupOrder(
+    qcResults.subjects.map((subject) => subject.group),
+    options.groupOrder || [],
+  )
   const palette = ['#2ca02c', '#ff7f0e', '#1f77b4', '#d62728', '#9467bd', '#8c564b']
   const colors = {}
 

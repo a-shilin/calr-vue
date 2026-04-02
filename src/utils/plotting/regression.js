@@ -32,6 +32,28 @@ function axisTitle(text) {
   }
 }
 
+function resolveGroupOrder(rows, preferredOrder = []) {
+  const seen = new Set()
+  const ordered = []
+
+  preferredOrder.forEach((groupName) => {
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  rows.forEach((row) => {
+    const groupName = row.groupName
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  return ordered
+}
+
 function computeOLS(xValues, yValues) {
   const count = xValues.length
 
@@ -97,7 +119,7 @@ export async function renderRegressionPlot(target, rows, options = {}) {
 
   const xLabel = options.xLabel || options.xVar
   const yLabel = options.yLabel || options.yVar
-  const groups = [...new Set(regressionRows.map((row) => row.groupName).filter(Boolean))]
+  const groups = resolveGroupOrder(regressionRows, options.groupOrder || [])
   const traces = []
 
   groups.forEach((groupName) => {

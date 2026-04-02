@@ -1177,6 +1177,134 @@ export function buildRegressionDataset(detailRows, {
     })
 }
 
+export function buildWeightDataset(detailRows, {
+  mode = 'total',
+} = {}) {
+  if (!Array.isArray(detailRows) || !detailRows.length) {
+    return []
+  }
+
+  const subjects = new Map()
+
+  detailRows.forEach((row) => {
+    const subjectId = row['subject.id']
+
+    if (!subjectId) {
+      return
+    }
+
+    if (!subjects.has(subjectId)) {
+      subjects.set(subjectId, {
+        'subject.id': subjectId,
+        groupName: row.groupName || 'Unknown',
+        color: row.color || '#888',
+        totalValues: [],
+        leanValues: [],
+        fatValues: [],
+        subjectSession: row.subjectSession || {},
+      })
+    }
+
+    const subject = subjects.get(subjectId)
+    const totalValue = toNullableNumber(row['subject.mass'])
+    const leanValue = toNullableNumber(row['subject.lean.mass'])
+    const fatValue = toNullableNumber(row['subject.fat.mass'])
+
+    if (totalValue !== null) {
+      subject.totalValues.push(totalValue)
+    }
+    if (leanValue !== null) {
+      subject.leanValues.push(leanValue)
+    }
+    if (fatValue !== null) {
+      subject.fatValues.push(fatValue)
+    }
+  })
+
+  const subjectEntries = [...subjects.values()].map((subject) => {
+    const totalMass = toNullableNumber(subject.subjectSession.total_mass) ?? mean(subject.totalValues)
+    const leanMass = toNullableNumber(subject.subjectSession.lean_mass) ?? mean(subject.leanValues)
+    const fatMass = toNullableNumber(subject.subjectSession.fat_mass) ?? mean(subject.fatValues)
+
+    return {
+      'subject.id': subject['subject.id'],
+      groupName: subject.groupName,
+      color: subject.color,
+      totalMass,
+      leanMass,
+      fatMass,
+    }
+  })
+
+  const metricsByMode = {
+    total: [{ key: 'totalMass', label: 'Total' }],
+    composition: [
+      { key: 'fatMass', label: 'Fat' },
+      { key: 'leanMass', label: 'Lean' },
+      { key: 'totalMass', label: 'Total' },
+    ],
+    compositionPercent: [
+      { key: 'fatPercent', label: 'Fat' },
+      { key: 'leanPercent', label: 'Lean' },
+    ],
+  }
+
+  const entriesWithPercents = subjectEntries.map((entry) => ({
+    ...entry,
+    fatPercent: entry.totalMass && entry.fatMass !== null ? (entry.fatMass / entry.totalMass) * 100 : null,
+    leanPercent: entry.totalMass && entry.leanMass !== null ? (entry.leanMass / entry.totalMass) * 100 : null,
+  }))
+
+  const metrics = metricsByMode[mode] || metricsByMode.total
+  const grouped = new Map()
+
+  entriesWithPercents.forEach((entry) => {
+    if (!grouped.has(entry.groupName)) {
+      grouped.set(entry.groupName, {
+        color: entry.color,
+        metrics: new Map(),
+      })
+    }
+
+    const group = grouped.get(entry.groupName)
+
+    metrics.forEach(({ key, label }) => {
+      const value = toNullableNumber(entry[key])
+
+      if (value === null) {
+        return
+      }
+
+      if (!group.metrics.has(label)) {
+        group.metrics.set(label, [])
+      }
+
+      group.metrics.get(label).push(value)
+    })
+  })
+
+  return [...grouped.entries()].flatMap(([groupName, group]) =>
+    metrics
+      .map(({ label }) => {
+        const values = group.metrics.get(label) || []
+
+        if (!values.length) {
+          return null
+        }
+
+        return {
+          groupName,
+          color: group.color,
+          metric: label,
+          mean: mean(values),
+          sem: sampleSem(values),
+          n: values.length,
+        }
+      })
+      .filter(Boolean),
+  )
+}
+
 export function normalizeSessionPayload(payload = {}) {
   const normalizeHourValue = (value, fallback) => {
     const parsed = toNullableNumber(value)

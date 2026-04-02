@@ -193,9 +193,30 @@
       <section class="plot-row">
         <aside class="controls-panel">
           <strong>Weight</strong>
-          <div class="muted-copy">Group mean body mass with SEM.</div>
+          <div class="muted-copy">Group mean mass summaries with SEM.</div>
         </aside>
         <div class="panel plot-panel">
+          <div class="card-tabs">
+            <button class="card-tab" :class="{ active: weightViewTab === 'total' }" @click="weightViewTab = 'total'">
+              Total Mass
+            </button>
+            <button
+              v-if="weightHasCompositionData"
+              class="card-tab"
+              :class="{ active: weightViewTab === 'composition' }"
+              @click="weightViewTab = 'composition'"
+            >
+              Mass Breakdown
+            </button>
+            <button
+              v-if="weightHasCompositionData"
+              class="card-tab"
+              :class="{ active: weightViewTab === 'compositionPercent' }"
+              @click="weightViewTab = 'compositionPercent'"
+            >
+              Composition %
+            </button>
+          </div>
           <div ref="weightPlot" class="plot-surface"></div>
         </div>
       </section>
@@ -430,14 +451,15 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchDataFile, fetchPublicFiles, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
+import { fetchDataFile, fetchPublicFiles, fetchSessionConfig, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
 import { fillAccumulatorColumns, mergeSessionCsvIntoPayload, processDetail } from '../utils/process'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { renderRegressionPlot } from '../utils/plotting/regression'
 import { renderTimeSeriesPlot } from '../utils/plotting/time-series'
-import { renderPowerPlot, renderQcPlot, renderWeightPlot } from '../utils/plotting'
+import { renderWeightPlot } from '../utils/plotting/weight'
+import { renderPowerPlot, renderQcPlot } from '../utils/plotting'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -468,7 +490,7 @@ export default {
         { field: 'subject.mass', label: 'Body Mass (g)' },
         { field: 'enviro.temp', label: 'Environmental Temperature (C)' },
       ],
-      timeSeriesVariables: [
+      timeSeriesVariableCatalog: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
         { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
@@ -481,12 +503,19 @@ export default {
         { field: 'drink', label: 'Water Intake (ml)' },
         { field: 'drink.acc', label: 'Cumulative Water Intake (ml)' },
         { field: 'xytot', label: 'Locomotor Activity (beam breaks)' },
+        { field: 'xyamb', label: 'Ambulatory Activity (beam breaks)' },
         { field: 'pedmeter', label: 'Pedestrian Locomotion (m)' },
         { field: 'allmeter', label: 'Distance in Cage (m)' },
         { field: 'body.temp', label: 'Body Temperature (C)' },
+        { field: 'wheel', label: 'Wheel Counts' },
+        { field: 'wheel.acc', label: 'Total Wheel Counts' },
         { field: 'subject.mass', label: 'Body Mass (g)' },
+        { field: 'C13', label: 'C13' },
+        { field: 'enviro.temp', label: 'Environmental Temperature (C)' },
+        { field: 'enviro.light', label: 'Environmental Light' },
+        { field: 'enviro.sound', label: 'Environmental Sound' },
       ],
-      boxPlotVariables: [
+      boxPlotVariableCatalog: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
         { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
@@ -495,9 +524,11 @@ export default {
         { field: 'feed', label: 'Food Intake (kcal/hr)' },
         { field: 'drink', label: 'Water Intake (ml)' },
         { field: 'xytot', label: 'Locomotor Activity (beam breaks)' },
+        { field: 'xyamb', label: 'Ambulatory Activity (beam breaks)' },
         { field: 'pedmeter', label: 'Pedestrian Locomotion (m)' },
         { field: 'allmeter', label: 'Distance in Cage (m)' },
         { field: 'body.temp', label: 'Body Temperature (C)' },
+        { field: 'wheel', label: 'Wheel Counts' },
       ],
       regressionYVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
@@ -552,6 +583,7 @@ export default {
       suppressAnalysisDirtyWatch: false,
       groupColors: {},
       powerViewTab: 'plot',
+      weightViewTab: 'total',
     }
   },
   computed: {
@@ -579,13 +611,64 @@ export default {
       }))
     },
     metadata() {
+      const orderedGroups = (this.sessionMetadata.groupNames || []).filter(Boolean)
+      const fallbackGroups = [...new Set(this.detailRowsWithGroups.map((row) => row.groupName).filter(Boolean))]
       return {
         experimentId: this.store.experiment.current?.name || this.store.experiment.current?.id || 'Current experiment',
-        groups: [...new Set(this.detailRowsWithGroups.map((row) => row.groupName).filter(Boolean))],
+        groups: orderedGroups.length ? orderedGroups : fallbackGroups,
         diets: this.sessionMetadata.dietNames,
         dietCalories: this.sessionMetadata.dietCal,
         subjects: new Set(this.store.experiment.detailRows.map((row) => row['subject.id'])).size,
       }
+    },
+    weightHasCompositionData() {
+      const sessionHasComposition = (this.sessionMetadata.subjects || []).some((subject) =>
+        subject.lean_mass != null
+        || subject.fat_mass != null,
+      )
+      const detailRowsHaveComposition = this.detailRowsWithGroups.some((row) =>
+        row['subject.lean.mass'] != null
+        || row['subject.fat.mass'] != null
+        || row.subjectSession?.lean_mass != null
+        || row.subjectSession?.fat_mass != null,
+      )
+      return sessionHasComposition || detailRowsHaveComposition
+    },
+    timeSeriesVariables() {
+      if (!this.detailRowsWithGroups.length) {
+        return this.timeSeriesVariableCatalog
+      }
+
+      const alwaysInclude = new Set(['eb', 'eb.acc'])
+      return this.timeSeriesVariableCatalog.filter((variable) => {
+        if (alwaysInclude.has(variable.field)) {
+          return true
+        }
+
+        const values = this.detailRowsWithGroups
+          .map((row) => row[variable.field])
+          .filter((value) => value !== null && value !== undefined && value !== '')
+
+        return new Set(values).size > 1
+      })
+    },
+    boxPlotVariables() {
+      if (!this.detailRowsWithGroups.length) {
+        return this.boxPlotVariableCatalog
+      }
+
+      const alwaysInclude = new Set(['eb'])
+      return this.boxPlotVariableCatalog.filter((variable) => {
+        if (alwaysInclude.has(variable.field)) {
+          return true
+        }
+
+        const values = this.detailRowsWithGroups
+          .map((row) => row[variable.field])
+          .filter((value) => value !== null && value !== undefined && value !== '')
+
+        return new Set(values).size > 1
+      })
     },
     powerVariableOptions() {
       if (!this.store.experiment.detailRows.length) {
@@ -705,10 +788,12 @@ export default {
       deep: true,
       handler() {
         this.normalizeTimeRange()
+        this.ensureValidTimeSeriesVariable()
         this.renderTimeSeries()
       },
     },
     distributionVariable() {
+      this.ensureValidDistributionVariable()
       this.renderDistribution()
     },
     regressionOptions: {
@@ -752,6 +837,11 @@ export default {
           this.renderPower()
         })
       }
+    },
+    weightViewTab() {
+      this.$nextTick(() => {
+        this.renderWeight()
+      })
     },
     'store.experiment.qcResults'() {
       this.$nextTick(() => {
@@ -955,13 +1045,14 @@ export default {
 
       file.loading = true
       try {
-        const [dataCsv, sessionCsv] = await Promise.all([
+        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
           fetchDataFile(standard.id, this.store.auth.token, isPublic),
           fetchSessionFile(session.id, this.store.auth.token, isPublic),
+          fetchSessionConfig(session.id, this.store.auth.token, isPublic),
         ])
 
         const parsedSessionRows = parseCsv(sessionCsv)
-        const sessionMetadata = mergeSessionCsvIntoPayload(parsedSessionRows)
+        const sessionMetadata = mergeSessionCsvIntoPayload(parsedSessionRows, sessionConfig)
         const detailRows = processDetail(parseCsv(dataCsv), {
           numericalColumns,
           session: sessionMetadata,
@@ -999,12 +1090,14 @@ export default {
       })
     },
     async renderTimeSeries() {
+      this.ensureValidTimeSeriesVariable()
       await renderTimeSeriesPlot(
         this.$refs.timePlot,
         this.detailRowsWithGroups,
         this.sessionMetadata,
         {
           ...this.timeOptions,
+          groupOrder: this.sessionMetadata.groupNames,
           removeOutliers: this.analysisOptions.removeOutliers,
           rangeEnd: Math.min(this.timeOptions.rangeEnd, this.maxHour),
         },
@@ -1012,8 +1105,10 @@ export default {
       )
     },
     async renderDistribution() {
+      this.ensureValidDistributionVariable()
       const yLabel = this.boxPlotVariables.find((variable) => variable.field === this.distributionVariable)?.label || this.distributionVariable
       await renderBoxPlot(this.$refs.distributionPlot, this.detailRowsWithGroups, this.distributionVariable, {
+        groupOrder: this.sessionMetadata.groupNames,
         yLabel,
         removeOutliers: this.analysisOptions.removeOutliers,
       })
@@ -1023,6 +1118,7 @@ export default {
       const yLabel = this.regressionYVariables.find((variable) => variable.field === this.regressionOptions.yVar)?.label || this.regressionOptions.yVar
       await renderRegressionPlot(this.$refs.regressionPlot, this.detailRowsWithGroups, {
         ...this.regressionOptions,
+        groupOrder: this.sessionMetadata.groupNames,
         removeOutliers: this.analysisOptions.removeOutliers,
         hourRange: this.sessionMetadata.hour_range,
         statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
@@ -1112,6 +1208,7 @@ export default {
       await renderQcPlot(this.$refs.qcPlot, this.store.experiment.qcResults, {
         title: `QC: ${this.clampInteger(this.qcOptions.nMassMeasurements, 1, 15, 5)} mass measurements, hours ${hourStart}-${hourEnd}`,
         groupColors: this.groupColors,
+        groupOrder: this.sessionMetadata.groupNames,
       })
     },
     async renderPower() {
@@ -1128,9 +1225,17 @@ export default {
       })
     },
     async renderWeight() {
+      const mode = this.weightHasCompositionData ? this.weightViewTab : 'total'
+      const labelsByMode = {
+        total: { yLabel: 'Mean (g)' },
+        composition: { yLabel: 'Mean (g)' },
+        compositionPercent: { yLabel: 'Mean Composition of Total Mass (%)' },
+      }
+
       await renderWeightPlot(this.$refs.weightPlot, this.detailRowsWithGroups, {
-        xLabel: 'Total',
-        yLabel: 'Mean (g)',
+        mode,
+        groupOrder: this.sessionMetadata.groupNames,
+        ...labelsByMode[mode],
       })
     },
     clampInteger(value, min, max, fallback) {
@@ -1164,6 +1269,24 @@ export default {
       })
 
       this.groupColors = nextGroupColors
+    },
+    ensureValidTimeSeriesVariable() {
+      if (!this.timeSeriesVariables.length) {
+        return
+      }
+
+      if (!this.timeSeriesVariables.some((variable) => variable.field === this.timeOptions.yVar)) {
+        this.timeOptions.yVar = this.timeSeriesVariables[0].field
+      }
+    },
+    ensureValidDistributionVariable() {
+      if (!this.boxPlotVariables.length) {
+        return
+      }
+
+      if (!this.boxPlotVariables.some((variable) => variable.field === this.distributionVariable)) {
+        this.distributionVariable = this.boxPlotVariables[0].field
+      }
     },
     normalizeTimeRange() {
       const normalized = this.normalizeHourRange(this.timeOptions.rangeStart, this.timeOptions.rangeEnd)
@@ -1227,6 +1350,9 @@ export default {
       this.analysisDirty.qc = true
       this.analysisDirty.power = true
       this.analysisDirty.ancova = true
+      if (!this.weightHasCompositionData) {
+        this.weightViewTab = 'total'
+      }
 
       this.$nextTick(() => {
         this.suppressAnalysisDirtyWatch = false

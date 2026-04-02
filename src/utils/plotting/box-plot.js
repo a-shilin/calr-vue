@@ -25,6 +25,28 @@ function axisTitle(text) {
   }
 }
 
+function resolveGroupOrder(rows, preferredOrder = []) {
+  const seen = new Set()
+  const ordered = []
+
+  preferredOrder.forEach((groupName) => {
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  rows.forEach((row) => {
+    const groupName = row.groupName
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  return ordered
+}
+
 export async function renderBoxPlot(target, rows, variable, options = {}) {
   if (!target || !rows.length) {
     return
@@ -38,7 +60,7 @@ export async function renderBoxPlot(target, rows, variable, options = {}) {
     return
   }
 
-  const groups = [...new Set(rows.map((row) => row.groupName).filter(Boolean))]
+  const groups = resolveGroupOrder(boxRows, options.groupOrder || [])
   const traces = []
 
   groups.forEach((groupName) => {

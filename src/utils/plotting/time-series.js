@@ -54,6 +54,28 @@ function axisTitle(text) {
   }
 }
 
+function resolveGroupOrder(rows, preferredOrder = []) {
+  const seen = new Set()
+  const ordered = []
+
+  preferredOrder.forEach((groupName) => {
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  rows.forEach((row) => {
+    const groupName = row.groupName
+    if (groupName && !seen.has(groupName)) {
+      seen.add(groupName)
+      ordered.push(groupName)
+    }
+  })
+
+  return ordered
+}
+
 function buildFiniteSeries(xValues, yValues) {
   const x = []
   const y = []
@@ -76,60 +98,6 @@ function buildFiniteSeries(xValues, yValues) {
   }
 
   return { x, y }
-}
-
-function buildRawGroupedAccumulatorSeries(rows, variable, groupName) {
-  const grouped = new Map()
-
-  rows
-    .filter((row) => (row.groupName || 'Unknown') === groupName)
-    .forEach((row) => {
-      const minute = Number(row['exp.minute'])
-      const value = Number(row[variable])
-
-      if (!Number.isFinite(minute) || !Number.isFinite(value)) {
-        return
-      }
-
-      if (!grouped.has(minute)) {
-        grouped.set(minute, [])
-      }
-
-      grouped.get(minute).push(value)
-    })
-
-  const minutes = [...grouped.keys()].sort((left, right) => left - right)
-  const xHours = []
-  const meanValues = []
-  const semValues = []
-
-  minutes.forEach((minute) => {
-    const values = grouped.get(minute) || []
-
-    if (!values.length) {
-      return
-    }
-
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length
-    const sem = values.length <= 1
-      ? 0
-      : Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)) / Math.sqrt(values.length)
-
-    if (!Number.isFinite(mean) || !Number.isFinite(sem)) {
-      return
-    }
-
-    xHours.push(minute / 60)
-    meanValues.push(mean)
-    semValues.push(sem)
-  })
-
-  return {
-    xHours,
-    meanValues,
-    semLower: meanValues.map((value, index) => value - semValues[index]),
-    semUpper: meanValues.map((value, index) => value + semValues[index]),
-  }
 }
 
 function computeLightDarkShading(rows) {
@@ -169,11 +137,10 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
   }
 
   const yLabel = explorerVariables.find((item) => item.field === options.yVar)?.label || options.yVar
-  const useRawAccumulatorStats = ['ee.acc', 'eb.acc'].includes(options.yVar)
   const filteredRows = options.removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
   const timeRangeRows = filteredRows.filter((row) => row['exp.minute'] >= options.rangeStart * 60 && row['exp.minute'] <= options.rangeEnd * 60)
   const { groupedRows, subjectRows } = buildTimeSeriesDataset(timeRangeRows)
-  const groups = [...new Set(groupedRows.map((row) => row.groupName).filter(Boolean))]
+  const groups = resolveGroupOrder(groupedRows, options.groupOrder || session?.groupNames || [])
   const traces = []
 
   if (options.showIndividuals) {
@@ -219,16 +186,13 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
       }
 
       const color = groupSeries[0]?.color || '#888'
-      const accumulatorSeries = useRawAccumulatorStats
-        ? buildRawGroupedAccumulatorSeries(timeRangeRows, options.yVar, groupName)
-        : null
-      const xHours = accumulatorSeries?.xHours || groupSeries.map((row) => row['exp.minute'] / 60)
-      const meanValues = accumulatorSeries?.meanValues || groupSeries.map((row) => row[`${options.yVar}.x`] ?? null)
-      const semLower = accumulatorSeries?.semLower || meanValues.map((value, index) => {
+      const xHours = groupSeries.map((row) => row['exp.minute'] / 60)
+      const meanValues = groupSeries.map((row) => row[`${options.yVar}.x`] ?? null)
+      const semLower = meanValues.map((value, index) => {
         const semValue = groupSeries[index]?.[`${options.yVar}.y`] ?? null
         return value === null || semValue === null ? null : value - semValue
       })
-      const semUpper = accumulatorSeries?.semUpper || meanValues.map((value, index) => {
+      const semUpper = meanValues.map((value, index) => {
         const semValue = groupSeries[index]?.[`${options.yVar}.y`] ?? null
         return value === null || semValue === null ? null : value + semValue
       })
