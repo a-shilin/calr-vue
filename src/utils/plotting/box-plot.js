@@ -30,7 +30,9 @@ export async function renderBoxPlot(target, rows, variable, options = {}) {
     return
   }
 
-  const boxRows = buildBoxPlotDataset(rows, variable)
+  const boxRows = buildBoxPlotDataset(rows, variable, {
+    removeOutliers: options.removeOutliers,
+  })
 
   if (!boxRows.length) {
     return

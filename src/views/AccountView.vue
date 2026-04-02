@@ -1608,8 +1608,10 @@ export default {
         ])
 
         const sessionRows = parseCsv(sessionCsv)
+        const sessionPayload = mergeSessionCsvIntoPayload(sessionRows)
         const detailRows = processDetail(parseCsv(dataCsv), {
           numericalColumns,
+          session: sessionPayload,
           sessionRows,
         })
 

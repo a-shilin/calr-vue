@@ -379,7 +379,7 @@ export function fillAccumulatorColumns(rows) {
   return completedRows
 }
 
-function applyDefaultOutlierRemoval(detailRows) {
+export function applyDefaultOutlierRemoval(detailRows) {
   if (!Array.isArray(detailRows) || !detailRows.length) {
     return []
   }
@@ -674,6 +674,48 @@ export function cropDetailRows(detailRows, hourRange) {
   })
 }
 
+function toProcessingSessionShape(session, fallbackCycleStarts, sessionRows = []) {
+  if (!session) {
+    return {
+      ...preprocessSession(sessionRows),
+      light_cycle_start: fallbackCycleStarts.lightCycleStart,
+      dark_cycle_start: fallbackCycleStarts.darkCycleStart,
+      subjects: [],
+    }
+  }
+
+  const hasLegacyGroups = Array.isArray(session.groups) && session.groups.every((group) => Array.isArray(group))
+
+  if (hasLegacyGroups) {
+    return {
+      ...session,
+      light_cycle_start: session.light_cycle_start ?? fallbackCycleStarts.lightCycleStart,
+      dark_cycle_start: session.dark_cycle_start ?? fallbackCycleStarts.darkCycleStart,
+      subjects: session.subjects || [],
+    }
+  }
+
+  const normalizedGroups = Array.isArray(session.groups) ? session.groups : []
+  const normalizedSubjects = Array.isArray(session.subjects) ? session.subjects : []
+  const groups = normalizedGroups.map((_, groupIndex) =>
+    normalizedSubjects
+      .filter((subject) => Number(subject.groupIndex) === groupIndex)
+      .map((subject) => `${subject.subject}`),
+  )
+
+  return {
+    ...session,
+    groupNames: normalizedGroups.map((group) => group.name || ''),
+    dietNames: normalizedGroups.map((group) => group.diet_name || ''),
+    colors: normalizedGroups.map((group, index) => group.color || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length]),
+    dietCal: normalizedGroups.map((group) => toNullableNumber(group.diet_kcal)),
+    groups,
+    subjects: normalizedSubjects,
+    light_cycle_start: session.light_cycle_start ?? fallbackCycleStarts.lightCycleStart,
+    dark_cycle_start: session.dark_cycle_start ?? fallbackCycleStarts.darkCycleStart,
+  }
+}
+
 export function processDetail(rows, {
   numericalColumns = [],
   sessionRows = [],
@@ -693,13 +735,7 @@ export function processDetail(rows, {
     processedRows = ensureEnviroLight(processedRows, cycleStarts.lightCycleStart, cycleStarts.darkCycleStart)
   }
 
-  const sessionPayload = normalizedSession.groups
-    ? normalizedSession
-    : {
-        ...normalizedSession,
-        light_cycle_start: cycleStarts.lightCycleStart,
-        dark_cycle_start: cycleStarts.darkCycleStart,
-      }
+  const sessionPayload = toProcessingSessionShape(normalizedSession, cycleStarts, sessionRows)
 
   processedRows = preprocessDetail(processedRows, numericalColumns)
   processedRows = enrichDetailRows(processedRows, sessionPayload)
@@ -899,12 +935,13 @@ export function buildTimeSeriesDataset(detailRows) {
   }
 }
 
-export function buildBoxPlotDataset(detailRows, variable) {
+export function buildBoxPlotDataset(detailRows, variable, options = {}) {
   if (!Array.isArray(detailRows) || !detailRows.length) {
     return []
   }
 
-  const outlierHandledRows = applyDefaultOutlierRemoval(detailRows)
+  const removeOutliers = options.removeOutliers ?? true
+  const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(detailRows) : detailRows
   const hourlyVariables = variable === 'eb' ? ['feed', 'ee'] : [variable]
 
   const hourlyRows = aggregateDetailRows(outlierHandledRows, {
@@ -973,6 +1010,24 @@ export function buildBoxPlotDataset(detailRows, variable) {
     buckets.get(key).push(entry.value)
   })
 
+  const sortedEntries = subjectEntries.sort((left, right) => {
+      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
+      if (periodDiff) {
+        return periodDiff
+      }
+
+      const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
+      if (groupDiff) {
+        return groupDiff
+      }
+
+      return String(left['subject.id']).localeCompare(String(right['subject.id']))
+    })
+
+  if (!removeOutliers) {
+    return sortedEntries
+  }
+
   const thresholds = new Map()
 
   buckets.forEach((values, key) => {
@@ -998,22 +1053,121 @@ export function buildBoxPlotDataset(detailRows, variable) {
     })
   })
 
-  return subjectEntries
-    .filter((entry) => {
-      const threshold = thresholds.get(`${entry.groupName}::${entry.period}`)
+  return sortedEntries.filter((entry) => {
+    const threshold = thresholds.get(`${entry.groupName}::${entry.period}`)
 
-      if (!threshold) {
-        return true
-      }
+    if (!threshold) {
+      return true
+    }
 
-      return entry.value >= threshold.lower && entry.value <= threshold.upper
+    return entry.value >= threshold.lower && entry.value <= threshold.upper
+  })
+}
+
+export function buildRegressionDataset(detailRows, {
+  xVar,
+  yVar,
+  period = 'Total',
+  removeOutliers = true,
+  hourRange = null,
+} = {}) {
+  if (!Array.isArray(detailRows) || !detailRows.length || !xVar || !yVar) {
+    return []
+  }
+
+  let sourceRows = detailRows
+
+  if (Array.isArray(hourRange) && hourRange.length === 2) {
+    sourceRows = cropDetailRows(sourceRows, hourRange)
+  }
+
+  const subjectMetadata = new Map()
+
+  sourceRows.forEach((row) => {
+    const subjectId = row['subject.id']
+
+    if (!subjectId || subjectMetadata.has(subjectId)) {
+      return
+    }
+
+    subjectMetadata.set(subjectId, {
+      subjectSession: row.subjectSession || {},
+      row,
     })
-    .sort((left, right) => {
-      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
-      if (periodDiff) {
-        return periodDiff
-      }
+  })
 
+  const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(sourceRows) : sourceRows
+  const aggregateVariables = [...new Set([xVar, yVar])]
+  const per = period === 'Total' ? 'hour' : 'light'
+
+  let aggregatedRows = aggregateDetailRows(outlierHandledRows, {
+    per,
+    grp: false,
+    variables: aggregateVariables,
+  })
+
+  if (period === 'Light') {
+    aggregatedRows = aggregatedRows.filter((row) => Number(row.light) === 1)
+  } else if (period === 'Dark') {
+    aggregatedRows = aggregatedRows.filter((row) => Number(row.light) === 0)
+  }
+
+  const subjectRows = new Map()
+
+  const getRegressionCovariateValue = (row) => {
+    const metadata = subjectMetadata.get(row['subject.id'])
+    const subjectSession = metadata?.subjectSession || {}
+    const sourceRow = metadata?.row || row
+
+    if (xVar === 'subject.mass') {
+      return toNullableNumber(subjectSession.total_mass ?? sourceRow['subject.mass'])
+    }
+
+    if (xVar === 'subject.lean.mass') {
+      return toNullableNumber(subjectSession.lean_mass ?? sourceRow['subject.lean.mass'])
+    }
+
+    if (xVar === 'subject.fat.mass') {
+      return toNullableNumber(subjectSession.fat_mass ?? sourceRow['subject.fat.mass'])
+    }
+
+    return toNullableNumber(row[xVar])
+  }
+
+  aggregatedRows.forEach((row) => {
+    const subjectId = row['subject.id']
+    const xValue = getRegressionCovariateValue(row)
+    const yValue = toNullableNumber(row[yVar])
+
+    if (!subjectId || xValue === null || yValue === null) {
+      return
+    }
+
+    if (!subjectRows.has(subjectId)) {
+      subjectRows.set(subjectId, {
+        'subject.id': subjectId,
+        groupName: row.groupName || 'Unknown',
+        color: row.color || '#888',
+        xValues: [],
+        yValues: [],
+      })
+    }
+
+    const subjectEntry = subjectRows.get(subjectId)
+    subjectEntry.xValues.push(xValue)
+    subjectEntry.yValues.push(yValue)
+  })
+
+  return [...subjectRows.values()]
+    .map((row) => ({
+      'subject.id': row['subject.id'],
+      groupName: row.groupName,
+      color: row.color,
+      x: mean(row.xValues),
+      y: mean(row.yValues),
+    }))
+    .filter((row) => row.x !== null && row.y !== null && !Number.isNaN(row.x) && !Number.isNaN(row.y))
+    .sort((left, right) => {
       const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
       if (groupDiff) {
         return groupDiff
@@ -1148,6 +1302,15 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
     .filter((value) => !isBlank(value))
     .map((value) => `${value}`.trim())
 
+  const xRanges = rows
+    .map((row) => toNullableNumber(row.xrange))
+    .filter((value) => value !== null)
+
+  const outlierValues = rows
+    .map((row) => row.outliers)
+    .filter((value) => !isBlank(value))
+    .map((value) => `${value}`.trim().toLowerCase())
+
   const groups = (groupColumns.length ? groupColumns : basePayload.groups.map((_, index) => `group${index + 1}`))
     .map((_, index) => ({
       name: groupNames[index] || basePayload.groups[index]?.name || `Group ${index + 1}`,
@@ -1245,5 +1408,11 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
     subjects,
     light_cycle_start: cycleStarts.lightCycleStart ?? basePayload.light_cycle_start,
     dark_cycle_start: cycleStarts.darkCycleStart ?? basePayload.dark_cycle_start,
+    hour_range: xRanges.length >= 2
+      ? [xRanges[0], xRanges[1]]
+      : basePayload.hour_range,
+    remove_outliers: outlierValues.length
+      ? outlierValues[0] === 'yes' || outlierValues[0] === 'true'
+      : basePayload.remove_outliers,
   })
 }

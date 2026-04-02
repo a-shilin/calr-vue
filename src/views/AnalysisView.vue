@@ -67,6 +67,10 @@
             <input v-model="groupColors[group]" type="color" />
           </label>
         </div>
+        <label class="checkbox-row">
+          <input v-model="analysisOptions.removeOutliers" type="checkbox" />
+          Remove outliers globally
+        </label>
       </section>
 
       <section class="plot-row">
@@ -105,11 +109,6 @@
           <label class="checkbox-row">
             <input v-model="timeOptions.showDarkLight" type="checkbox" />
             Shade Dark/Light Periods
-          </label>
-
-          <label class="checkbox-row">
-            <input v-model="timeOptions.removeOutliers" type="checkbox" />
-            Remove outliers
           </label>
 
           <label class="control-stack">
@@ -178,6 +177,11 @@
           <label class="checkbox-row">
             <input v-model="regressionOptions.showCI" type="checkbox" />
             Show 95% Confidence Interval
+          </label>
+
+          <label class="checkbox-row">
+            <input v-model="regressionOptions.showStatsLegend" type="checkbox" />
+            Show Stats Legend
           </label>
         </aside>
 
@@ -429,10 +433,11 @@ import { appStore } from '../store/appStore'
 import { fetchDataFile, fetchPublicFiles, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
-import { fillAccumulatorColumns, preprocessSession, processDetail } from '../utils/process'
+import { fillAccumulatorColumns, mergeSessionCsvIntoPayload, processDetail } from '../utils/process'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
+import { renderRegressionPlot } from '../utils/plotting/regression'
 import { renderTimeSeriesPlot } from '../utils/plotting/time-series'
-import { renderPowerPlot, renderQcPlot, renderRegressionPlot, renderWeightPlot } from '../utils/plotting'
+import { renderPowerPlot, renderQcPlot, renderWeightPlot } from '../utils/plotting'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -513,7 +518,9 @@ export default {
         showDarkLight: true,
         rangeStart: 0,
         rangeEnd: 24,
-        removeOutliers: false,
+      },
+      analysisOptions: {
+        removeOutliers: true,
       },
       distributionVariable: 'ee',
       regressionOptions: {
@@ -521,6 +528,7 @@ export default {
         yVar: 'ee',
         period: 'Total',
         showCI: true,
+        showStatsLegend: true,
       },
       qcOptions: {
         nMassMeasurements: 5,
@@ -548,7 +556,17 @@ export default {
   },
   computed: {
     sessionMetadata() {
-      return preprocessSession(this.store.experiment.sessionRows)
+      const payload = mergeSessionCsvIntoPayload(this.store.experiment.sessionRows)
+      return {
+        groupNames: payload.groups.map((group) => group.name),
+        dietNames: payload.groups.map((group) => group.diet_name),
+        dietCal: payload.groups.map((group) => group.diet_kcal),
+        colors: payload.groups.map((group) => group.color),
+        subjects: payload.subjects,
+        light_cycle_start: payload.light_cycle_start,
+        dark_cycle_start: payload.dark_cycle_start,
+        hour_range: payload.hour_range,
+      }
     },
     maxHour() {
       const hours = this.store.experiment.detailRows.map((row) => row.hour).filter((hour) => hour !== null)
@@ -602,6 +620,42 @@ export default {
     },
     anovaSummaryRows() {
       return this.normalizeAnalysisRows(this.store.experiment.ancovaResults?.anova || [], this.anovaPeriods)
+    },
+    regressionStatsLegendLines() {
+      if (!this.store.experiment.ancovaResults) {
+        return []
+      }
+
+      const effectKey = this.regressionOptions.xVar === 'xytot' ? 'activity' : 'mass'
+      const title = this.regressionOptions.xVar === 'xytot' ? 'Activity' : 'Total Mass'
+      const periodCandidates = {
+        Total: ['full_day', 'total', 'all'],
+        Light: ['light'],
+        Dark: ['dark'],
+      }[this.regressionOptions.period] || ['full_day', 'total']
+      const yLabel = this.lookupVariableLabel(this.regressionOptions.yVar)
+      const statsRow = this.ancovaSummaryRows.find((row) =>
+        row.variable === this.regressionOptions.yVar || row.label === yLabel,
+      )
+
+      if (!statsRow) {
+        return []
+      }
+
+      const effects = periodCandidates
+        .map((periodKey) => statsRow.periods[periodKey])
+        .find((value) => value && Object.keys(value).length) || {}
+
+      if (!Object.keys(effects).length) {
+        return []
+      }
+
+      return [
+        title,
+        `${effectKey === 'activity' ? 'Activity' : 'Mass'} effect: ${this.formatAnalysisPValue(effects.mass)}`,
+        `Group effect: ${this.formatAnalysisPValue(effects.group)}`,
+        `Interaction effect: ${this.formatAnalysisPValue(effects.interaction)}`,
+      ]
     },
     powerGroupTableRows() {
       const result = this.store.experiment.powerResults
@@ -661,7 +715,21 @@ export default {
       deep: true,
       handler() {
         this.renderRegression()
-        this.markAnalysisDirty('ancova')
+      },
+    },
+    'regressionOptions.xVar'() {
+      this.markAnalysisDirty('ancova')
+    },
+    'regressionOptions.yVar'() {
+      this.markAnalysisDirty('ancova')
+    },
+    'regressionOptions.period'() {
+      this.markAnalysisDirty('ancova')
+    },
+    analysisOptions: {
+      deep: true,
+      handler() {
+        this.renderPlots()
       },
     },
     qcOptions: {
@@ -693,6 +761,11 @@ export default {
     'store.experiment.powerResults'() {
       this.$nextTick(() => {
         this.renderPower()
+      })
+    },
+    'store.experiment.ancovaResults'() {
+      this.$nextTick(() => {
+        this.renderRegression()
       })
     },
     maxHour: {
@@ -888,7 +961,7 @@ export default {
         ])
 
         const parsedSessionRows = parseCsv(sessionCsv)
-        const sessionMetadata = preprocessSession(parsedSessionRows)
+        const sessionMetadata = mergeSessionCsvIntoPayload(parsedSessionRows)
         const detailRows = processDetail(parseCsv(dataCsv), {
           numericalColumns,
           session: sessionMetadata,
@@ -900,7 +973,7 @@ export default {
         this.store.experiment.sessionRows = parsedSessionRows
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
-        this.initializeGroupColors(preprocessSession(parsedSessionRows))
+        this.initializeGroupColors(this.sessionMetadata)
         this.resetAnalysisControlsForDataset()
         this.syncAnalysisDirtyWithStoredResults()
         this.powerViewTab = 'plot'
@@ -932,6 +1005,7 @@ export default {
         this.sessionMetadata,
         {
           ...this.timeOptions,
+          removeOutliers: this.analysisOptions.removeOutliers,
           rangeEnd: Math.min(this.timeOptions.rangeEnd, this.maxHour),
         },
         this.timeSeriesVariables,
@@ -941,6 +1015,7 @@ export default {
       const yLabel = this.boxPlotVariables.find((variable) => variable.field === this.distributionVariable)?.label || this.distributionVariable
       await renderBoxPlot(this.$refs.distributionPlot, this.detailRowsWithGroups, this.distributionVariable, {
         yLabel,
+        removeOutliers: this.analysisOptions.removeOutliers,
       })
     },
     async renderRegression() {
@@ -948,6 +1023,9 @@ export default {
       const yLabel = this.regressionYVariables.find((variable) => variable.field === this.regressionOptions.yVar)?.label || this.regressionOptions.yVar
       await renderRegressionPlot(this.$refs.regressionPlot, this.detailRowsWithGroups, {
         ...this.regressionOptions,
+        removeOutliers: this.analysisOptions.removeOutliers,
+        hourRange: this.sessionMetadata.hour_range,
+        statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
         xLabel,
         yLabel,
       }, this.explorerVariables)

@@ -1,4 +1,4 @@
-import { buildTimeSeriesDataset } from '../process'
+import { applyDefaultOutlierRemoval, buildTimeSeriesDataset } from '../process'
 
 let plotlyPromise = null
 
@@ -132,60 +132,6 @@ function buildRawGroupedAccumulatorSeries(rows, variable, groupName) {
   }
 }
 
-function filterOutliersByMad(rows, variable) {
-  const groupedValues = {}
-
-  rows.forEach((row) => {
-    const groupName = row.groupName || 'Unknown'
-    const value = row[variable]
-
-    if (value === null || Number.isNaN(value)) {
-      return
-    }
-
-    if (!groupedValues[groupName]) {
-      groupedValues[groupName] = []
-    }
-
-    groupedValues[groupName].push(value)
-  })
-
-  const thresholds = {}
-
-  Object.entries(groupedValues).forEach(([groupName, values]) => {
-    if (values.length < 5) {
-      thresholds[groupName] = null
-      return
-    }
-
-    const sortedValues = [...values].sort((left, right) => left - right)
-    const median = sortedValues[Math.floor(sortedValues.length / 2)]
-    const deviations = sortedValues.map((value) => Math.abs(value - median)).sort((left, right) => left - right)
-    const mad = deviations[Math.floor(deviations.length / 2)]
-
-    if (!mad) {
-      thresholds[groupName] = null
-      return
-    }
-
-    thresholds[groupName] = {
-      lower: median - 3 * mad,
-      upper: median + 3 * mad,
-    }
-  })
-
-  return rows.filter((row) => {
-    const threshold = thresholds[row.groupName || 'Unknown']
-    const value = row[variable]
-
-    if (!threshold || value === null || Number.isNaN(value)) {
-      return true
-    }
-
-    return value >= threshold.lower && value <= threshold.upper
-  })
-}
-
 function computeLightDarkShading(rows) {
   const subject = rows[0]?.['subject.id']
   const subjectRows = rows
@@ -224,7 +170,7 @@ export async function renderTimeSeriesPlot(target, rows, session, options, explo
 
   const yLabel = explorerVariables.find((item) => item.field === options.yVar)?.label || options.yVar
   const useRawAccumulatorStats = ['ee.acc', 'eb.acc'].includes(options.yVar)
-  const filteredRows = options.removeOutliers ? filterOutliersByMad(rows, options.yVar) : rows
+  const filteredRows = options.removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
   const timeRangeRows = filteredRows.filter((row) => row['exp.minute'] >= options.rangeStart * 60 && row['exp.minute'] <= options.rangeEnd * 60)
   const { groupedRows, subjectRows } = buildTimeSeriesDataset(timeRangeRows)
   const groups = [...new Set(groupedRows.map((row) => row.groupName).filter(Boolean))]
