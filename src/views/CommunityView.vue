@@ -61,6 +61,8 @@ import { parseCsv, preprocessSummary } from '../utils/csv'
 import { purgePlot } from '../utils/plotting/core'
 import { renderSummaryRegressionPlot } from '../utils/plotting/summary-regression'
 
+const summaryCsvUrl = `${import.meta.env.BASE_URL}calrepo_summary_v1.csv`
+
 export default {
   name: 'CommunityView',
   data() {
@@ -123,7 +125,7 @@ export default {
   },
   async mounted() {
     if (!this.store.community.summaryLoaded) {
-      const response = await fetch('/calrepo_summary_v1.csv')
+      const response = await fetch(summaryCsvUrl)
       const csv = await response.text()
       this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
       this.store.community.summaryLoaded = true

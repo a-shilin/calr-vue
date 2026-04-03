@@ -246,7 +246,7 @@
           <div v-else class="muted-copy">QC is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy">⚠️ this section is still in progress and may change as backend alignment continues.</div>
+          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <div v-if="store.experiment.qcResults" ref="qcPlot" class="plot-surface"></div>
           <div v-else class="plot-placeholder">Run QC to populate this plot.</div>
         </div>
@@ -304,7 +304,7 @@
           <div v-else class="muted-copy">Power is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy">⚠️ this section is still in progress and may change as backend alignment continues.</div>
+          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <template v-if="store.experiment.powerResults">
             <div class="card-tabs">
               <button class="card-tab" :class="{ active: powerViewTab === 'plot' }" @click="powerViewTab = 'plot'">Plot</button>
@@ -358,7 +358,7 @@
           <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy">⚠️ this section is still in progress and may change as backend alignment continues.</div>
+          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <div v-if="store.experiment.ancovaResults" class="ancova-report">
             <div>
               <div v-if="ancovaMassVariableLabel" class="ancova-report__meta">

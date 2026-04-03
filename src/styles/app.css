@@ -657,6 +657,12 @@ a {
 .muted-copy {
   color: #667085;
 }
+.warn-copy {
+  padding: 10px;
+  background: #fff4e1;
+  border-radius: 5px;
+  margin: 0 0 10px 0;
+}
 
 .sub-copy{
   font-weight: normal;
