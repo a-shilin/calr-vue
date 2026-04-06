@@ -3,3 +3,4 @@ dist/
 .DS_Store
 .codex-status.md
 JS_REBUILD_FILES_REFERENCE/
+python_server/

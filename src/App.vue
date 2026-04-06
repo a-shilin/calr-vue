@@ -1,6 +1,6 @@
 <template>
   <div class="app-shell">
-    <header class="app-header">CalR</header>
+    <header class="app-header">CalRepository</header>
     <TabNav />
     <main class="app-content">
       <router-view />
