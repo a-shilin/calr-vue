@@ -454,11 +454,11 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchDataFile, fetchPublicFiles, fetchSessionConfig, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
+import { fetchEnrichedData, fetchPublicFiles, fetchSessionConfig, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { parseCsv } from '../utils/csv'
 import { formatDate } from '../utils/format'
-import { clearProcessCaches } from '../utils/process'
-import { buildAnalysisSession, prepForAnalysis } from '../utils/prep-for-analysis'
+import { clearProcessCaches, preprocessDetail } from '../utils/process'
+import { buildAnalysisSession } from '../utils/prep-for-analysis'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { purgePlot } from '../utils/plotting/core'
 import { renderPowerPlot } from '../utils/plotting/power'
@@ -1043,23 +1043,20 @@ export default {
       file.loading = true
       try {
         clearProcessCaches()
-        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, isPublic),
+        const [enrichedCsv, sessionCsv, sessionConfig] = await Promise.all([
+          fetchEnrichedData(session.id, this.store.auth.token),
           fetchSessionFile(session.id, this.store.auth.token, isPublic),
           fetchSessionConfig(session.id, this.store.auth.token, isPublic),
         ])
 
         const parsedSessionRows = parseCsv(sessionCsv)
-        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
-          numericalColumns,
-          sessionRows: parsedSessionRows,
-          sessionConfig,
-        })
+        const analysisSession = buildAnalysisSession(parsedSessionRows, sessionConfig)
+        const enrichedRows = preprocessDetail(parseCsv(enrichedCsv), numericalColumns)
 
         this.store.experiment.current = file
-        this.store.experiment.detailRows = analysisData.rows
+        this.store.experiment.detailRows = enrichedRows
         this.store.experiment.sessionRows = parsedSessionRows
-        this.store.experiment.analysisData = analysisData
+        this.store.experiment.analysisData = { rows: enrichedRows, session: analysisSession }
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
         this.initializeGroupColors(this.sessionMetadata)

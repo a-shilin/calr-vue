@@ -714,6 +714,7 @@ import {
   convertInstrumentFiles,
   deleteExperiment,
   fetchDataFile,
+  fetchEnrichedData,
   fetchSessionConfig,
   fetchSessionFile,
   fetchUserFiles,
@@ -737,8 +738,9 @@ import {
   inferSessionPayloadFromCalrData,
   mergeSessionCsvIntoPayload,
   normalizeSessionPayload,
+  preprocessDetail,
 } from '../utils/process'
-import { prepForAnalysis } from '../utils/prep-for-analysis'
+import { buildAnalysisSession } from '../utils/prep-for-analysis'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -1604,23 +1606,20 @@ export default {
 
       try {
         clearProcessCaches()
-        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, file.public),
+        const [enrichedCsv, sessionCsv, sessionConfig] = await Promise.all([
+          fetchEnrichedData(session.id, this.store.auth.token),
           fetchSessionFile(session.id, this.store.auth.token, file.public),
           fetchSessionConfig(session.id, this.store.auth.token, file.public),
         ])
 
         const sessionRows = parseCsv(sessionCsv)
-        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
-          numericalColumns,
-          sessionRows,
-          sessionConfig,
-        })
+        const analysisSession = buildAnalysisSession(sessionRows, sessionConfig)
+        const enrichedRows = preprocessDetail(parseCsv(enrichedCsv), numericalColumns)
 
         this.store.experiment.current = file
-        this.store.experiment.detailRows = analysisData.rows
+        this.store.experiment.detailRows = enrichedRows
         this.store.experiment.sessionRows = sessionRows
-        this.store.experiment.analysisData = analysisData
+        this.store.experiment.analysisData = { rows: enrichedRows, session: analysisSession }
         if (this.store.experiment.analysisSessionId !== session.id) {
           this.store.experiment.analysisSessionId = session.id
           this.store.experiment.qcResults = null
