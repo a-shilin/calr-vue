@@ -104,9 +104,9 @@ export async function fetchSessionConfig(fileId, token, isPublic = false) {
   return parseJsonResponse(response)
 }
 
-export async function fetchEnrichedData(sessionId, token) {
+export async function fetchEnrichedData(sessionId, token, isPublic = false) {
   const response = await fetch(`${API_BASE}/sessions/${sessionId}/enriched`, {
-    headers: token ? createHeaders(token) : {},
+    headers: isPublic ? {} : createHeaders(token),
   })
 
   return parseTextResponse(response)

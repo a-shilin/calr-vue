@@ -1596,6 +1596,8 @@ export default {
     },
     async openExperiment(file) {
       const session = file.files.find((item) => item.file_type === 'session')
+      // standard is not used directly after this point, but its presence is required:
+      // the server's _load_session_and_standard_df will 404 if no standard file exists.
       const standard = file.files.find((item) => item.file_type === 'standard')
 
       if (!session || !standard) {
