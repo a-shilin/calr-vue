@@ -1,7 +1,7 @@
 // Analysis-prep entry points.
 // This file turns loaded converted CALR rows plus session metadata into the
 // shared analysis dataset shape consumed by the plotting modules.
-import { mergeSessionCsvIntoPayload, processDetail } from './process'
+import { mergeSessionCsvIntoPayload } from './process'
 
 function toAnalysisSession(sessionPayload = {}) {
   const groups = Array.isArray(sessionPayload.groups) ? sessionPayload.groups : []
@@ -17,26 +17,4 @@ function toAnalysisSession(sessionPayload = {}) {
 
 export function buildAnalysisSession(sessionRows = [], fallbackPayload = {}) {
   return toAnalysisSession(mergeSessionCsvIntoPayload(sessionRows, fallbackPayload))
-}
-
-export function prepForAnalysis(detailRows, {
-  numericalColumns = [],
-  sessionRows = [],
-  sessionConfig = {},
-  applySessionExclusions = true,
-  hourRange = null,
-} = {}) {
-  const session = buildAnalysisSession(sessionRows, sessionConfig)
-  const rows = processDetail(detailRows, {
-    numericalColumns,
-    sessionRows,
-    session,
-    applySessionExclusions,
-    hourRange,
-  })
-
-  return {
-    rows,
-    session,
-  }
 }

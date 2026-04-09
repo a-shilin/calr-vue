@@ -732,7 +732,6 @@ import { formatDate, formatFileSize } from '../utils/format'
 import {
   clearProcessCaches,
   DEFAULT_GROUP_COLORS,
-  ensureEnviroLight,
   ensureExpMinute,
   getSessionCycleStartsFromRows,
   inferSessionPayloadFromCalrData,

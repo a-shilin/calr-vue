@@ -137,15 +137,6 @@ function computeCycleDay(expMinute, lightCycleStart) {
   return Math.floor((expMinute / 60 - lightCycleStart) / 24)
 }
 
-function applySessionFieldFallbacks(row, subjectSession = {}) {
-  return {
-    ...row,
-    'subject.mass': row['subject.mass'] ?? subjectSession.total_mass ?? null,
-    'subject.lean.mass': row['subject.lean.mass'] ?? subjectSession.lean_mass ?? row['Lean.Mass'] ?? null,
-    'subject.fat.mass': row['subject.fat.mass'] ?? subjectSession.fat_mass ?? row['Fat.Mass'] ?? null,
-  }
-}
-
 function mean(values) {
   if (!values.length) {
     return null
@@ -293,20 +284,6 @@ function aggregateBucketVariable(variable, values, per) {
   }
 
   return mean(numericValues)
-}
-
-function convertFeedColumns(row) {
-  const dietCal = toNullableNumber(row.dietCal)
-
-  if (dietCal === null) {
-    return row
-  }
-
-  return {
-    ...row,
-    feed: row.feed === null || row.feed === undefined ? row.feed : row.feed * dietCal,
-    'feed.acc': row['feed.acc'] === null || row['feed.acc'] === undefined ? row['feed.acc'] : row['feed.acc'] * dietCal,
-  }
 }
 
 function getCachedDerivedRows(cache, rows, cacheKey, computeValue) {
@@ -478,28 +455,6 @@ export function ensureExpMinute(rows) {
   })
 }
 
-export function ensureEnviroLight(rows, lightStartHour, darkStartHour, lightValue = 5, darkValue = 0) {
-  if (!Array.isArray(rows) || !rows.length) {
-    return rows
-  }
-
-  const timeKey = findTimeKey(rows)
-
-  if (!timeKey) {
-    return rows
-  }
-
-  return rows.map((row) => {
-    const hour = Number(String(row[timeKey] || '').slice(11, 13))
-    const isLight = !Number.isNaN(hour) && hour >= Number(lightStartHour) && hour < Number(darkStartHour)
-
-    return {
-      ...row,
-      'enviro.light': isLight ? lightValue : darkValue,
-    }
-  })
-}
-
 export function getSessionCycleStartsFromRows(rows) {
   const values = rows
     .map((row) => toNullableNumber(row.light))
@@ -590,65 +545,6 @@ export function preprocessDetail(rows, numericalColumns) {
     parsed.hour = minute === null ? null : minute / 60
     parsed['exp.hour'] = parsed.hour
     return parsed
-  })
-}
-
-export function attachSessionMetadata(detailRows, session) {
-  if (!Array.isArray(detailRows) || !detailRows.length) {
-    return []
-  }
-
-  return detailRows.map((row) => {
-    const groupIndex = resolveSubjectGroupIndex(row['subject.id'] || row.subject_id, session)
-
-    return {
-      ...row,
-      groupName: session.groupNames[groupIndex] || 'Unknown',
-      groupIndex,
-      diet: session.dietNames[groupIndex] || null,
-      color: session.colors[groupIndex] || '#888',
-      dietCal: session.dietCal[groupIndex] || null,
-    }
-  })
-}
-
-export function enrichDetailRows(detailRows, session) {
-  const sessionSubjects = new Map((session.subjects || []).map((subject) => [subject.subject, subject]))
-
-  return attachSessionMetadata(detailRows, session).map((row) => {
-    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
-    const subjectSession = sessionSubjects.get(subjectId) || {}
-    const expMinute = toNullableNumber(row['exp.minute'])
-    const enviroLight = toNullableNumber(row['enviro.light'])
-    const clockHour = computeClockHour(expMinute)
-    const lightFlag = enviroLight === null
-      ? (clockHour !== null && clockHour >= session.light_cycle_start && clockHour < session.dark_cycle_start ? 1 : 0)
-      : (enviroLight > 1 ? 1 : 0)
-
-    const enrichedRow = convertFeedColumns(applySessionFieldFallbacks({
-      ...row,
-      'exp.minute': expMinute,
-      hour: expMinute === null ? null : expMinute / 60,
-      'exp.hour': expMinute === null ? null : expMinute / 60,
-      'enviro.light': enviroLight,
-      light: lightFlag,
-      dark: lightFlag === null ? null : lightFlag === 1 ? 0 : 1,
-      day: computeCycleDay(expMinute, session.light_cycle_start),
-      'exp.day': computeCycleDay(expMinute, session.light_cycle_start),
-      clockHour,
-      subjectSession,
-    }, subjectSession))
-
-    const feedValue = toNullableNumber(enrichedRow.feed)
-    const eeValue = toNullableNumber(enrichedRow.ee)
-    const feedAccValue = toNullableNumber(enrichedRow['feed.acc'])
-    const eeAccValue = toNullableNumber(enrichedRow['ee.acc'])
-
-    return {
-      ...enrichedRow,
-      eb: feedValue === null || eeValue === null ? null : feedValue - eeValue,
-      'eb.acc': feedAccValue === null || eeAccValue === null ? null : feedAccValue - eeAccValue,
-    }
   })
 }
 
@@ -747,15 +643,9 @@ export function processDetail(rows, {
 
   let processedRows = ensureExpMinute(rows)
 
-  if (processedRows.length && processedRows.every((row) => isBlank(row['enviro.light']))) {
-    processedRows = ensureEnviroLight(processedRows, cycleStarts.lightCycleStart, cycleStarts.darkCycleStart)
-  }
-
   const sessionPayload = toProcessingSessionShape(normalizedSession, cycleStarts, sessionRows)
 
   processedRows = preprocessDetail(processedRows, numericalColumns)
-  processedRows = enrichDetailRows(processedRows, sessionPayload)
-  processedRows = fillAccumulatorColumns(processedRows)
 
   if (applySessionExclusions) {
     processedRows = applyExclusions(processedRows, sessionPayload)
