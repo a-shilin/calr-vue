@@ -104,6 +104,14 @@ export async function fetchSessionConfig(fileId, token, isPublic = false) {
   return parseJsonResponse(response)
 }
 
+export async function fetchEnrichedData(sessionId, token) {
+  const response = await fetch(`${API_BASE}/sessions/${sessionId}/enriched`, {
+    headers: token ? createHeaders(token) : {},
+  })
+
+  return parseTextResponse(response)
+}
+
 export async function updateExperimentPublicStatus(fileId, makePublic, token) {
   const response = await fetch(`${API_BASE}/files/${fileId}?public=${makePublic}`, {
     method: 'PATCH',
