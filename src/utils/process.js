@@ -108,34 +108,6 @@ function findTimeKey(rows) {
   return null
 }
 
-function resolveSubjectGroupIndex(subjectIdValue, session) {
-  const firstGroupValue = session.groups?.[0]?.[0]
-  const useCompoundSubjectId = typeof firstGroupValue === 'string' && firstGroupValue.includes('_')
-  const normalizedValue = normalizeSubjectIdentifier(subjectIdValue)
-
-  if (!normalizedValue) {
-    return -1
-  }
-
-  const targetId = useCompoundSubjectId ? normalizedValue : normalizedValue.split('_')[0]
-  return session.groups.findIndex((group) => group.includes(targetId))
-}
-
-function computeClockHour(expMinute) {
-  if (expMinute === null) {
-    return null
-  }
-
-  return ((expMinute / 60) % 24 + 24) % 24
-}
-
-function computeCycleDay(expMinute, lightCycleStart) {
-  if (expMinute === null) {
-    return null
-  }
-
-  return Math.floor((expMinute / 60 - lightCycleStart) / 24)
-}
 
 function mean(values) {
   if (!values.length) {
@@ -628,35 +600,6 @@ function toProcessingSessionShape(session, fallbackCycleStarts, sessionRows = []
   }
 }
 
-export function processDetail(rows, {
-  numericalColumns = [],
-  sessionRows = [],
-  session = null,
-  applySessionExclusions = true,
-  hourRange = null,
-} = {}) {
-  const normalizedSession = session || preprocessSession(sessionRows)
-  const cycleStarts = {
-    lightCycleStart: normalizedSession.light_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).lightCycleStart,
-    darkCycleStart: normalizedSession.dark_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).darkCycleStart,
-  }
-
-  let processedRows = ensureExpMinute(rows)
-
-  const sessionPayload = toProcessingSessionShape(normalizedSession, cycleStarts, sessionRows)
-
-  processedRows = preprocessDetail(processedRows, numericalColumns)
-
-  if (applySessionExclusions) {
-    processedRows = applyExclusions(processedRows, sessionPayload)
-  }
-
-  if (hourRange) {
-    processedRows = cropDetailRows(processedRows, hourRange)
-  }
-
-  return processedRows
-}
 
 export function aggregateDetailRows(detailRows, {
   per = 'min',
