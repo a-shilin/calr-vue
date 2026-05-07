@@ -108,44 +108,6 @@ function findTimeKey(rows) {
   return null
 }
 
-function resolveSubjectGroupIndex(subjectIdValue, session) {
-  const firstGroupValue = session.groups?.[0]?.[0]
-  const useCompoundSubjectId = typeof firstGroupValue === 'string' && firstGroupValue.includes('_')
-  const normalizedValue = normalizeSubjectIdentifier(subjectIdValue)
-
-  if (!normalizedValue) {
-    return -1
-  }
-
-  const targetId = useCompoundSubjectId ? normalizedValue : normalizedValue.split('_')[0]
-  return session.groups.findIndex((group) => group.includes(targetId))
-}
-
-function computeClockHour(expMinute) {
-  if (expMinute === null) {
-    return null
-  }
-
-  return ((expMinute / 60) % 24 + 24) % 24
-}
-
-function computeCycleDay(expMinute, lightCycleStart) {
-  if (expMinute === null) {
-    return null
-  }
-
-  return Math.floor((expMinute / 60 - lightCycleStart) / 24)
-}
-
-function applySessionFieldFallbacks(row, subjectSession = {}) {
-  return {
-    ...row,
-    'subject.mass': row['subject.mass'] ?? subjectSession.total_mass ?? null,
-    'subject.lean.mass': row['subject.lean.mass'] ?? subjectSession.lean_mass ?? row['Lean.Mass'] ?? null,
-    'subject.fat.mass': row['subject.fat.mass'] ?? subjectSession.fat_mass ?? row['Fat.Mass'] ?? null,
-  }
-}
-
 function mean(values) {
   if (!values.length) {
     return null
@@ -575,83 +537,6 @@ export function preprocessSession(rows) {
   return session
 }
 
-export function preprocessDetail(rows, numericalColumns) {
-  return rows.map((row) => {
-    const parsed = { ...row }
-
-    numericalColumns.forEach((column) => {
-      if (parsed[column] !== undefined) {
-        parsed[column] = toNullableNumber(parsed[column])
-      }
-    })
-
-    const minute = toNullableNumber(parsed['exp.minute'])
-    parsed['exp.minute'] = minute
-    parsed.hour = minute === null ? null : minute / 60
-    parsed['exp.hour'] = parsed.hour
-    return parsed
-  })
-}
-
-export function attachSessionMetadata(detailRows, session) {
-  if (!Array.isArray(detailRows) || !detailRows.length) {
-    return []
-  }
-
-  return detailRows.map((row) => {
-    const groupIndex = resolveSubjectGroupIndex(row['subject.id'] || row.subject_id, session)
-
-    return {
-      ...row,
-      groupName: session.groupNames[groupIndex] || 'Unknown',
-      groupIndex,
-      diet: session.dietNames[groupIndex] || null,
-      color: session.colors[groupIndex] || '#888',
-      dietCal: session.dietCal[groupIndex] || null,
-    }
-  })
-}
-
-export function enrichDetailRows(detailRows, session) {
-  const sessionSubjects = new Map((session.subjects || []).map((subject) => [subject.subject, subject]))
-
-  return attachSessionMetadata(detailRows, session).map((row) => {
-    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
-    const subjectSession = sessionSubjects.get(subjectId) || {}
-    const expMinute = toNullableNumber(row['exp.minute'])
-    const enviroLight = toNullableNumber(row['enviro.light'])
-    const clockHour = computeClockHour(expMinute)
-    const lightFlag = enviroLight === null
-      ? (clockHour !== null && clockHour >= session.light_cycle_start && clockHour < session.dark_cycle_start ? 1 : 0)
-      : (enviroLight > 1 ? 1 : 0)
-
-    const enrichedRow = convertFeedColumns(applySessionFieldFallbacks({
-      ...row,
-      'exp.minute': expMinute,
-      hour: expMinute === null ? null : expMinute / 60,
-      'exp.hour': expMinute === null ? null : expMinute / 60,
-      'enviro.light': enviroLight,
-      light: lightFlag,
-      dark: lightFlag === null ? null : lightFlag === 1 ? 0 : 1,
-      day: computeCycleDay(expMinute, session.light_cycle_start),
-      'exp.day': computeCycleDay(expMinute, session.light_cycle_start),
-      clockHour,
-      subjectSession,
-    }, subjectSession))
-
-    const feedValue = toNullableNumber(enrichedRow.feed)
-    const eeValue = toNullableNumber(enrichedRow.ee)
-    const feedAccValue = toNullableNumber(enrichedRow['feed.acc'])
-    const eeAccValue = toNullableNumber(enrichedRow['ee.acc'])
-
-    return {
-      ...enrichedRow,
-      eb: feedValue === null || eeValue === null ? null : feedValue - eeValue,
-      'eb.acc': feedAccValue === null || eeAccValue === null ? null : feedAccValue - eeAccValue,
-    }
-  })
-}
-
 export function applyExclusions(detailRows, session) {
   if (!Array.isArray(detailRows) || !detailRows.length) {
     return []
@@ -688,84 +573,6 @@ export function cropDetailRows(detailRows, hourRange) {
 
     return expHour >= startHour && expHour <= endHour
   })
-}
-
-function toProcessingSessionShape(session, fallbackCycleStarts, sessionRows = []) {
-  if (!session) {
-    return {
-      ...preprocessSession(sessionRows),
-      light_cycle_start: fallbackCycleStarts.lightCycleStart,
-      dark_cycle_start: fallbackCycleStarts.darkCycleStart,
-      subjects: [],
-    }
-  }
-
-  const hasLegacyGroups = Array.isArray(session.groups) && session.groups.every((group) => Array.isArray(group))
-
-  if (hasLegacyGroups) {
-    return {
-      ...session,
-      light_cycle_start: session.light_cycle_start ?? fallbackCycleStarts.lightCycleStart,
-      dark_cycle_start: session.dark_cycle_start ?? fallbackCycleStarts.darkCycleStart,
-      subjects: session.subjects || [],
-    }
-  }
-
-  const normalizedGroups = Array.isArray(session.groups) ? session.groups : []
-  const normalizedSubjects = Array.isArray(session.subjects) ? session.subjects : []
-  const groups = normalizedGroups.map((_, groupIndex) =>
-    normalizedSubjects
-      .filter((subject) => Number(subject.groupIndex) === groupIndex)
-      .map((subject) => `${subject.subject}`),
-  )
-
-  return {
-    ...session,
-    groupNames: normalizedGroups.map((group) => group.name || ''),
-    dietNames: normalizedGroups.map((group) => group.diet_name || ''),
-    colors: normalizedGroups.map((group, index) => group.color || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length]),
-    dietCal: normalizedGroups.map((group) => toNullableNumber(group.diet_kcal)),
-    groups,
-    subjects: normalizedSubjects,
-    light_cycle_start: session.light_cycle_start ?? fallbackCycleStarts.lightCycleStart,
-    dark_cycle_start: session.dark_cycle_start ?? fallbackCycleStarts.darkCycleStart,
-  }
-}
-
-export function processDetail(rows, {
-  numericalColumns = [],
-  sessionRows = [],
-  session = null,
-  applySessionExclusions = true,
-  hourRange = null,
-} = {}) {
-  const normalizedSession = session || preprocessSession(sessionRows)
-  const cycleStarts = {
-    lightCycleStart: normalizedSession.light_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).lightCycleStart,
-    darkCycleStart: normalizedSession.dark_cycle_start ?? getSessionCycleStartsFromRows(sessionRows).darkCycleStart,
-  }
-
-  let processedRows = ensureExpMinute(rows)
-
-  if (processedRows.length && processedRows.every((row) => isBlank(row['enviro.light']))) {
-    processedRows = ensureEnviroLight(processedRows, cycleStarts.lightCycleStart, cycleStarts.darkCycleStart)
-  }
-
-  const sessionPayload = toProcessingSessionShape(normalizedSession, cycleStarts, sessionRows)
-
-  processedRows = preprocessDetail(processedRows, numericalColumns)
-  processedRows = enrichDetailRows(processedRows, sessionPayload)
-  processedRows = fillAccumulatorColumns(processedRows)
-
-  if (applySessionExclusions) {
-    processedRows = applyExclusions(processedRows, sessionPayload)
-  }
-
-  if (hourRange) {
-    processedRows = cropDetailRows(processedRows, hourRange)
-  }
-
-  return processedRows
 }
 
 export function aggregateDetailRows(detailRows, {
@@ -965,7 +772,7 @@ export function normalizeSessionPayload(payload = {}) {
     name: `${group?.name || `Group ${index + 1}`}`.trim(),
     diet_name: group?.diet_name ? `${group.diet_name}`.trim() : '',
     diet_kcal: toNullableNumber(group?.diet_kcal),
-    color: payload.group_colors?.[group?.name] || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length],
+    color: group?.color || payload.group_colors?.[group?.name] || DEFAULT_GROUP_COLORS[index % DEFAULT_GROUP_COLORS.length],
   }))
 
   const groupColors = groups.reduce((accumulator, group, index) => {
@@ -1173,7 +980,12 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
     }
   })
 
-  const cycleStarts = getSessionCycleStartsFromRows(rows)
+  const cycleStarts = rows.length
+    ? getSessionCycleStartsFromRows(rows)
+    : {
+        lightCycleStart: basePayload.light_cycle_start,
+        darkCycleStart: basePayload.dark_cycle_start,
+      }
 
   return normalizeSessionPayload({
     ...basePayload,

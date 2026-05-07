@@ -247,6 +247,7 @@
         </aside>
         <div class="panel plot-panel">
           <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
+          <div v-if="store.experiment.analysisErrors.qc" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.qc }}</div>
           <div v-if="store.experiment.qcResults" ref="qcPlot" class="plot-surface"></div>
           <div v-else class="plot-placeholder">Run QC to populate this plot.</div>
         </div>
@@ -305,6 +306,7 @@
         </aside>
         <div class="panel plot-panel">
           <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
+          <div v-if="store.experiment.analysisErrors.power" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.power }}</div>
           <template v-if="store.experiment.powerResults">
             <div class="card-tabs">
               <button class="card-tab" :class="{ active: powerViewTab === 'plot' }" @click="powerViewTab = 'plot'">Plot</button>
@@ -359,6 +361,7 @@
         </aside>
         <div class="panel plot-panel">
           <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
+          <div v-if="store.experiment.analysisErrors.ancova" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.ancova }}</div>
           <div v-if="store.experiment.ancovaResults" class="ancova-report">
             <div>
               <div v-if="ancovaMassVariableLabel" class="ancova-report__meta">
@@ -454,11 +457,10 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchDataFile, fetchPublicFiles, fetchSessionConfig, fetchSessionFile, fetchUserFiles, runAnalysis } from '../services/registryService'
-import { parseCsv } from '../utils/csv'
+import { fetchEnrichedSession, fetchPublicFiles, fetchSessionConfig, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { formatDate } from '../utils/format'
 import { clearProcessCaches } from '../utils/process'
-import { buildAnalysisSession, prepForAnalysis } from '../utils/prep-for-analysis'
+import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { purgePlot } from '../utils/plotting/core'
 import { renderPowerPlot } from '../utils/plotting/power'
@@ -598,7 +600,14 @@ export default {
     analysisData() {
       return this.store.experiment.analysisData || {
         rows: this.store.experiment.detailRows,
-        session: buildAnalysisSession(this.store.experiment.sessionRows),
+        session: {
+          groupNames: [],
+          dietNames: [],
+          dietCal: [],
+          colors: [],
+          subjects: [],
+          hour_range: [0, 24],
+        },
       }
     },
     sessionMetadata() {
@@ -886,7 +895,7 @@ export default {
       await this.loadPrivateFiles()
     }
 
-    if (this.store.experiment.current && this.store.experiment.sessionRows.length) {
+    if (this.store.experiment.current && this.store.experiment.analysisData?.rows?.length) {
       clearProcessCaches()
       this.ensureExperimentAnalysisCache()
       this.initializeGroupColors(this.sessionMetadata)
@@ -1031,34 +1040,32 @@ export default {
       this.store.experiment.qcResults = null
       this.store.experiment.powerResults = null
       this.store.experiment.ancovaResults = null
+      this.store.experiment.analysisErrors.qc = null
+      this.store.experiment.analysisErrors.power = null
+      this.store.experiment.analysisErrors.ancova = null
     },
     async openExperimentForAnalysis(file, isPublic) {
       const session = file.files.find((item) => item.file_type === 'session')
-      const standard = file.files.find((item) => item.file_type === 'standard')
 
-      if (!session || !standard) {
+      if (!session) {
         return
       }
 
       file.loading = true
       try {
         clearProcessCaches()
-        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, isPublic),
-          fetchSessionFile(session.id, this.store.auth.token, isPublic),
+        const [enrichedPayload, sessionConfig] = await Promise.all([
+          fetchEnrichedSession(session.id, this.store.auth.token, isPublic),
           fetchSessionConfig(session.id, this.store.auth.token, isPublic),
         ])
 
-        const parsedSessionRows = parseCsv(sessionCsv)
-        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
+        const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
           numericalColumns,
-          sessionRows: parsedSessionRows,
           sessionConfig,
         })
 
         this.store.experiment.current = file
         this.store.experiment.detailRows = analysisData.rows
-        this.store.experiment.sessionRows = parsedSessionRows
         this.store.experiment.analysisData = analysisData
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
@@ -1156,6 +1163,7 @@ export default {
 
       this.store.loaders.doQC = true
       try {
+        this.store.experiment.analysisErrors.qc = null
         const hourRange = this.normalizeHourRange(this.qcOptions.hourStart, this.qcOptions.hourEnd)
         this.store.experiment.qcResults = await runAnalysis(
           'qc',
@@ -1170,6 +1178,9 @@ export default {
           this.store.experiment.current.public,
         )
         this.analysisDirty.qc = false
+      } catch (error) {
+        this.store.experiment.qcResults = null
+        this.store.experiment.analysisErrors.qc = this.normalizeAnalysisError(error, 'QC')
       } finally {
         this.store.loaders.doQC = false
       }
@@ -1181,6 +1192,7 @@ export default {
 
       this.store.loaders.doAncova = true
       try {
+        this.store.experiment.analysisErrors.ancova = null
         this.store.experiment.ancovaResults = await runAnalysis(
           'ancova',
           {
@@ -1193,6 +1205,9 @@ export default {
           this.store.experiment.current.public,
         )
         this.analysisDirty.ancova = false
+      } catch (error) {
+        this.store.experiment.ancovaResults = null
+        this.store.experiment.analysisErrors.ancova = this.normalizeAnalysisError(error, 'Ancova')
       } finally {
         this.store.loaders.doAncova = false
       }
@@ -1204,6 +1219,7 @@ export default {
 
       this.store.loaders.doPower = true
       try {
+        this.store.experiment.analysisErrors.power = null
         const hourRange = this.normalizeHourRange(this.powerOptions.hourStart, this.powerOptions.hourEnd)
         this.store.experiment.powerResults = await runAnalysis(
           'power',
@@ -1222,6 +1238,9 @@ export default {
           this.store.experiment.current.public,
         )
         this.analysisDirty.power = false
+      } catch (error) {
+        this.store.experiment.powerResults = null
+        this.store.experiment.analysisErrors.power = this.normalizeAnalysisError(error, 'Power')
       } finally {
         this.store.loaders.doPower = false
       }
@@ -1330,6 +1349,25 @@ export default {
         return value.toFixed(2)
       }
       return value
+    },
+    normalizeAnalysisError(error, label) {
+      const fallbackMessage = `${label} could not be generated.`
+      const sourceMessage = error?.message || ''
+
+      if (!sourceMessage) {
+        return fallbackMessage
+      }
+
+      try {
+        const parsed = JSON.parse(sourceMessage)
+        if (parsed?.detail) {
+          return `${label} could not be generated: ${parsed.detail}`
+        }
+      } catch {
+        // Ignore non-JSON error text and fall back below.
+      }
+
+      return `${label} could not be generated: ${sourceMessage}`
     },
     normalizePowerGroupRow(row, fallbackGroupName = '', result = this.store.experiment.powerResults) {
       const sampleSize = row['sample.size'] ?? row.sample_size ?? row.sampleSize ?? row.n ?? row.sample?.size

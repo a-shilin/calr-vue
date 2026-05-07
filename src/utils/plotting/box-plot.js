@@ -1,7 +1,7 @@
 // Box-plot rendering.
-// This file takes analysis-ready rows, computes photoperiod summaries for one
-// variable, and builds the Plotly box plot configuration.
-import { aggregateDetailRows, applyDefaultOutlierRemoval } from '../process'
+// This file takes analysis-ready rows, computes subject-level photoperiod
+// averages, and builds the Plotly box plot configuration.
+import { applyDefaultOutlierRemoval } from '../process'
 import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function resolveGroupOrder(rows, preferredOrder = []) {
@@ -34,23 +34,6 @@ function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function quantile(sortedValues, q) {
-  if (!sortedValues.length) {
-    return null
-  }
-
-  const position = (sortedValues.length - 1) * q
-  const lowerIndex = Math.floor(position)
-  const upperIndex = Math.ceil(position)
-
-  if (lowerIndex === upperIndex) {
-    return sortedValues[lowerIndex]
-  }
-
-  const weight = position - lowerIndex
-  return sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight
-}
-
 function buildBoxPlotDataset(rows, variable, options = {}) {
   if (!Array.isArray(rows) || !rows.length) {
     return []
@@ -58,21 +41,17 @@ function buildBoxPlotDataset(rows, variable, options = {}) {
 
   const removeOutliers = options.removeOutliers ?? true
   const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
-  const hourlyVariables = variable === 'eb' ? ['feed', 'ee'] : [variable]
-  const hourlyRows = aggregateDetailRows(outlierHandledRows, {
-    per: 'hour',
-    grp: false,
-    variables: hourlyVariables,
-  })
   const subjectPeriods = new Map()
 
-  hourlyRows.forEach((row) => {
+  outlierHandledRows.forEach((row) => {
     const subjectId = row['subject.id']
-    const baseKey = `${subjectId}::${row.groupName || 'Unknown'}`
+    const groupName = row.groupName || 'Unknown'
+    const color = row.color || '#888'
+    const baseKey = `${subjectId}::${groupName}`
     const periodBuckets = [
       { period: 'Total', include: true },
-      { period: 'Dark', include: Number(row.light) === 0 },
-      { period: 'Light', include: Number(row.light) === 1 },
+      { period: 'Dark', include: Number(row.light ?? (Number(row['enviro.light']) > 1 ? 1 : 0)) === 0 },
+      { period: 'Light', include: Number(row.light ?? (Number(row['enviro.light']) > 1 ? 1 : 0)) === 1 },
     ]
 
     periodBuckets.forEach(({ period, include }) => {
@@ -92,8 +71,8 @@ function buildBoxPlotDataset(rows, variable, options = {}) {
       if (!subjectPeriods.has(key)) {
         subjectPeriods.set(key, {
           period,
-          groupName: row.groupName || 'Unknown',
-          color: row.color || '#888',
+          groupName,
+          color,
           subjectId,
           values: [],
         })
@@ -113,66 +92,7 @@ function buildBoxPlotDataset(rows, variable, options = {}) {
       value: mean(entry.values),
     }))
     .filter((entry) => entry.value !== null && !Number.isNaN(entry.value))
-
-  if (!removeOutliers) {
-    return subjectEntries.sort((left, right) => {
-      const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
-      if (periodDiff) {
-        return periodDiff
-      }
-
-      const groupDiff = String(left.groupName).localeCompare(String(right.groupName))
-      if (groupDiff) {
-        return groupDiff
-      }
-
-      return String(left['subject.id']).localeCompare(String(right['subject.id']))
-    })
-  }
-
-  const buckets = new Map()
-  subjectEntries.forEach((entry) => {
-    const key = `${entry.groupName}::${entry.period}`
-    if (!buckets.has(key)) {
-      buckets.set(key, [])
-    }
-    buckets.get(key).push(entry.value)
-  })
-
-  const thresholds = new Map()
-  buckets.forEach((values, key) => {
-    if (values.length < 5) {
-      thresholds.set(key, null)
-      return
-    }
-
-    const sorted = [...values].sort((left, right) => left - right)
-    const q1 = quantile(sorted, 0.25)
-    const q3 = quantile(sorted, 0.75)
-
-    if (q1 === null || q3 === null) {
-      thresholds.set(key, null)
-      return
-    }
-
-    const iqr = q3 - q1
-    thresholds.set(key, {
-      lower: q1 - (1.5 * iqr),
-      upper: q3 + (1.5 * iqr),
-    })
-  })
-
-  return subjectEntries
-    .filter((entry) => {
-      const threshold = thresholds.get(`${entry.groupName}::${entry.period}`)
-
-      if (!threshold) {
-        return true
-      }
-
-      return entry.value >= threshold.lower && entry.value <= threshold.upper
-    })
-    .sort((left, right) => {
+  return subjectEntries.sort((left, right) => {
       const periodDiff = periodOrder.indexOf(left.period) - periodOrder.indexOf(right.period)
       if (periodDiff) {
         return periodDiff

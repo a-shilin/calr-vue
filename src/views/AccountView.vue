@@ -714,6 +714,7 @@ import {
   convertInstrumentFiles,
   deleteExperiment,
   fetchDataFile,
+  fetchEnrichedSession,
   fetchSessionConfig,
   fetchSessionFile,
   fetchUserFiles,
@@ -738,7 +739,7 @@ import {
   mergeSessionCsvIntoPayload,
   normalizeSessionPayload,
 } from '../utils/process'
-import { prepForAnalysis } from '../utils/prep-for-analysis'
+import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -1594,9 +1595,8 @@ export default {
     },
     async openExperiment(file) {
       const session = file.files.find((item) => item.file_type === 'session')
-      const standard = file.files.find((item) => item.file_type === 'standard')
 
-      if (!session || !standard) {
+      if (!session) {
         return
       }
 
@@ -1604,28 +1604,27 @@ export default {
 
       try {
         clearProcessCaches()
-        const [dataCsv, sessionCsv, sessionConfig] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, file.public),
-          fetchSessionFile(session.id, this.store.auth.token, file.public),
+        const [enrichedPayload, sessionConfig] = await Promise.all([
+          fetchEnrichedSession(session.id, this.store.auth.token, file.public),
           fetchSessionConfig(session.id, this.store.auth.token, file.public),
         ])
 
-        const sessionRows = parseCsv(sessionCsv)
-        const analysisData = prepForAnalysis(parseCsv(dataCsv), {
+        const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
           numericalColumns,
-          sessionRows,
           sessionConfig,
         })
 
         this.store.experiment.current = file
         this.store.experiment.detailRows = analysisData.rows
-        this.store.experiment.sessionRows = sessionRows
         this.store.experiment.analysisData = analysisData
         if (this.store.experiment.analysisSessionId !== session.id) {
           this.store.experiment.analysisSessionId = session.id
           this.store.experiment.qcResults = null
           this.store.experiment.powerResults = null
           this.store.experiment.ancovaResults = null
+          this.store.experiment.analysisErrors.qc = null
+          this.store.experiment.analysisErrors.power = null
+          this.store.experiment.analysisErrors.ancova = null
         }
         this.$router.push('/analysis')
       } finally {

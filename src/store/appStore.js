@@ -55,12 +55,16 @@ export const appStore = reactive({
     latestExperimentId: null,
     current: null,
     detailRows: [],
-    sessionRows: [],
     analysisData: null,
     analysisSessionId: null,
     qcResults: null,
     ancovaResults: null,
     powerResults: null,
+    analysisErrors: {
+      qc: null,
+      ancova: null,
+      power: null,
+    },
   },
   community: {
     summaryRows: [],

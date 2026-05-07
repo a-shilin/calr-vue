@@ -44,6 +44,21 @@ async function parseTextResponse(response) {
   return response.text()
 }
 
+async function parseJsonOrTextResponse(response) {
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || `Request failed with status ${response.status}`)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+
+  return response.text()
+}
+
 export async function login(username, password) {
   const response = await fetch(`${AUTH_BASE}/login/`, {
     method: 'POST',
@@ -102,6 +117,14 @@ export async function fetchSessionConfig(fileId, token, isPublic = false) {
   })
 
   return parseJsonResponse(response)
+}
+
+export async function fetchEnrichedSession(sessionId, token, isPublic = false) {
+  const response = await fetch(`${API_BASE}/sessions/${sessionId}/enriched`, {
+    headers: isPublic ? {} : createHeaders(token),
+  })
+
+  return parseJsonOrTextResponse(response)
 }
 
 export async function updateExperimentPublicStatus(fileId, makePublic, token) {

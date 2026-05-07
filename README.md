@@ -23,17 +23,6 @@ npm run build
 npm run preview
 ```
 
-## Current Structure
-
-- [src/views](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/views): page-level screens
-- [src/router/index.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/router/index.js): app routes
-- [src/services/registryService.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/services/registryService.js): backend API calls
-- [src/utils/process.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/process.js): shared CALR/session normalization and aggregation helpers
-- [src/utils/prep-for-analysis.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/prep-for-analysis.js): shared analysis-ready dataset preparation
-- [src/utils/plotting](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting): plot-specific renderers and plotting helpers
-- [src/store/appStore.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/store/appStore.js): shared reactive app state
-- [src/styles/app.css](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/styles/app.css): app styles
-
 ## Routes
 
 - `#/`: dashboard
@@ -43,19 +32,41 @@ npm run preview
 
 The app uses hash routing for GitHub Pages compatibility.
 
+## Current Structure
+
+- [src/views](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/views): page-level screens
+- [src/router/index.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/router/index.js): app routes
+- [src/services/registryService.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/services/registryService.js): live CalR backend API calls
+- [src/utils/prep-for-analysis.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/prep-for-analysis.js): normalize backend enriched payloads into frontend analysis data
+- [src/utils/process.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/process.js): shared session normalization, exclusions, outlier handling, and aggregation helpers
+- [src/utils/plotting](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting): plot-specific renderers and plotting helpers
+- [src/store/appStore.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/store/appStore.js): shared reactive app state
+- [src/styles/app.css](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/styles/app.css): app styles
+
 ## Analysis Data Flow
 
-The shared frontend analysis boundary is:
+The analysis screens now use backend-enriched session data as the primary source of truth.
 
-1. load converted CALR detail CSV
-2. load session CSV
-3. load session JSON config
-4. run `prepForAnalysis(...)`
-5. pass the resulting `analysisData` into plot-specific renderers
+Current frontend analysis flow:
 
-Shared analysis prep lives in:
+1. load session config from `GET /api/calr/sessions/{session_id}`
+2. load enriched analysis data from `GET /api/calr/sessions/{session_id}/enriched`
+3. normalize that payload with `normalizeEnrichedAnalysisData(...)`
+4. pass the resulting `analysisData` into the plot-specific renderers
 
-- [src/utils/prep-for-analysis.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/prep-for-analysis.js)
+`analysisData` has the shared shape:
+
+- `rows`: normalized analysis-ready detail rows
+- `session`: normalized session/group/subject metadata used by plots and analysis controls
+
+The frontend still keeps a few compatibility behaviors during normalization:
+
+- parse enriched payloads returned as either JSON or CSV text
+- fill stable numeric/time fields such as `exp.minute`, `exp.hour`, `day`, `light`, `dark`, and `clockHour`
+- apply session-level exclusions from the backend session config
+- preserve group, diet, color, and subject body-composition metadata used by plots
+
+## Plotting and Analysis
 
 Plot-specific prep and Plotly rendering live in:
 
@@ -67,43 +78,45 @@ Plot-specific prep and Plotly rendering live in:
 - [src/utils/plotting/power.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/power.js)
 - [src/utils/plotting/summary-regression.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/summary-regression.js)
 
+QC, Power, and ANCOVA/ANOVA are backend-run analyses. The frontend sends requests to:
+
+- `POST /api/calr/analysis/qc`
+- `POST /api/calr/analysis/power`
+- `POST /api/calr/analysis/ancova`
+
+and renders the returned results in the analysis screen.
+
 ## Current Status
 
 ### Working
 
 - public and private dataset browsing
-- converted dataset loading into analysis
-- session CSV + session JSON merge for analysis
+- account-side create, edit, download, and open flows
+- enriched session loading for analysis
+- session metadata editing and upload/update flows
 - time-series plot
-- box plot
+- distribution plot
 - regression plot
 - weight plot
 - QC plot
-- power plot
-- ANCOVA / ANOVA summary section
+- power plot and tables
+- ANCOVA / ANOVA summary tables
 - community summary comparison plot
-- account-side create/edit/open flows
 
-### Important Notes
+### Current Notes
 
-- `JS_REBUILD_FILES_REFERENCE` is the current behavior reference for rebuilt analysis logic.
-- Avoid dataset-specific fixes.
-- Some backend-driven analysis sections are still marked as in progress in the UI:
-  - QC
-  - Power
-  - ANCOVA
+- The current analysis path is backend-enriched first. Older local preprocessing paths have been removed from the analysis view.
+- Plot parity work has recently aligned time-series, distribution, and regression behavior more closely with the legacy app.
+- `JS_REBUILD_FILES_REFERENCE` is still the main behavior reference when checking rebuilt frontend logic against the older app.
+- Avoid dataset-specific fixes unless a backend/data contract issue has been confirmed.
 
-### Memory / Performance
+## Sample and Parity Files
 
-Some memory cleanup has already been done:
+Files used during backend/frontend parity checks live in:
 
-- removed deep reactive watching over the full analysis dataset
-- batched plot renders
-- added Plotly purge on unmount
-- reduced unnecessary analysis-row cloning
-- added and bounded shared derived-data caches
+- [sample_enriched](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/sample_enriched)
 
-Memory work is not the current focus, but it is still an area to revisit later.
+These are reference artifacts only; they are not part of the runtime application flow.
 
 ## Backend Dependencies
 
@@ -111,12 +124,25 @@ This frontend depends on the live CalR backend APIs for:
 
 - auth
 - file listing
-- converted data/session loading
+- experiment metadata
+- session config loading
+- enriched session loading
 - QC analysis
 - power analysis
 - ANCOVA analysis
 
 The app is static-hostable, but runtime behavior still depends on those APIs being reachable and permitting the deployed frontend origin.
+
+## Performance Notes
+
+Some cleanup/performance work already in place:
+
+- batched plot renders
+- Plotly purge on unmount
+- bounded shared derived-data caches
+- reduced redundant analysis-path transformations
+
+Large Plotly bundles are still present in production builds, so Vite may warn about chunk size during `npm run build`.
 
 ## GitHub Pages
 

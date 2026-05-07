@@ -1,7 +1,7 @@
 // Time-series plot rendering.
 // This file takes analysis-ready rows, applies time-series-specific shaping,
 // and produces Plotly traces/layout for the analysis time plot.
-import { aggregateDetailRows, applyDefaultOutlierRemoval } from '../process'
+import { applyDefaultOutlierRemoval } from '../process'
 import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function smoothValues(values, windowSize) {
@@ -55,37 +55,6 @@ function resolveGroupOrder(rows, preferredOrder = []) {
   return ordered
 }
 
-function buildFiniteSeries(xValues, yValues) {
-  const x = []
-  const y = []
-
-  for (let index = 0; index < xValues.length; index += 1) {
-    const xValue = xValues[index]
-    const yValue = yValues[index]
-
-    if (
-      xValue === null
-      || yValue === null
-      || Number.isNaN(xValue)
-      || Number.isNaN(yValue)
-    ) {
-      continue
-    }
-
-    x.push(xValue)
-    y.push(yValue)
-  }
-
-  return { x, y }
-}
-
-function buildTimeSeriesDataset(rows) {
-  return {
-    groupedRows: aggregateDetailRows(rows, { per: 'min', grp: true }),
-    subjectRows: aggregateDetailRows(rows, { per: 'min', grp: false }),
-  }
-}
-
 function computeLightDarkShading(rows) {
   const subject = rows[0]?.['subject.id']
   const subjectRows = rows
@@ -128,14 +97,13 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
   const yLabel = explorerVariables.find((item) => item.field === options.yVar)?.label || options.yVar
   const filteredRows = options.removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
   const timeRangeRows = filteredRows.filter((row) => row['exp.minute'] >= options.rangeStart * 60 && row['exp.minute'] <= options.rangeEnd * 60)
-  const { groupedRows, subjectRows } = buildTimeSeriesDataset(timeRangeRows)
-  const groups = resolveGroupOrder(groupedRows, options.groupOrder || session?.groupNames || [])
+  const groups = resolveGroupOrder(timeRangeRows, options.groupOrder || session?.groupNames || [])
   const traces = []
 
   if (options.showIndividuals) {
     const subjects = {}
 
-    subjectRows.forEach((row) => {
+    timeRangeRows.forEach((row) => {
       const subjectId = row['subject.id']
       if (!subjects[subjectId]) {
         subjects[subjectId] = []
@@ -166,7 +134,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
 
   if (options.showMean) {
     groups.forEach((groupName) => {
-      const groupSeries = groupedRows
+      const groupSeries = timeRangeRows
         .filter((row) => row.groupName === groupName)
         .sort((left, right) => left['exp.minute'] - right['exp.minute'])
 
@@ -175,58 +143,90 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       }
 
       const color = resolveGroupColor(groupName, options.groupColors, groupSeries[0]?.color || '#888')
-      const xHours = groupSeries.map((row) => row['exp.minute'] / 60)
-      const meanValues = groupSeries.map((row) => row[`${options.yVar}.x`] ?? null)
-      const semLower = meanValues.map((value, index) => {
-        const semValue = groupSeries[index]?.[`${options.yVar}.y`] ?? null
-        return value === null || semValue === null ? null : value - semValue
+      const byMinute = {}
+
+      groupSeries.forEach((row) => {
+        const minute = Math.round(row['exp.minute'])
+        const value = row[options.yVar]
+
+        if (minute === null || minute === undefined || value === null || value === undefined || Number.isNaN(value)) {
+          return
+        }
+
+        if (!byMinute[minute]) {
+          byMinute[minute] = []
+        }
+
+        byMinute[minute].push(value)
       })
-      const semUpper = meanValues.map((value, index) => {
-        const semValue = groupSeries[index]?.[`${options.yVar}.y`] ?? null
-        return value === null || semValue === null ? null : value + semValue
+
+      const minutes = Object.keys(byMinute)
+        .map((value) => Number.parseInt(value, 10))
+        .sort((left, right) => left - right)
+
+      const xHours = minutes.map((minute) => minute / 60)
+      const meanValues = []
+      const semLower = []
+      const semUpper = []
+
+      minutes.forEach((minute) => {
+        const values = byMinute[minute].filter((value) => value !== null && value !== undefined && !Number.isNaN(value))
+
+        if (!values.length) {
+          meanValues.push(null)
+          semLower.push(null)
+          semUpper.push(null)
+          return
+        }
+
+        const avg = values.reduce((sum, value) => sum + value, 0) / values.length
+
+        if (values.length === 1) {
+          meanValues.push(avg)
+          semLower.push(avg)
+          semUpper.push(avg)
+          return
+        }
+
+        const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1)
+        const sem = Math.sqrt(variance) / Math.sqrt(values.length)
+
+        meanValues.push(avg)
+        semLower.push(avg - sem)
+        semUpper.push(avg + sem)
       })
+
       const windowSize = options.smoothing ? options.smoothWindow : 1
       const smoothedMean = smoothValues(meanValues, windowSize)
       const smoothedLower = smoothValues(semLower, windowSize)
       const smoothedUpper = smoothValues(semUpper, windowSize)
-      const meanSeries = buildFiniteSeries(xHours, smoothedMean)
-      const lowerSeries = buildFiniteSeries(xHours, smoothedLower)
-      const upperSeries = buildFiniteSeries(xHours, smoothedUpper)
-
-      if (!meanSeries.x.length) {
-        return
-      }
-
-      if (lowerSeries.x.length && upperSeries.x.length) {
-        traces.push({
-          x: lowerSeries.x,
-          y: lowerSeries.y,
-          line: { width: 0 },
-          hoverinfo: 'skip',
-          fillcolor: hexToRGBA(color, 0.2),
-          showlegend: false,
-          name: `${groupName} (SEM lower)`,
-          type: 'scatter',
-          connectgaps: false,
-        })
-
-        traces.push({
-          x: upperSeries.x,
-          y: upperSeries.y,
-          fill: 'tonexty',
-          line: { width: 0 },
-          fillcolor: hexToRGBA(color, 0.2),
-          hoverinfo: 'skip',
-          showlegend: false,
-          name: `${groupName} (SEM ribbon)`,
-          type: 'scatter',
-          connectgaps: false,
-        })
-      }
 
       traces.push({
-        x: meanSeries.x,
-        y: meanSeries.y,
+        x: xHours,
+        y: smoothedLower,
+        line: { width: 0 },
+        hoverinfo: 'skip',
+        fillcolor: hexToRGBA(color, 0.2),
+        showlegend: false,
+        name: `${groupName} (SEM lower)`,
+        type: 'scatter',
+      })
+
+      traces.push({
+        x: xHours,
+        y: smoothedUpper,
+        fill: 'tonexty',
+        line: { width: 0 },
+        fillcolor: hexToRGBA(color, 0.2),
+        hoverinfo: 'skip',
+        showlegend: false,
+        name: `${groupName} (SEM ribbon)`,
+        type: 'scatter',
+      })
+
+      traces.push({
+        x: xHours,
+        y: smoothedMean,
         mode: 'lines',
         line: {
           color,
@@ -234,7 +234,6 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
         },
         name: groupName,
         type: 'scatter',
-        connectgaps: false,
       })
     })
   }
