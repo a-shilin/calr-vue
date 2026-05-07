@@ -576,7 +576,7 @@ export default {
       },
       powerOptions: {
         variable: 'ee',
-        sampleSizesText: '4, 8, 12, 16, 20, 24',
+        sampleSizesText: '4, 6, 8, 12, 16, 20, 24',
         dayPhase: 'total',
         alpha: 0.05,
         hourStart: 0,
@@ -1198,7 +1198,7 @@ export default {
           {
             session_id: this.store.experiment.current.files.find((file) => file.file_type === 'session')?.id,
             variable: this.regressionOptions.yVar,
-            mass_variable: this.regressionOptions.xVar,
+            mass_variable: 'total_mass',
             time_of_day: this.regressionOptions.period.toLowerCase(),
           },
           this.store.auth.token,
@@ -1301,7 +1301,7 @@ export default {
         .map((value) => Number.parseInt(value.trim(), 10))
         .filter((value) => !Number.isNaN(value) && value > 0)
 
-      return parsed.length ? parsed : [4, 8, 12, 16, 20, 24]
+      return parsed.length ? parsed : [4, 6, 8, 12, 16, 20, 24]
     },
     initializeGroupColors(session) {
       const nextGroupColors = {}
