@@ -246,7 +246,6 @@
           <div v-else class="muted-copy">QC is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <div v-if="store.experiment.analysisErrors.qc" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.qc }}</div>
           <div v-if="store.experiment.qcResults" ref="qcPlot" class="plot-surface"></div>
           <div v-else class="plot-placeholder">Run QC to populate this plot.</div>
@@ -305,7 +304,6 @@
           <div v-else class="muted-copy">Power is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <div v-if="store.experiment.analysisErrors.power" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.power }}</div>
           <template v-if="store.experiment.powerResults">
             <div class="card-tabs">
@@ -360,7 +358,6 @@
           <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
         </aside>
         <div class="panel plot-panel">
-          <div class="muted-copy warn-copy">⚠️ this section is still in progress and may show incorrect results.</div>
           <div v-if="store.experiment.analysisErrors.ancova" class="muted-copy warn-copy">{{ store.experiment.analysisErrors.ancova }}</div>
           <div v-if="store.experiment.ancovaResults" class="ancova-report">
             <div>
