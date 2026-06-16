@@ -1,44 +1,61 @@
 <template>
   <div class="page-column">
     <section class="panel panel--spaced">
-      <div v-if="store.auth.token" class="card-tabs">
-        <button class="card-tab" :class="{ active: datasetSourceTab === 'public' }" @click="datasetSourceTab = 'public'">
-          Public Datasets
-        </button>
-        <button class="card-tab" :class="{ active: datasetSourceTab === 'private' }" @click="datasetSourceTab = 'private'">
-          Your Datasets
-        </button>
-      </div>
-      <strong>{{ datasetTableTitle }}</strong>
-      <div v-if="loadingPublicFiles" class="empty-state">
-        <BSpinner small />
-      </div>
-      <BTable v-else-if="datasetTableItems.length" :items="datasetTableItems" :fields="publicFields" small hover striped>
-        <template #cell(name)="slot">
-          {{ slot.item.name || slot.item.title || slot.item.id }}
-        </template>
-        <template #cell(description)="slot">
-          {{ slot.item.description || '' }}
-        </template>
-        <template #cell(uploaded_at)="slot">
-          {{ formatDate(slot.item.uploaded_at) }}
-        </template>
-        <template #cell(actions)="slot">
-          <BBadge v-if="isSelectedDataset(slot.item)" variant="success">Selected</BBadge>
-          <BButton
-            v-else
-            size="sm"
-            variant="primary"
-            @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
+      <div class="row-between">
+        <div class="card-tabs">
+          <button class="card-tab" :class="{ active: datasetSourceTab === 'public' }" @click="selectDatasetTab('public')">
+            Public Datasets ({{ publicDatasetCount }})
+          </button>
+          <button
+            v-if="store.auth.token"
+            class="card-tab"
+            :class="{ active: datasetSourceTab === 'private' }"
+            @click="selectDatasetTab('private')"
           >
-            <BSpinner v-if="slot.item.loading" small />
-            <span v-else>Open</span>
-          </BButton>
-        </template>
-      </BTable>
-      <div v-else class="empty-state">
-        {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
+            Your Datasets ({{ privateDatasetCount }})
+          </button>
+        </div>
+        <BButton v-if="showDatasetToggle" size="sm" variant="outline-secondary" @click="showDatasetList = !showDatasetList">
+          {{ showDatasetList ? 'Hide Dataset List' : 'Show Dataset List' }}
+        </BButton>
       </div>
+      <template v-if="showDatasetList">
+        <strong>{{ datasetTableTitle }}</strong>
+        <div v-if="loadingPublicFiles" class="empty-state">
+          <BSpinner small />
+        </div>
+        <div v-else-if="datasetTableItems.length" class="table-scroll-shell">
+          <BTable :items="datasetTableItems" :fields="publicFields" small hover striped>
+            <template #cell(name)="slot">
+              {{ slot.item.name || slot.item.title || slot.item.id }}
+            </template>
+            <template #cell(description)="slot">
+              {{ slot.item.description || '' }}
+            </template>
+            <template #cell(uploaded_at)="slot">
+              {{ formatDate(slot.item.uploaded_at) }}
+            </template>
+            <template #cell(actions)="slot">
+              <BBadge v-if="isSelectedDataset(slot.item)" variant="success">Selected</BBadge>
+              <BButton
+                v-else
+                size="sm"
+                variant="primary"
+                @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
+              >
+                <template v-if="slot.item.loading">
+                  <BSpinner small />
+                  <span style="margin-left: 0.4rem;">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
+                </template>
+                <span v-else>Open</span>
+              </BButton>
+            </template>
+          </BTable>
+        </div>
+        <div v-else class="empty-state">
+          {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
+        </div>
+      </template>
     </section>
 
     <div v-if="!store.experiment.current" class="empty-state panel">
@@ -479,6 +496,7 @@ export default {
       store: appStore,
       publicFields: ['name', 'description', 'uploaded_at', 'actions'],
       datasetSourceTab: 'public',
+      showDatasetList: true,
       explorerVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
@@ -611,8 +629,19 @@ export default {
       return this.analysisData.session
     },
     maxHour() {
-      const hours = this.analysisData.rows.map((row) => row.hour).filter((hour) => hour !== null)
-      return hours.length ? Math.ceil(Math.max(...hours)) : 24
+      let maxHour = null
+
+      this.analysisData.rows.forEach((row) => {
+        const hour = Number(row?.hour)
+
+        if (!Number.isFinite(hour)) {
+          return
+        }
+
+        maxHour = maxHour === null ? hour : Math.max(maxHour, hour)
+      })
+
+      return maxHour === null ? 24 : Math.ceil(maxHour)
     },
     analysisRows() {
       return this.analysisData.rows
@@ -783,6 +812,15 @@ export default {
     datasetTableTitle() {
       return this.datasetSourceTab === 'private' ? 'Your Private Datasets' : 'Public Datasets'
     },
+    publicDatasetCount() {
+      return this.store.account.publicFiles.length
+    },
+    privateDatasetCount() {
+      return this.store.account.userFiles.length
+    },
+    showDatasetToggle() {
+      return Boolean(this.store.experiment.current)
+    },
   },
   watch: {
     analysisRows() {
@@ -856,7 +894,7 @@ export default {
     maxHour: {
       immediate: true,
       handler(value) {
-        const safeValue = value || 24
+        const safeValue = Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 24
         this.timeOptions.rangeEnd = safeValue
         this.qcOptions.hourEnd = safeValue
         this.powerOptions.hourEnd = safeValue
@@ -872,17 +910,25 @@ export default {
       deep: true,
       handler() {
         this.syncDatasetSourceTab()
+
+        if (this.store.experiment.current) {
+          this.showDatasetList = false
+          return
+        }
+
+        this.showDatasetList = true
       },
     },
   },
   async mounted() {
     this.syncDatasetSourceTab()
+    this.showDatasetList = !this.store.experiment.current
 
     if (!this.store.account.publicFiles.length) {
       this.loadingPublicFiles = true
       try {
         const files = await fetchPublicFiles()
-        this.store.account.publicFiles = files.map((file) => ({ ...file, loading: false }))
+        this.store.account.publicFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
       } finally {
         this.loadingPublicFiles = false
       }
@@ -915,6 +961,13 @@ export default {
   },
   methods: {
     formatDate,
+    selectDatasetTab(tab) {
+      this.datasetSourceTab = tab
+
+      if (!this.showDatasetList) {
+        this.showDatasetList = true
+      }
+    },
     syncDatasetSourceTab() {
       if (this.store.auth.token && this.store.experiment.current && !this.store.experiment.current.public) {
         this.datasetSourceTab = 'private'
@@ -925,7 +978,7 @@ export default {
     },
     async loadPrivateFiles() {
       const files = await fetchUserFiles(this.store.auth.token)
-      this.store.account.userFiles = files.map((file) => ({ ...file, loading: false }))
+      this.store.account.userFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
     },
     lookupVariableLabel(variable) {
       const labelMaps = [
@@ -1049,11 +1102,20 @@ export default {
       }
 
       file.loading = true
+      file.loadingProgress = 0
       try {
         clearProcessCaches()
         const [enrichedPayload, sessionConfig] = await Promise.all([
-          fetchEnrichedSession(session.id, this.store.auth.token, isPublic),
-          fetchSessionConfig(session.id, this.store.auth.token, isPublic),
+          fetchEnrichedSession(session.id, this.store.auth.token, isPublic, {
+            onProgress: (progress) => {
+              const safeProgress = Number.isFinite(progress) ? progress : 0
+              file.loadingProgress = Math.max(5, Math.min(95, Math.round(safeProgress * 0.9 + 5)))
+            },
+          }),
+          fetchSessionConfig(session.id, this.store.auth.token, isPublic).then((result) => {
+            file.loadingProgress = Math.max(Number(file.loadingProgress) || 0, 10)
+            return result
+          }),
         ])
 
         const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
@@ -1064,15 +1126,18 @@ export default {
         this.store.experiment.current = file
         this.store.experiment.detailRows = analysisData.rows
         this.store.experiment.analysisData = analysisData
+        this.showDatasetList = false
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
         this.initializeGroupColors(this.sessionMetadata)
         this.resetAnalysisControlsForDataset()
         this.syncAnalysisDirtyWithStoredResults()
         this.powerViewTab = 'plot'
+        file.loadingProgress = 100
         await this.runInitialAnalyses()
       } finally {
         file.loading = false
+        file.loadingProgress = null
       }
     },
     async openPublicExperiment(file) {
@@ -1299,6 +1364,15 @@ export default {
         .filter((value) => !Number.isNaN(value) && value > 0)
 
       return parsed.length ? parsed : [4, 6, 8, 12, 16, 20, 24]
+    },
+    formatLoadingProgress(progress) {
+      const numericProgress = Number(progress)
+
+      if (!Number.isFinite(numericProgress) || numericProgress <= 0) {
+        return 'Loading...'
+      }
+
+      return `${Math.min(100, Math.round(numericProgress))}%`
     },
     initializeGroupColors(session) {
       const nextGroupColors = {}

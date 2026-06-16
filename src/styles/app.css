@@ -302,6 +302,15 @@ a {
   border-bottom: 1px solid #ccc;
 }
 
+.table-scroll-shell {
+  max-height: 400px;
+  overflow: auto;
+}
+
+.table-scroll-shell table {
+  margin-bottom: 0;
+}
+
 .card-tab {
   padding: 10px 20px;
   border: 1px solid #cbd5e1;

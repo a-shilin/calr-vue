@@ -59,6 +59,61 @@ async function parseJsonOrTextResponse(response) {
   return response.text()
 }
 
+async function readResponseWithProgress(response, onProgress) {
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || `Request failed with status ${response.status}`)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10)
+  const canReportProgress = Number.isFinite(contentLength) && contentLength > 0 && typeof onProgress === 'function'
+
+  if (!response.body) {
+    const payload = contentType.includes('application/json')
+      ? await response.json()
+      : await response.text()
+
+    if (typeof onProgress === 'function') {
+      onProgress(100)
+    }
+
+    return payload
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let receivedLength = 0
+  let responseText = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    receivedLength += value.length
+    responseText += decoder.decode(value, { stream: true })
+
+    if (canReportProgress) {
+      onProgress(Math.min(100, Math.round((receivedLength / contentLength) * 100)))
+    }
+  }
+
+  responseText += decoder.decode()
+
+  if (typeof onProgress === 'function') {
+    onProgress(100)
+  }
+
+  if (contentType.includes('application/json')) {
+    return JSON.parse(responseText)
+  }
+
+  return responseText
+}
+
 export async function login(username, password) {
   const response = await fetch(`${AUTH_BASE}/login/`, {
     method: 'POST',
@@ -119,12 +174,12 @@ export async function fetchSessionConfig(fileId, token, isPublic = false) {
   return parseJsonResponse(response)
 }
 
-export async function fetchEnrichedSession(sessionId, token, isPublic = false) {
+export async function fetchEnrichedSession(sessionId, token, isPublic = false, { onProgress } = {}) {
   const response = await fetch(`${API_BASE}/sessions/${sessionId}/enriched`, {
     headers: isPublic ? {} : createHeaders(token),
   })
 
-  return parseJsonOrTextResponse(response)
+  return readResponseWithProgress(response, onProgress)
 }
 
 export async function updateExperimentPublicStatus(fileId, makePublic, token) {

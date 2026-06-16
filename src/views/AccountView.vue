@@ -40,7 +40,7 @@
 
         <div class="card-tabs">
           <button class="card-tab" :class="{ active: activeAccountTab === 'experiments' }" @click="activeAccountTab = 'experiments'">
-            Your Experiments
+            Your Experiments ({{ experimentCount }})
           </button>
           <button
             v-if="store.account.userCreatingNew"
@@ -57,89 +57,93 @@
             <BSpinner small />
           </div>
     
-          <BTable
-            v-else-if="store.account.userFiles.length"
-            :items="store.account.userFiles"
-            :fields="userFilesFields"
-            responsive
-            small
-            hover
-            striped
-          >
-            <template #cell(name)="slot">
-              {{ slot.item.name || slot.item.title || slot.item.id }}
-            </template>
-    
-            <template #cell(description)="slot">
-              {{ slot.item.description || '' }}
-            </template>
-    
-            <template #cell(public)="slot">
-              <BBadge
-                :variant="slot.item.public ? 'success' : 'secondary'"
-                class="badge-toggle"
-                @click="toggleExperimentPublic(slot.item)"
-              >
-                {{ slot.item.public ? 'Yes' : 'No' }}
-              </BBadge>
-            </template>
-    
-            <template #cell(uploaded_at)="slot">
-              {{ formatDate(slot.item.uploaded_at) }}
-            </template>
-    
-            <template #cell(actions)="slot">
-              <span style="display:inline-block; width:1rem;"><BSpinner v-if="slot.item.loading" small /></span>
-              <BButton size="sm" variant="link" @click="openExperiment(slot.item)">
-                Analysis
-              </BButton>
-              <BButton size="sm" variant="link" @click="toggleMetadataDetails(slot.item)">
-                {{ slot.item._showDetails ? 'Hide Info' : 'Info' }}
-              </BButton>
-              <BButton size="sm" variant="link" @click="editExperiment(slot.item)">
-                Edit
-              </BButton>
-              <BButton size="sm" variant="link" class="text-danger" @click="removeExperiment(slot.item)">
-                Delete
-              </BButton>
-            </template>
-    
-            <template #row-details="slot">
-              <div class="metadata-card">
-                <div class="metadata-card__header">
-                  <strong>Experiment Metadata</strong>
-                </div>
-                <div class="metadata-columns">
-                  <section v-for="section in metadataSections" :key="section.title" class="metadata-section">
-                    <strong>{{ section.title }}</strong>
-                    <div class="metadata-grid metadata-grid--display">
-                      <div v-for="field in section.fields" :key="field.key" class="metadata-display-field">
-                        <span class="metadata-display-field__label">{{ field.label }}</span>
-                        <span>{{ formatMetadataValue(slot.item.metadata?.[field.key] ?? slot.item[field.key]) }}</span>
+          <div v-else-if="store.account.userFiles.length" class="table-scroll-shell">
+            <BTable
+              :items="store.account.userFiles"
+              :fields="userFilesFields"
+              responsive
+              small
+              hover
+              striped
+            >
+              <template #cell(name)="slot">
+                {{ slot.item.name || slot.item.title || slot.item.id }}
+              </template>
+      
+              <template #cell(description)="slot">
+                {{ slot.item.description || '' }}
+              </template>
+      
+              <template #cell(public)="slot">
+                <BBadge
+                  :variant="slot.item.public ? 'success' : 'secondary'"
+                  class="badge-toggle"
+                  @click="toggleExperimentPublic(slot.item)"
+                >
+                  {{ slot.item.public ? 'Yes' : 'No' }}
+                </BBadge>
+              </template>
+      
+              <template #cell(uploaded_at)="slot">
+                {{ formatDate(slot.item.uploaded_at) }}
+              </template>
+      
+              <template #cell(actions)="slot">
+                <span style="display:inline-flex; align-items:center; gap:0.35rem; min-width:4.5rem;">
+                  <BSpinner v-if="slot.item.loading" small />
+                  <span v-if="slot.item.loading" class="muted-copy">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
+                </span>
+                <BButton size="sm" variant="link" @click="openExperiment(slot.item)">
+                  Analysis
+                </BButton>
+                <BButton size="sm" variant="link" @click="toggleMetadataDetails(slot.item)">
+                  {{ slot.item._showDetails ? 'Hide Info' : 'Info' }}
+                </BButton>
+                <BButton size="sm" variant="link" @click="editExperiment(slot.item)">
+                  Edit
+                </BButton>
+                <BButton size="sm" variant="link" class="text-danger" @click="removeExperiment(slot.item)">
+                  Delete
+                </BButton>
+              </template>
+      
+              <template #row-details="slot">
+                <div class="metadata-card">
+                  <div class="metadata-card__header">
+                    <strong>Experiment Metadata</strong>
+                  </div>
+                  <div class="metadata-columns">
+                    <section v-for="section in metadataSections" :key="section.title" class="metadata-section">
+                      <strong>{{ section.title }}</strong>
+                      <div class="metadata-grid metadata-grid--display">
+                        <div v-for="field in section.fields" :key="field.key" class="metadata-display-field">
+                          <span class="metadata-display-field__label">{{ field.label }}</span>
+                          <span>{{ formatMetadataValue(slot.item.metadata?.[field.key] ?? slot.item[field.key]) }}</span>
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                </div>
-                <div class="metadata-card__files">
-                  <strong>Files</strong>
-                  <div class="metadata-file-list">
-                    <div v-for="file in slot.item.files" :key="file.id" class="file-pill">
-                      <BBadge variant="primary">{{ file.file_type }}</BBadge>
-                      <span>{{ file.file_name }} ({{ formatFileSize(file.file_size) }})</span>
-                      <BButton
-                        v-if="file.file_type === 'session' || file.file_type === 'standard'"
-                        size="sm"
-                        variant="link"
-                        @click="downloadExperimentFile(slot.item, file)"
-                      >
-                        Download
-                      </BButton>
+                    </section>
+                  </div>
+                  <div class="metadata-card__files">
+                    <strong>Files</strong>
+                    <div class="metadata-file-list">
+                      <div v-for="file in slot.item.files" :key="file.id" class="file-pill">
+                        <BBadge variant="primary">{{ file.file_type }}</BBadge>
+                        <span>{{ file.file_name }} ({{ formatFileSize(file.file_size) }})</span>
+                        <BButton
+                          v-if="file.file_type === 'session' || file.file_type === 'standard'"
+                          size="sm"
+                          variant="link"
+                          @click="downloadExperimentFile(slot.item, file)"
+                        >
+                          Download
+                        </BButton>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </template>
-          </BTable>
+              </template>
+            </BTable>
+          </div>
     
           <div v-else class="empty-state">You have no experiments yet.</div>
         </div>
@@ -904,6 +908,9 @@ export default {
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
     },
+    experimentCount() {
+      return this.store.account.userFiles.length
+    },
   },
   async mounted() {
     if (this.store.auth.token && !this.store.account.userFiles.length) {
@@ -1533,7 +1540,7 @@ export default {
 
       try {
         const files = await fetchUserFiles(this.store.auth.token)
-        this.store.account.userFiles = files.map((file) => ({ ...file, loading: false }))
+        this.store.account.userFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
       } finally {
         this.store.loaders.getUserFiles = false
       }
@@ -1601,12 +1608,21 @@ export default {
       }
 
       file.loading = true
+      file.loadingProgress = 0
 
       try {
         clearProcessCaches()
         const [enrichedPayload, sessionConfig] = await Promise.all([
-          fetchEnrichedSession(session.id, this.store.auth.token, file.public),
-          fetchSessionConfig(session.id, this.store.auth.token, file.public),
+          fetchEnrichedSession(session.id, this.store.auth.token, file.public, {
+            onProgress: (progress) => {
+              const safeProgress = Number.isFinite(progress) ? progress : 0
+              file.loadingProgress = Math.max(5, Math.min(95, Math.round(safeProgress * 0.9 + 5)))
+            },
+          }),
+          fetchSessionConfig(session.id, this.store.auth.token, file.public).then((result) => {
+            file.loadingProgress = Math.max(Number(file.loadingProgress) || 0, 10)
+            return result
+          }),
         ])
 
         const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
@@ -1626,10 +1642,21 @@ export default {
           this.store.experiment.analysisErrors.power = null
           this.store.experiment.analysisErrors.ancova = null
         }
+        file.loadingProgress = 100
         this.$router.push('/analysis')
       } finally {
         file.loading = false
+        file.loadingProgress = null
       }
+    },
+    formatLoadingProgress(progress) {
+      const numericProgress = Number(progress)
+
+      if (!Number.isFinite(numericProgress) || numericProgress <= 0) {
+        return 'Loading...'
+      }
+
+      return `${Math.min(100, Math.round(numericProgress))}%`
     },
     async toggleExperimentPublic(file) {
       const response = await updateExperimentPublicStatus(file.id, !file.public, this.store.auth.token)
