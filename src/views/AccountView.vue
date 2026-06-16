@@ -473,12 +473,18 @@
                         </colgroup>
                         <thead>
                           <tr>
-                            <th class="txt-center relative" :colspan="3">
-                              Weights (optional)
-                              <div class="sub-copy">Weights from calorimeter will be used unless specified here</div>
-                              <button class="btn btn-outline-secondary btn-sm session-table-option-btn" @click="showWeightColumns = !showWeightColumns">
-                                {{ showWeightColumns ? 'Hide' : 'Show' }}
-                              </button>
+                            <th class="txt-center relative session-subject-header" :colspan="3">
+                              Weights
+                              <div class="sub-copy"><span class="bold">Optional.</span> Weights from calorimeter will be used unless specified here.</div>
+                              <div class="session-table-actions">
+                                <button
+                                  class="btn btn-outline-secondary btn-sm session-table-option-btn"
+                                  data-tooltip="Upload weights data from template"
+                                  @click="openTemplateUploadModal('weights')"
+                                >
+                                  <i class="bi bi-upload"></i>
+                                </button>
+                              </div>
                             </th>
                           </tr>
                           <tr>
@@ -495,9 +501,6 @@
                           </tr>
                         </tbody>
                       </table>
-                      <div class="session-table-overlay" v-if="!showWeightColumns">
-    
-                      </div>
                     </div>
                     <div class="relative">
                       <table class="data-table session-subject-table">
@@ -505,12 +508,18 @@
                         </colgroup>
                         <thead>
                           <tr>
-                            <th class="txt-center relative" :colspan="1">
-                              Mass Change (optional)
-                              <div class="sub-copy">Subject mass change</div>
-                              <button class="btn btn-outline-secondary btn-sm session-table-option-btn" @click="showMassChangeColumns = !showMassChangeColumns">
-                                {{ showMassChangeColumns ? 'Hide' : 'Show' }}
-                              </button>
+                            <th class="txt-center relative session-subject-header" :colspan="1">
+                              Mass Change
+                              <div class="sub-copy"><span class="bold">Optional.</span> Subject mass change.</div>
+                              <div class="session-table-actions">
+                                <button
+                                  class="btn btn-outline-secondary btn-sm session-table-option-btn"
+                                  data-tooltip="Upload mass change data from template"
+                                  @click="openTemplateUploadModal('massChange')"
+                                >
+                                  <i class="bi bi-upload"></i>
+                                </button>
+                              </div>
                             </th>
                           </tr>
                           <tr>
@@ -523,9 +532,6 @@
                           </tr>
                         </tbody>
                       </table>
-                      <div class="session-table-overlay" v-if="!showMassChangeColumns">
-
-                      </div>
                     </div>
                     <div class="relative">
                       <table class="data-table session-subject-table">
@@ -533,12 +539,9 @@
                         </colgroup>
                         <thead>
                           <tr>
-                            <th class="txt-center relative" :colspan="2">
-                              Exclusions (optional)
-                              <div class="sub-copy">Exclude subject ID's starting at hour</div>
-                              <button class="btn btn-outline-secondary btn-sm session-table-option-btn" @click="showExclusionColumns = !showExclusionColumns">
-                                {{ showExclusionColumns ? 'Hide' : 'Show' }}
-                              </button>
+                            <th class="txt-center relative session-subject-header" :colspan="2">
+                              Exclusions
+                              <div class="sub-copy"><span class="bold">Optional.</span> Exclude subject ID's starting at hour.</div>
                             </th>
                           </tr>
                           <tr>
@@ -553,9 +556,6 @@
                           </tr>
                         </tbody>
                       </table>
-                      <div class="session-table-overlay" v-if="!showExclusionColumns">
-    
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -738,6 +738,52 @@
       </div>
     </div>
   </div>
+
+  <div v-if="templateUploadDialog.visible" class="confirm-dialog-backdrop" @click.self="closeTemplateUploadModal">
+    <div class="confirm-dialog">
+      <div class="confirm-dialog__header row-between">
+        <strong>{{ templateUploadDialog.title }}</strong>
+        <button class="btn btn-outline-secondary btn-sm" @click="closeTemplateUploadModal">
+          Close
+        </button>
+      </div>
+      <div class="confirm-dialog__body">
+        <div
+          class="dropzone dropzone--compact"
+          :class="{ dragover: templateUploadDialog.dragover }"
+          @click="openTemplateUploadFileDialog"
+          @dragover.prevent="templateUploadDialog.dragover = true"
+          @dragleave="templateUploadDialog.dragover = false"
+          @drop.prevent="handleTemplateUploadDrop"
+        >
+          <div>
+            Drop a CSV template here, or click to select one.
+          </div>
+        </div>
+        <input
+          ref="templateUploadInput"
+          type="file"
+          accept=".csv,text/csv"
+          hidden
+          @change="handleTemplateUploadFileSelect"
+        />
+        <div v-if="templateUploadDialog.fileName" class="muted-copy">
+          Selected file: {{ templateUploadDialog.fileName }}
+        </div>
+        <div v-if="templateUploadDialog.message" class="message-text">
+          {{ templateUploadDialog.message }}
+        </div>
+      </div>
+      <div class="button-row confirm-dialog__actions">
+        <BButton variant="outline-secondary" @click="downloadTemplate(templateUploadDialog.type)">
+          Download Template
+        </BButton>
+        <BButton variant="outline-secondary" @click="closeTemplateUploadModal">
+          Done
+        </BButton>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -842,9 +888,6 @@ export default {
         name: '',
         kcal: '',
       },
-      showWeightColumns: false,
-      showMassChangeColumns: false,
-      showExclusionColumns: false,
       experimentDraft: {
         name: '',
         description: '',
@@ -877,6 +920,14 @@ export default {
       sessionDragover: false,
       sessionImportName: '',
       sessionImportMessage: '',
+      templateUploadDialog: {
+        visible: false,
+        type: '',
+        title: '',
+        dragover: false,
+        fileName: '',
+        message: '',
+      },
       confirmDialog: {
         visible: false,
         title: '',
@@ -1036,20 +1087,6 @@ export default {
         treatment: this.metadataDraft.treatment.trim() || null,
       }
     },
-    updateOptionalColumnVisibility() {
-      this.showWeightColumns = this.sessionEditor.subjects.some((subject) =>
-        subject.total_mass !== null
-        || subject.lean_mass !== null
-        || subject.fat_mass !== null,
-      )
-      this.showMassChangeColumns = this.sessionEditor.subjects.some((subject) =>
-        subject.mass_change !== null,
-      )
-      this.showExclusionColumns = this.sessionEditor.subjects.some((subject) =>
-        subject.exc_hour !== null
-        || Boolean(subject.exc_reason),
-      )
-    },
     normalizedGroupName(group, index) {
       return group.name.trim() || `Group ${index + 1}`
     },
@@ -1155,6 +1192,126 @@ export default {
       link.click()
       URL.revokeObjectURL(url)
     },
+    getTemplateConfig(type) {
+      if (type === 'weights') {
+        return {
+          title: 'Weights Template',
+          filename: 'weights_template.csv',
+          headers: ['', 'Total.Mass', 'Lean.Mass', 'Fat.Mass'],
+        }
+      }
+
+      return {
+        title: 'Mass Change Template',
+        filename: 'mass_change_template.csv',
+        headers: ['', 'Mass.Change'],
+      }
+    },
+    buildTemplateCsv(type) {
+      const { headers } = this.getTemplateConfig(type)
+      const subjectRows = this.sessionEditor.subjects.map((subject) => {
+        if (type === 'weights') {
+          return [subject.subject, '', '', '']
+        }
+
+        return [subject.subject, '']
+      })
+
+      return [headers, ...subjectRows]
+        .map((row) => row.map((value) => `${value ?? ''}`).join(','))
+        .join('\n')
+    },
+    downloadTemplate(type) {
+      const { filename } = this.getTemplateConfig(type)
+      this.triggerCsvDownload(filename, this.buildTemplateCsv(type))
+    },
+    openTemplateUploadModal(type) {
+      const { title } = this.getTemplateConfig(type)
+      this.templateUploadDialog.visible = true
+      this.templateUploadDialog.type = type
+      this.templateUploadDialog.title = `Upload ${title}`
+      this.templateUploadDialog.dragover = false
+      this.templateUploadDialog.fileName = ''
+      this.templateUploadDialog.message = ''
+    },
+    closeTemplateUploadModal() {
+      this.templateUploadDialog.visible = false
+      this.templateUploadDialog.type = ''
+      this.templateUploadDialog.title = ''
+      this.templateUploadDialog.dragover = false
+      this.templateUploadDialog.fileName = ''
+      this.templateUploadDialog.message = ''
+
+      if (this.$refs.templateUploadInput) {
+        this.$refs.templateUploadInput.value = ''
+      }
+    },
+    openTemplateUploadFileDialog() {
+      this.$refs.templateUploadInput?.click()
+    },
+    async handleTemplateUploadFileSelect(event) {
+      const [file] = Array.from(event.target.files || [])
+      await this.importTemplateFile(file)
+    },
+    async handleTemplateUploadDrop(event) {
+      this.templateUploadDialog.dragover = false
+      const [file] = Array.from(event.dataTransfer.files || [])
+      await this.importTemplateFile(file)
+    },
+    resolveTemplateSubjectId(row) {
+      const value = row?.[''] ?? row?.id ?? row?.subject ?? row?.Subject ?? row?.['Subject ID']
+      return value === null || value === undefined ? '' : `${value}`.trim()
+    },
+    applyTemplateRows(type, rows) {
+      const subjectsById = new Map(this.sessionEditor.subjects.map((subject) => [`${subject.subject}`, subject]))
+      let matchedRows = 0
+
+      rows.forEach((row) => {
+        const subjectId = this.resolveTemplateSubjectId(row)
+        const subject = subjectsById.get(subjectId)
+
+        if (!subject) {
+          return
+        }
+
+        matchedRows += 1
+
+        if (type === 'weights') {
+          subject.total_mass = row['Total.Mass'] === '' || row['Total.Mass'] == null ? null : row['Total.Mass']
+          subject.lean_mass = row['Lean.Mass'] === '' || row['Lean.Mass'] == null ? null : row['Lean.Mass']
+          subject.fat_mass = row['Fat.Mass'] === '' || row['Fat.Mass'] == null ? null : row['Fat.Mass']
+          return
+        }
+
+        subject.mass_change = row['Mass.Change'] === '' || row['Mass.Change'] == null ? null : row['Mass.Change']
+      })
+
+      if (!matchedRows) {
+        throw new Error('No matching subject IDs were found in the uploaded template.')
+      }
+
+      return matchedRows
+    },
+    async importTemplateFile(file) {
+      if (!file || !this.templateUploadDialog.type) {
+        return
+      }
+
+      try {
+        const csvText = await file.text()
+        const rows = parseCsv(csvText)
+        const matchedRows = this.applyTemplateRows(this.templateUploadDialog.type, rows)
+        this.templateUploadDialog.fileName = file.name
+        this.templateUploadDialog.message = `Imported template values for ${matchedRows} subject${matchedRows === 1 ? '' : 's'}.`
+      } catch (error) {
+        this.templateUploadDialog.message = error.message || 'Unable to import template CSV.'
+      } finally {
+        this.templateUploadDialog.dragover = false
+        if (this.$refs.templateUploadInput) {
+          this.$refs.templateUploadInput.value = ''
+        }
+      }
+    },
     openFileDialog() {
       this.$refs.fileInput?.click()
     },
@@ -1185,7 +1342,6 @@ export default {
         const rows = parseCsv(csvText)
         this.sessionEditor = mergeSessionCsvIntoPayload(rows, this.sessionEditor)
         this.syncGroupDietSelections()
-        this.updateOptionalColumnVisibility()
         this.sessionImportName = file.name
         this.sessionImportMessage = 'Session CSV imported into the form.'
       } catch (error) {
@@ -1247,9 +1403,7 @@ export default {
         name: '',
         kcal: '',
       }
-      this.showWeightColumns = false
-      this.showMassChangeColumns = false
-      this.showExclusionColumns = false
+      this.closeTemplateUploadModal()
       this.activeBuilderStep = 'upload'
       this.editingExperimentId = null
       this.editingSessionId = null
@@ -1383,7 +1537,6 @@ export default {
       this.sessionEditor = normalizeSessionPayload(sessionPayload || inferSessionPayloadFromCalrData(parsedRows))
       this.sessionEditor.hour_range = this.floorHourRange(this.sessionEditor.hour_range)
       this.syncGroupDietSelections()
-      this.updateOptionalColumnVisibility()
     },
     hydrateSessionEditorFromCalrCsv(csvText) {
       this.hydrateBuilder(csvText)
