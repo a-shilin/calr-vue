@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.13.1",
     "bootstrap-vue-next": "^0.24.23",
     "papaparse": "^5.4.1",
     "plotly.js-cartesian-dist-min": "^3.4.0",

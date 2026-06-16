@@ -693,6 +693,7 @@ a {
     display: flex;
     justify-content: space-between;
     background: #f9fafc;
+    gap:10px;
 }
 
 .data-table {
@@ -702,6 +703,7 @@ a {
 .data-table th,
 .data-table td {
   vertical-align: middle;
+  text-align: center;
 }
 
 .data-table th {
@@ -710,6 +712,10 @@ a {
   background: #f8fafc;
   border-top: 1px solid #e5e7eb;
   border-bottom: 5px solid transparent;
+}
+
+.data-table td input[type="number"] {
+    width: 100px;
 }
 
 .txt-center{

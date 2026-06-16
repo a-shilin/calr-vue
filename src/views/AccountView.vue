@@ -417,7 +417,7 @@
                   <div class="row-between session-subsection__header">
                     <div>
                       <strong>b. Designate Subjects</strong>
-                      <div class="muted-copy">Assign each subject to a group. Weights and exclusions are optional.</div>
+                      <div class="muted-copy">Assign each subject to a group. Weights, mass change, and exclusions are optional.</div>
                     </div>
                     <div class="button-row">
                     </div>
@@ -497,6 +497,34 @@
                       </table>
                       <div class="session-table-overlay" v-if="!showWeightColumns">
     
+                      </div>
+                    </div>
+                    <div class="relative">
+                      <table class="data-table session-subject-table">
+                        <colgroup>
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th class="txt-center relative" :colspan="1">
+                              Mass Change (optional)
+                              <div class="sub-copy">Subject mass change</div>
+                              <button class="btn btn-outline-secondary btn-sm session-table-option-btn" @click="showMassChangeColumns = !showMassChangeColumns">
+                                {{ showMassChangeColumns ? 'Hide' : 'Show' }}
+                              </button>
+                            </th>
+                          </tr>
+                          <tr>
+                            <th>Mass Change (g)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
+                            <td><input v-model="subject.mass_change" type="number" step="0.1" /></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div class="session-table-overlay" v-if="!showMassChangeColumns">
+
                       </div>
                     </div>
                     <div class="relative">
@@ -815,6 +843,7 @@ export default {
         kcal: '',
       },
       showWeightColumns: false,
+      showMassChangeColumns: false,
       showExclusionColumns: false,
       experimentDraft: {
         name: '',
@@ -1012,6 +1041,9 @@ export default {
         subject.total_mass !== null
         || subject.lean_mass !== null
         || subject.fat_mass !== null,
+      )
+      this.showMassChangeColumns = this.sessionEditor.subjects.some((subject) =>
+        subject.mass_change !== null,
       )
       this.showExclusionColumns = this.sessionEditor.subjects.some((subject) =>
         subject.exc_hour !== null
@@ -1216,6 +1248,7 @@ export default {
         kcal: '',
       }
       this.showWeightColumns = false
+      this.showMassChangeColumns = false
       this.showExclusionColumns = false
       this.activeBuilderStep = 'upload'
       this.editingExperimentId = null
@@ -1442,6 +1475,7 @@ export default {
           total_mass: toNumberOrNull(subject.total_mass),
           lean_mass: toNumberOrNull(subject.lean_mass),
           fat_mass: toNumberOrNull(subject.fat_mass),
+          mass_change: toNumberOrNull(subject.mass_change),
           exc_hour: toNumberOrNull(subject.exc_hour),
           exc_reason: subject.exc_reason?.trim() || '',
         })),
@@ -1564,10 +1598,12 @@ export default {
       file.loading = true
 
       try {
-        const [dataCsv, sessionConfig] = await Promise.all([
+        const [dataCsv, sessionConfig, sessionCsv] = await Promise.all([
           fetchDataFile(standard.id, this.store.auth.token, file.public),
           fetchSessionConfig(session.id, this.store.auth.token, file.public),
+          fetchSessionFile(session.id, this.store.auth.token, file.public),
         ])
+        const mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
 
         this.store.account.userCreatingNew = true
         this.activeAccountTab = 'builder'
@@ -1584,7 +1620,7 @@ export default {
           public: Boolean(file.public),
         }
         this.resetMetadataDraft(file)
-        this.hydrateBuilder(dataCsv, sessionConfig)
+        this.hydrateBuilder(dataCsv, mergedSessionConfig)
       } finally {
         file.loading = false
       }

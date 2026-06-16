@@ -790,6 +790,7 @@ export function normalizeSessionPayload(payload = {}) {
       total_mass: toNullableNumber(subject.total_mass),
       lean_mass: toNullableNumber(subject.lean_mass),
       fat_mass: toNullableNumber(subject.fat_mass),
+      mass_change: toNullableNumber(subject.mass_change),
       exc_hour: toNullableNumber(subject.exc_hour),
       exc_reason: subject.exc_reason ? `${subject.exc_reason}` : '',
     }
@@ -826,6 +827,7 @@ export function inferSessionPayloadFromCalrData(rows) {
         total_mass: null,
         lean_mass: null,
         fat_mass: null,
+        mass_change: null,
         exc_hour: null,
         exc_reason: '',
       })
@@ -956,6 +958,7 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
       total_mass: null,
       lean_mass: null,
       fat_mass: null,
+      mass_change: null,
       exc_hour: null,
       exc_reason: '',
     }
@@ -971,6 +974,7 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
       total_mass: toNullableNumber(sourceRow['Total.Mass']) ?? baseSubject.total_mass,
       lean_mass: toNullableNumber(sourceRow['Lean.Mass']) ?? baseSubject.lean_mass,
       fat_mass: toNullableNumber(sourceRow['Fat.Mass']) ?? baseSubject.fat_mass,
+      mass_change: toNullableNumber(sourceRow['Mass.Change']) ?? baseSubject.mass_change,
       exc_hour: exclusionNumber ?? baseSubject.exc_hour,
       exc_reason: exclusionNumber === null && !isBlank(exclusionValue)
         ? `${exclusionValue}`.trim()
