@@ -38,26 +38,15 @@
           </div>
         </div>
 
-        <div class="card-tabs">
-          <button class="card-tab" :class="{ active: activeAccountTab === 'experiments' }" @click="activeAccountTab = 'experiments'">
-            Your Experiments ({{ experimentCount }})
-          </button>
-          <button
-            v-if="store.account.userCreatingNew"
-            class="card-tab"
-            :class="{ active: activeAccountTab === 'builder' }"
-            @click="activeAccountTab = 'builder'"
-          >
-            {{ builderTabLabel }}
-          </button>
-        </div>
-
-        <div v-if="activeAccountTab === 'experiments'" class="page-column" style="padding: 0 10px">
+        <div class="page-column" style="padding: 0 10px">
+          <div>
+            <h5 class="bold">Your Experiments ({{ experimentCount }})</h5>
+          </div>
           <div v-if="store.loaders.getUserFiles" class="empty-state">
             <BSpinner small />
           </div>
     
-          <div v-else-if="store.account.userFiles.length" class="table-scroll-shell">
+          <div v-else-if="store.account.userFiles.length">
             <BTable
               :items="store.account.userFiles"
               :fields="userFilesFields"
@@ -144,31 +133,60 @@
               </template>
             </BTable>
           </div>
-    
+
           <div v-else class="empty-state">You have no experiments yet.</div>
         </div>
-    
-        <div v-if="activeAccountTab === 'builder' && store.auth.token && store.account.userCreatingNew" class="page-column">
-          <div class="row-between">
-            <div>
-              <!--<strong>{{ builderTabLabel }}</strong>-->
+
+        <div v-if="store.auth.token && store.account.userCreatingNew" class="builder-overlay">
+          <div class="builder-overlay__backdrop"></div>
+          <div class="builder-modal">
+            <div class="builder-modal__header row-between">
+              <div>
+                <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
+                <div class="muted-copy">
+                  {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
+                </div>
+              </div>
+              <div class="button-row">
+                <button
+                  class="btn btn-primary"
+                  :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
+                  @click="saveExperiment"
+                >
+                  <BSpinner v-if="store.loaders.uploadExperiment" small />
+                  <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
+                </button>
+                <BButton
+                  v-if="latestCreatedExperiment && !isEditingExperiment"
+                  variant="success"
+                  @click="openExperiment(latestCreatedExperiment)"
+                >
+                  Open in Analysis
+                </BButton>
+                <BButton v-if="store.account.userCreatingNew" variant="outline-secondary" @click="closeBuilderTab">
+                  Close
+                </BButton>
+              </div>
             </div>
-            <div class="button-row">
-              <BButton variant="outline-secondary" @click="resetCreateFlow">
-                Reset
-              </BButton>
-              <BButton v-if="store.account.userCreatingNew" variant="outline-secondary" @click="closeBuilderTab">
-                Close Tab
-            </BButton>
+            <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
+            <div v-else-if="!canSaveExperiment" class="message-text row-end">
+              Experiment 'Name' and 'Description' required.
             </div>
-          </div>
-    
-          <div class="session-builder">
-            <section class="session-step accordion-step" :class="{ 'accordion-step--open': activeBuilderStep === 'upload' }">
-              <button class="accordion-step__toggle" @click="goToBuilderStep('upload')">
-                <strong>1. Upload Data</strong>
-              </button>
-              <div v-if="activeBuilderStep === 'upload'" class="accordion-step__body page-column">
+
+            <div class="session-builder builder-modal__body">
+              <div class="card-tabs session-builder-tabs">
+                <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
+                  1. Upload Data
+                </button>
+                <button class="card-tab" :class="{ active: activeBuilderStep === 'configure' }" @click="goToBuilderStep('configure')">
+                  2. Configure Session
+                </button>
+                <button class="card-tab" :class="{ active: activeBuilderStep === 'review' }" @click="goToBuilderStep('review')">
+                  3. Add Metadata
+                </button>
+              </div>
+
+              <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
               <div class="session-uploads">
                 <div>
                   <div class="muted-copy">
@@ -314,20 +332,14 @@
                   Continue to Configure
                 </BButton>
               </div>
-              </div>
-            </section>
-    
-            <section class="session-step accordion-step" :class="{ 'accordion-step--open': activeBuilderStep === 'configure' }">
-              <button class="accordion-step__toggle" @click="goToBuilderStep('configure')">
-                <div class="row-spread">
-                  <strong>2. Configure Session</strong>
-                  <div v-if="!canContinueToConfigure" class="message-text">
-                    Upload or convert a CalR file to configure the session.
-                  </div>
+              </section>
+
+              <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
+                <div v-if="!canContinueToConfigure" class="message-text">
+                  Upload or convert a CalR file to configure the session.
                 </div>
-              </button>
-              <div v-if="activeBuilderStep === 'configure'" class="accordion-step__body">
-                <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
+                <div>
+                  <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
     
                 <div class="session-subsection">
                   <div class="row-between session-subsection__header">
@@ -434,6 +446,7 @@
                           <th></th>
                           <th class="txt-center" :colspan="sessionEditor.groups.length">
                             Groups
+                            <div class="bold sub-copy">Required</div>
                             <div class="sub-copy">Assign each subject to a group</div>
                           </th>
                         </tr>
@@ -474,9 +487,8 @@
                         <thead>
                           <tr>
                             <th class="txt-center relative session-subject-header" :colspan="3">
-                              Weights
-                              <div class="sub-copy"><span class="bold">Optional.</span> Weights from calorimeter will be used unless specified here.</div>
-                              <div class="session-table-actions">
+                              <div class="session-subject-header-title-with-button">
+                                Weights
                                 <button
                                   class="btn btn-outline-secondary btn-sm session-table-option-btn"
                                   data-tooltip="Upload weights data from template"
@@ -485,6 +497,8 @@
                                   <i class="bi bi-upload"></i>
                                 </button>
                               </div>
+                              <div class="bold sub-copy">Optional</div> 
+                              <div class="sub-copy">Weights from calorimeter will be used otherwise.</div>
                             </th>
                           </tr>
                           <tr>
@@ -509,9 +523,8 @@
                         <thead>
                           <tr>
                             <th class="txt-center relative session-subject-header" :colspan="1">
-                              Mass Change
-                              <div class="sub-copy"><span class="bold">Optional.</span> Subject mass change.</div>
-                              <div class="session-table-actions">
+                              <div class="session-subject-header-title-with-button">
+                                Mass Change
                                 <button
                                   class="btn btn-outline-secondary btn-sm session-table-option-btn"
                                   data-tooltip="Upload mass change data from template"
@@ -520,6 +533,8 @@
                                   <i class="bi bi-upload"></i>
                                 </button>
                               </div>
+                              <div class="bold sub-copy">Optional</div>
+                              <div class="sub-copy">Subject mass change.</div>
                             </th>
                           </tr>
                           <tr>
@@ -541,7 +556,8 @@
                           <tr>
                             <th class="txt-center relative session-subject-header" :colspan="2">
                               Exclusions
-                              <div class="sub-copy"><span class="bold">Optional.</span> Exclude subject ID's starting at hour.</div>
+                              <div class="bold sub-copy">Optional</div>
+                              <div class="sub-copy">Exclude subject ID's starting at hour.</div>
                             </th>
                           </tr>
                           <tr>
@@ -590,7 +606,7 @@
                     </div>
                     <div class="session-settings-grid">
                       <label class="control-stack">
-                        Food cutoff
+                        Food cutoff (kcal/hr)
                         <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" />
                       </label>
                     </div>
@@ -605,29 +621,24 @@
     
                 <div class="session-step__footer">
                   <div v-if="!canContinueToReview" class="message-text row-end">
-                    Assign at least one mouse to each group before continuing to review.
+                    Assign at least one mouse to each group before continuing to metadata.
                   </div>
                   <div class="row-end">
                     <BButton variant="primary" :disabled="!canContinueToReview" @click="goToBuilderStep('review')">
-                      Continue to Review
+                      Continue to Metadata
                     </BButton>
                   </div>
                 </div>
-                </fieldset>
-              </div>
-            </section>
-    
-            <section class="session-step accordion-step" :class="{ 'accordion-step--open': activeBuilderStep === 'review' }">
-              <button class="accordion-step__toggle" @click="goToBuilderStep('review')">
-                <div class="row-spread">
-                  <strong>{{ isEditingExperiment ? '3. Review Experiment' : '3. Save Experiment' }}</strong>
-                  <div v-if="!canContinueToReview" class="message-text">
-                    Configure session setup to save.
-                  </div>
+                  </fieldset>
                 </div>
-              </button>
-              <div v-if="activeBuilderStep === 'review'" class="accordion-step__body">
-                <fieldset class="builder-fieldset page-column" :disabled="!canContinueToReview">
+              </section>
+
+              <section v-else class="session-step">
+                <div v-if="!canContinueToReview" class="message-text">
+                  Configure session setup to save.
+                </div>
+                <div>
+                  <fieldset class="builder-fieldset page-column" :disabled="!canContinueToReview">
                 <div class="metadata-section">
                   <label class="control-stack">
                     Experiment name
@@ -686,33 +697,10 @@
                     Make public
                   </label>
                 </div>
-    
-                <div v-if="!canSaveExperiment" class="message-text row-end">
-                    Experiment 'Name' and 'Description' required.
+                  </fieldset>
                 </div>
-                <div class="button-row row-end">
-                  <button
-                    class="btn btn-primary"
-                    :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
-                    @click="saveExperiment"
-                  >
-                    <BSpinner v-if="store.loaders.uploadExperiment" small />
-                    <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
-                  </button>
-    
-                  <BButton
-                    v-if="latestCreatedExperiment && !isEditingExperiment"
-                    variant="success"
-                    @click="openExperiment(latestCreatedExperiment)"
-                  >
-                    Open in Analysis
-                  </BButton>
-                </div>
-    
-                <div v-if="saveMessage" class="message-text">{{ saveMessage }}</div>
-                </fieldset>
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
         </div>
 
@@ -880,7 +868,6 @@ export default {
       presetDietOptions: PRESET_DIETS,
       sexOptions: SEX_OPTIONS,
       systemOptions: SYSTEM_OPTIONS,
-      activeAccountTab: 'experiments',
       activeBuilderStep: 'upload',
       customDietOptions: [],
       showCustomDietEditor: false,
@@ -973,17 +960,6 @@ export default {
     },
     canSaveExperiment() {
       return Boolean(this.experimentDraft.name.trim()) && Boolean(this.experimentDraft.description.trim())
-    },
-    builderTabLabel() {
-      if (!this.store.account.userCreatingNew) {
-        return ''
-      }
-
-      if (this.isEditingExperiment) {
-        return `Editing ${this.experimentDraft.name.trim() || 'Experiment'}`
-      }
-
-      return 'New Experiment'
     },
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
@@ -1493,27 +1469,21 @@ export default {
     },
     async startCreateExperiment() {
       if (this.store.account.userCreatingNew && !this.isEditingExperiment) {
-        this.activeAccountTab = 'builder'
         this.activeBuilderStep = 'upload'
         return
       }
 
       if (!await this.confirmBuilderReplacement('a new experiment')) {
-        if (this.store.account.userCreatingNew) {
-          this.activeAccountTab = 'builder'
-        }
         return
       }
 
       this.store.account.userCreatingNew = true
       this.resetCreateFlow()
-      this.activeAccountTab = 'builder'
       this.activeBuilderStep = 'upload'
     },
     cancelCreateExperiment() {
       this.store.account.userCreatingNew = false
       this.resetCreateFlow()
-      this.activeAccountTab = 'experiments'
     },
     closeBuilderTab() {
       this.cancelCreateExperiment()
@@ -1743,7 +1713,6 @@ export default {
       if (this.store.account.userCreatingNew) {
         const targetLabel = `editing ${file.name || file.title || 'this experiment'}`
         if (!await this.confirmBuilderReplacement(targetLabel)) {
-          this.activeAccountTab = 'builder'
           return
         }
       }
@@ -1759,7 +1728,6 @@ export default {
         const mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
 
         this.store.account.userCreatingNew = true
-        this.activeAccountTab = 'builder'
         this.activeBuilderStep = 'configure'
         this.editingExperimentId = file.id
         this.editingSessionId = session.id

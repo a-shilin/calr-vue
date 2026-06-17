@@ -1,6 +1,6 @@
 <template>
   <div class="page-column">
-    <section class="panel panel--spaced">
+    <section>
       <div class="row-between">
         <div class="card-tabs">
           <button class="card-tab" :class="{ active: datasetSourceTab === 'public' }" @click="selectDatasetTab('public')">
@@ -15,47 +15,41 @@
             Your Datasets ({{ privateDatasetCount }})
           </button>
         </div>
-        <BButton v-if="showDatasetToggle" size="sm" variant="outline-secondary" @click="showDatasetList = !showDatasetList">
-          {{ showDatasetList ? 'Hide Dataset List' : 'Show Dataset List' }}
-        </BButton>
       </div>
-      <template v-if="showDatasetList">
-        <strong>{{ datasetTableTitle }}</strong>
-        <div v-if="loadingPublicFiles" class="empty-state">
-          <BSpinner small />
-        </div>
-        <div v-else-if="datasetTableItems.length" class="table-scroll-shell">
-          <BTable :items="datasetTableItems" :fields="publicFields" small hover striped>
-            <template #cell(name)="slot">
-              {{ slot.item.name || slot.item.title || slot.item.id }}
-            </template>
-            <template #cell(description)="slot">
-              {{ slot.item.description || '' }}
-            </template>
-            <template #cell(uploaded_at)="slot">
-              {{ formatDate(slot.item.uploaded_at) }}
-            </template>
-            <template #cell(actions)="slot">
-              <BBadge v-if="isSelectedDataset(slot.item)" variant="success">Selected</BBadge>
-              <BButton
-                v-else
-                size="sm"
-                variant="primary"
-                @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
-              >
-                <template v-if="slot.item.loading">
-                  <BSpinner small />
-                  <span style="margin-left: 0.4rem;">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
-                </template>
-                <span v-else>Open</span>
-              </BButton>
-            </template>
-          </BTable>
-        </div>
-        <div v-else class="empty-state">
-          {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
-        </div>
-      </template>
+      <div v-if="loadingPublicFiles" class="empty-state">
+        <BSpinner small />
+      </div>
+      <div v-else-if="datasetTableItems.length" class="table-scroll-shell">
+        <BTable :items="datasetTableItems" :fields="publicFields" small hover striped sticky-header>
+          <template #cell(name)="slot">
+            {{ slot.item.name || slot.item.title || slot.item.id }}
+          </template>
+          <template #cell(description)="slot">
+            {{ slot.item.description || '' }}
+          </template>
+          <template #cell(uploaded_at)="slot">
+            {{ formatDate(slot.item.uploaded_at) }}
+          </template>
+          <template #cell(actions)="slot">
+            <BButton v-if="isSelectedDataset(slot.item)" size="sm" variant="success" disabled>Selected</BButton>
+            <BButton 
+              v-else
+              size="sm"
+              variant="primary"
+              @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
+            >
+              <template v-if="slot.item.loading">
+                <BSpinner small />
+                <span style="margin-left: 0.4rem;">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
+              </template>
+              <span v-else>Open</span>
+            </BButton>
+          </template>
+        </BTable>
+      </div>
+      <div v-else class="empty-state">
+        {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
+      </div>
     </section>
 
     <div v-if="!store.experiment.current" class="empty-state panel">
@@ -496,7 +490,6 @@ export default {
       store: appStore,
       publicFields: ['name', 'description', 'uploaded_at', 'actions'],
       datasetSourceTab: 'public',
-      showDatasetList: true,
       explorerVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
@@ -910,19 +903,11 @@ export default {
       deep: true,
       handler() {
         this.syncDatasetSourceTab()
-
-        if (this.store.experiment.current) {
-          this.showDatasetList = false
-          return
-        }
-
-        this.showDatasetList = true
       },
     },
   },
   async mounted() {
     this.syncDatasetSourceTab()
-    this.showDatasetList = !this.store.experiment.current
 
     if (!this.store.account.publicFiles.length) {
       this.loadingPublicFiles = true
@@ -963,10 +948,6 @@ export default {
     formatDate,
     selectDatasetTab(tab) {
       this.datasetSourceTab = tab
-
-      if (!this.showDatasetList) {
-        this.showDatasetList = true
-      }
     },
     syncDatasetSourceTab() {
       if (this.store.auth.token && this.store.experiment.current && !this.store.experiment.current.public) {
@@ -1126,7 +1107,6 @@ export default {
         this.store.experiment.current = file
         this.store.experiment.detailRows = analysisData.rows
         this.store.experiment.analysisData = analysisData
-        this.showDatasetList = false
         this.syncDatasetSourceTab()
         this.ensureExperimentAnalysisCache()
         this.initializeGroupColors(this.sessionMetadata)

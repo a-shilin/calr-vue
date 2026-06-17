@@ -893,6 +893,10 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
     .filter((value) => !isBlank(value))
     .map((value) => `${value}`.trim().toLowerCase())
 
+  const feedCutoffValues = rows
+    .map((row) => toNullableNumber(row.feedCutoff ?? row.food_cutoff))
+    .filter((value) => value !== null)
+
   const groups = (groupColumns.length ? groupColumns : basePayload.groups.map((_, index) => `group${index + 1}`))
     .map((_, index) => ({
       name: groupNames[index] || basePayload.groups[index]?.name || `Group ${index + 1}`,
@@ -1000,6 +1004,9 @@ export function mergeSessionCsvIntoPayload(rows, fallbackPayload = {}) {
     hour_range: xRanges.length >= 2
       ? [xRanges[0], xRanges[1]]
       : basePayload.hour_range,
+    food_cutoff: feedCutoffValues.length
+      ? feedCutoffValues[0]
+      : basePayload.food_cutoff,
     remove_outliers: outlierValues.length
       ? outlierValues[0] === 'yes' || outlierValues[0] === 'true'
       : basePayload.remove_outliers,

@@ -11,6 +11,7 @@ This app is a rebuild of the older single-file prototype preserved in [index.pro
 - Vue Router
 - Bootstrap 5
 - BootstrapVue Next
+- Bootstrap Icons
 - Plotly
 - Papa Parse
 
@@ -43,6 +44,15 @@ The app uses hash routing for GitHub Pages compatibility.
 - [src/store/appStore.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/store/appStore.js): shared reactive app state
 - [src/styles/app.css](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/styles/app.css): app styles
 
+## Current UX Notes
+
+- The analysis page always shows dataset tabs. Before login, only the public-datasets tab is available.
+- On the analysis page, once a dataset is opened the dataset list auto-hides and can be reopened with the header toggle.
+- The account page shows the experiment list inline under a `Your Experiments` heading.
+- Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
+- Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
+- The account-side create/edit experiment flow opens in an overlay modal with step tabs for upload, session configuration, and metadata.
+
 ## Analysis Data Flow
 
 The analysis screens now use backend-enriched session data as the primary source of truth.
@@ -65,6 +75,7 @@ The frontend still keeps a few compatibility behaviors during normalization:
 - fill stable numeric/time fields such as `exp.minute`, `exp.hour`, `day`, `light`, `dark`, and `clockHour`
 - apply session-level exclusions from the backend session config
 - preserve group, diet, color, and subject body-composition metadata used by plots
+- preserve subject mass metadata returned in the session config, including total, lean, fat, and mass-change fields when available
 
 ## Plotting and Analysis
 
@@ -86,6 +97,16 @@ QC, Power, and ANCOVA/ANOVA are backend-run analyses. The frontend sends request
 
 and renders the returned results in the analysis screen.
 
+## Account Builder Flow
+
+The account-side experiment builder currently supports:
+
+- upload or convert instrument data into CalR CSV
+- import a session CSV to hydrate groups, diets, subjects, exclusions, food cutoff, and subject mass fields
+- edit existing experiments by loading the saved CalR CSV plus backend session config/session CSV
+- subject designation with always-visible tables for groups, weights, mass change, and exclusions
+- template-based import helpers for weights and mass change, including blank CSV template download and CSV upload from the builder modal
+
 ## Current Status
 
 ### Working
@@ -94,6 +115,8 @@ and renders the returned results in the analysis screen.
 - account-side create, edit, download, and open flows
 - enriched session loading for analysis
 - session metadata editing and upload/update flows
+- subject session CSV import and builder hydration
+- subject weights and mass-change template import/export helpers
 - time-series plot
 - distribution plot
 - regression plot
@@ -106,6 +129,7 @@ and renders the returned results in the analysis screen.
 ### Current Notes
 
 - The current analysis path is backend-enriched first. Older local preprocessing paths have been removed from the analysis view.
+- The analysis view now guards large datasets more carefully; `maxHour` is computed without array spreading to avoid call-stack failures on large sessions.
 - Plot parity work has recently aligned time-series, distribution, and regression behavior more closely with the legacy app.
 - `JS_REBUILD_FILES_REFERENCE` is still the main behavior reference when checking rebuilt frontend logic against the older app.
 - Avoid dataset-specific fixes unless a backend/data contract issue has been confirmed.
