@@ -147,7 +147,8 @@
                   {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
                 </div>
               </div>
-              <div class="button-row">
+              <div class="button-row" style="align-items: center;">
+                <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
                 <button
                   class="btn btn-primary"
                   :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
@@ -168,12 +169,23 @@
                 </BButton>
               </div>
             </div>
-            <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
-            <div v-else-if="!canSaveExperiment" class="message-text row-end">
-              Experiment 'Name' and 'Description' required.
-            </div>
-
+            
             <div class="session-builder builder-modal__body">
+              <div class="builder-core-fields">
+                <label class="control-stack builder-core-fields__name">
+                  Experiment name
+                  <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
+                </label>
+  
+                <label class="control-stack builder-core-fields__description">
+                  Description
+                  <textarea
+                    v-model="experimentDraft.description"
+                    rows="1"
+                    placeholder="Short experiment description"
+                  ></textarea>
+                </label>
+              </div>
               <div class="card-tabs session-builder-tabs">
                 <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
                   1. Upload Data
@@ -640,55 +652,26 @@
                 <div>
                   <fieldset class="builder-fieldset page-column" :disabled="!canContinueToReview">
                 <div class="metadata-section">
-                  <label class="control-stack">
-                    Experiment name
-                    <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
-                  </label>
-    
-                  <label class="control-stack">
-                    Description
-                    <textarea v-model="experimentDraft.description" rows="3" placeholder="Short experiment description"></textarea>
-                  </label>
-                </div>
-    
-                <div class="metadata-section">
+                  <div class="metadata-legend">
+                    <span class="metadata-legend__item">
+                      <span class="metadata-required-icon" aria-hidden="true"></span>
+                      Required for public
+                    </span>
+                  </div>
                   <div class="metadata-columns">
                     <section v-for="section in metadataSections" :key="section.title" class="metadata-section">
                       <strong>{{ section.title }}</strong>
                       <label v-for="field in section.fields" :key="field.key" class="control-stack">
-                        {{ field.label }}
-                        <select
-                          v-if="field.key === 'sex'"
-                          v-model="metadataDraft[field.key]"
-                        >
-                          <option value="">Select sex</option>
-                          <option v-for="option in sexOptions" :key="option" :value="option">{{ option }}</option>
-                        </select>
-                        <select
-                          v-else-if="field.key === 'system'"
-                          v-model="metadataDraft[field.key]"
-                        >
-                          <option value="">Select system</option>
-                          <option v-for="option in systemOptions" :key="option" :value="option">{{ option }}</option>
-                        </select>
-                        <input
-                          v-else-if="['litter', 'age', 'quality_score'].includes(field.key)"
-                          v-model="metadataDraft[field.key]"
-                          type="number"
-                          step="1"
-                        />
-                        <input
-                          v-else-if="field.key === 'temperature'"
-                          v-model="metadataDraft[field.key]"
-                          type="number"
-                          step="0.1"
-                        />
-                        <input
-                          v-else
-                          v-model="metadataDraft[field.key]"
-                          type="text"
-                          :placeholder="field.key === 'species' ? 'Mouse' : field.key === 'tissue' ? 'Whole Body' : ''"
-                        />
+                        <span class="metadata-field-label">
+                          {{ field.label }}
+                          <span
+                            v-if="field.requiredForPublic"
+                            class="metadata-required-icon"
+                            aria-label="Required for public"
+                            title="Required for public"
+                          ></span>
+                        </span>
+                        <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
                       </label>
                     </section>
                   </div>
@@ -776,6 +759,8 @@
 
 <script>
 import { appStore } from '../store/appStore'
+import MetadataFieldInput from '../components/MetadataFieldInput.vue'
+import experimentMetadataSections from '../config/experimentMetadata.json'
 import {
   convertInstrumentFiles,
   deleteExperiment,
@@ -817,57 +802,31 @@ const PRESET_DIETS = [
   { id: 'labdiet-5008', name: 'LabDiet 5008', kcal: 3.56 },
   { id: 'rd-60-fat', name: 'Research Diet 60 kcal% Fat', kcal: 5.21 },
 ]
-const SEX_OPTIONS = ['male', 'female', 'both', 'other']
-const SYSTEM_OPTIONS = ['CLAMS', 'TSE', 'Sable', 'Other']
-const METADATA_SECTIONS = [
-  {
-    title: 'Study Setup',
-    fields: [
-      { key: 'experiment_id', label: 'Experiment ID' },
-      { key: 'investigator', label: 'Investigator' },
-      { key: 'location', label: 'Location' },
-      { key: 'system', label: 'System' },
-      { key: 'pmid', label: 'PMID' },
-      { key: 'quality_score', label: 'Quality Score' },
-    ],
-  },
-  {
-    title: 'Biology',
-    fields: [
-      { key: 'species', label: 'Species' },
-      { key: 'tissue', label: 'Tissue' },
-      { key: 'treatment', label: 'Treatment' },
-      { key: 'strain', label: 'Strain' },
-      { key: 'genetic_background', label: 'Genetic Background' },
-      { key: 'sex', label: 'Sex' },
-      { key: 'age', label: 'Age' },
-      { key: 'litter', label: 'Litter Size' },
-    ],
-  },
-  {
-    title: 'Environment',
-    fields: [
-      { key: 'temperature', label: 'Ambient Temperature (°C)' },
-      { key: 'bedding', label: 'Bedding' },
-      { key: 'enrich', label: 'Enrichment' },
-      { key: 'ee_calc', label: 'EE Calc. Method' },
-    ],
-  },
-]
+const EXPERIMENT_METADATA_SECTIONS = experimentMetadataSections
+const EXPERIMENT_METADATA_FIELDS = EXPERIMENT_METADATA_SECTIONS.flatMap((section) => section.fields)
+
+function createEmptyMetadataDraft() {
+  return EXPERIMENT_METADATA_FIELDS.reduce((draft, field) => {
+    draft[field.key] = ''
+    return draft
+  }, {})
+}
 
 export default {
   name: 'AccountView',
+  components: {
+    MetadataFieldInput,
+  },
   data() {
     return {
       store: appStore,
       maxGroups: 4,
       baseGroupCount: 2,
-      metadataSections: METADATA_SECTIONS,
+      metadataSections: EXPERIMENT_METADATA_SECTIONS,
+      metadataFields: EXPERIMENT_METADATA_FIELDS,
       userFilesFields: ['name', 'description', 'public', 'uploaded_at', {key: 'actions', label: 'Actions', class: 'txt-right'}],
       sessionEditor: normalizeSessionPayload(),
       presetDietOptions: PRESET_DIETS,
-      sexOptions: SEX_OPTIONS,
-      systemOptions: SYSTEM_OPTIONS,
       activeBuilderStep: 'upload',
       customDietOptions: [],
       showCustomDietEditor: false,
@@ -882,26 +841,7 @@ export default {
       },
       editingExperimentId: null,
       editingSessionId: null,
-      metadataDraft: {
-        species: '',
-        tissue: '',
-        litter: '',
-        bedding: '',
-        ee_calc: '',
-        enrich: '',
-        experiment_id: '',
-        age: '',
-        strain: '',
-        genetic_background: '',
-        sex: '',
-        temperature: '',
-        quality_score: '',
-        system: '',
-        location: '',
-        pmid: '',
-        investigator: '',
-        treatment: '',
-      },
+      metadataDraft: createEmptyMetadataDraft(),
       latestCreatedExperimentId: null,
       saveMessage: '',
       sessionDragover: false,
@@ -977,6 +917,10 @@ export default {
     formatDate,
     formatFileSize,
     formatMetadataValue(value) {
+      if (Array.isArray(value)) {
+        return value.length ? value.join(', ') : 'NA'
+      }
+
       return value === null || value === undefined || value === '' ? 'NA' : `${value}`
     },
     formatHourRange(range) {
@@ -1009,27 +953,30 @@ export default {
     readMetadataValue(source, key) {
       return source?.metadata?.[key] ?? source?.[key] ?? ''
     },
-    resetMetadataDraft(source = null) {
-      this.metadataDraft = {
-        species: this.readMetadataValue(source, 'species'),
-        tissue: this.readMetadataValue(source, 'tissue'),
-        litter: this.readMetadataValue(source, 'litter'),
-        bedding: this.readMetadataValue(source, 'bedding'),
-        ee_calc: this.readMetadataValue(source, 'ee_calc'),
-        enrich: this.readMetadataValue(source, 'enrich'),
-        experiment_id: this.readMetadataValue(source, 'experiment_id'),
-        age: this.readMetadataValue(source, 'age'),
-        strain: this.readMetadataValue(source, 'strain'),
-        genetic_background: this.readMetadataValue(source, 'genetic_background'),
-        sex: this.readMetadataValue(source, 'sex'),
-        temperature: this.readMetadataValue(source, 'temperature'),
-        quality_score: this.readMetadataValue(source, 'quality_score'),
-        system: this.readMetadataValue(source, 'system'),
-        location: this.readMetadataValue(source, 'location'),
-        pmid: this.readMetadataValue(source, 'pmid'),
-        investigator: this.readMetadataValue(source, 'investigator'),
-        treatment: this.readMetadataValue(source, 'treatment'),
+    normalizeConfiguredMetadataValue(field, value) {
+      if (typeof value !== 'string' || !Array.isArray(field.options)) {
+        return value
       }
+
+      const trimmedValue = value.trim()
+      if (!trimmedValue) {
+        return ''
+      }
+
+      const matchingOption = field.options.find((option) => option.toLowerCase() === trimmedValue.toLowerCase())
+      return matchingOption || value
+    },
+    resetMetadataDraft(source = null) {
+      const nextDraft = createEmptyMetadataDraft()
+
+      this.metadataFields.forEach((field) => {
+        const value = this.readMetadataValue(source, field.key)
+        nextDraft[field.key] = Array.isArray(value)
+          ? [...value]
+          : this.normalizeConfiguredMetadataValue(field, value)
+      })
+
+      this.metadataDraft = nextDraft
     },
     goToBuilderStep(step) {
       this.activeBuilderStep = step
@@ -1039,29 +986,28 @@ export default {
     },
     buildMetadataPayload() {
       const numberOrNull = (value) => (value === '' || value === null || value === undefined ? null : Number(value))
-
-      return {
+      const payload = {
         name: this.experimentDraft.name.trim() || null,
         description: this.experimentDraft.description.trim() || null,
-        species: this.metadataDraft.species.trim() || null,
-        tissue: this.metadataDraft.tissue.trim() || null,
-        litter: numberOrNull(this.metadataDraft.litter),
-        bedding: this.metadataDraft.bedding.trim() || null,
-        ee_calc: this.metadataDraft.ee_calc.trim() || null,
-        enrich: this.metadataDraft.enrich.trim() || null,
-        experiment_id: this.metadataDraft.experiment_id.trim() || null,
-        age: numberOrNull(this.metadataDraft.age),
-        strain: this.metadataDraft.strain.trim() || null,
-        genetic_background: this.metadataDraft.genetic_background.trim() || null,
-        sex: this.metadataDraft.sex || null,
-        temperature: numberOrNull(this.metadataDraft.temperature),
-        quality_score: numberOrNull(this.metadataDraft.quality_score),
-        system: this.metadataDraft.system || null,
-        location: this.metadataDraft.location.trim() || null,
-        pmid: this.metadataDraft.pmid.trim() || null,
-        investigator: this.metadataDraft.investigator.trim() || null,
-        treatment: this.metadataDraft.treatment.trim() || null,
       }
+
+      this.metadataFields.forEach((field) => {
+        const value = this.metadataDraft[field.key]
+
+        if (field.type === 'number') {
+          payload[field.key] = numberOrNull(value)
+          return
+        }
+
+        if (typeof value === 'string') {
+          payload[field.key] = value.trim() || null
+          return
+        }
+
+        payload[field.key] = value || null
+      })
+
+      return payload
     },
     normalizedGroupName(group, index) {
       return group.name.trim() || `Group ${index + 1}`
@@ -1734,7 +1680,7 @@ export default {
         this.latestCreatedExperimentId = null
         this.sessionImportName = ''
         this.sessionImportMessage = ''
-        this.saveMessage = 'Existing experiment loaded into the session form.'
+        this.saveMessage = ''
         this.experimentDraft = {
           name: file.name || '',
           description: file.description || '',
