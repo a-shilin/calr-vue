@@ -199,11 +199,11 @@
               </div>
 
               <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
+              <div class="muted-copy">
+                Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
+              </div>
               <div class="session-uploads">
                 <div>
-                  <div class="muted-copy">
-                    Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
-                  </div>
                   <div class="session-uploads-convert">
                     <div class="session-uploads-intruments">
                       <div class="session-uploads-intrument" :class="{'detected': store.upload.detectedFileFormat==='sable'}">SABLE</div>
@@ -221,6 +221,15 @@
                   </div>
                   
                   <div
+                    v-if="showEditingCalrDownload"
+                    class="session-import-download detected-calr"
+                  >
+                    <BButton variant="outline-secondary" @click="downloadEditingStandardFile">
+                      Download CalR
+                    </BButton>
+                  </div>
+                  <div
+                    v-else
                     class="dropzone"
                     :class="{ 
                       dragover: store.upload.dragover, 
@@ -279,22 +288,102 @@
                       <div>{{ sessionEditor.subjects.length }}</div>
                     </div>
                     <div>
-                      <strong>Hours</strong>
-                      <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
+                      <strong>Total Hours</strong>
+                      <div>{{ totalCalrHours }}</div>
                     </div>
                   </div>
                 </div>
+              </div>
+    
+              <div v-if="canContinueToConfigure" class="row-end">
+                <BButton variant="primary" @click="goToBuilderStep('configure')">
+                  Continue to Configure
+                </BButton>
+              </div>
+
+              <div v-if="hasConvertedData" class="page-column">
+                <div class="row-between">
+                  <strong>CalR Data Preview</strong>
+                  <div class="muted-copy">
+                    Showing {{ calrPreviewRangeStart }}-{{ calrPreviewRangeEnd }} of {{ calrPreviewSourceRows.length }} row(s)
+                  </div>
+                </div>
+                <div class="table-scroll-shell">
+                  <BTable
+                    class="preview-table"
+                    :items="calrPreviewRows"
+                    :fields="calrPreviewFields"
+                    responsive
+                    small
+                    striped
+                    hover
+                  />
+                </div>
+                <div v-if="calrPreviewPageCount > 1" class="preview-pagination">
+                  <BButton
+                    size="sm"
+                    variant="outline-secondary"
+                    :disabled="calrPreviewPage <= 1"
+                    @click="goToCalrPreviewPage(calrPreviewPage - 1)"
+                  >
+                    Previous
+                  </BButton>
+                  <span class="muted-copy">Page {{ calrPreviewPage }} of {{ calrPreviewPageCount }}</span>
+                  <BButton
+                    size="sm"
+                    variant="outline-secondary"
+                    :disabled="calrPreviewPage >= calrPreviewPageCount"
+                    @click="goToCalrPreviewPage(calrPreviewPage + 1)"
+                  >
+                    Next
+                  </BButton>
+                </div>
+              </div>
+              </section>
+
+              <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
+                <div v-if="!canContinueToConfigure" class="alert alert-warning" role="alert"">
+                  Upload or convert a CalR file to configure a session.
+                </div>
+
+                <div class="muted-copy">
+                  Designate groups, diets, subjects, and experiment ranges.
+                </div>
+                <div class="session-uploads">
+                <div>
+                  <div class="session-uploads-convert">
+                      <div class="session-uploads-session">
+                      <div>Session</div>
+                      <div class="session-uploads-intruments">
+                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
+                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects</div>
+                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Ranges</div>
+                      </div>
+                    </div>
+                  </div>
+                  <!--
+                  <div class="session-diagram">
+                    <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
+                  </div>
+                  -->
+                </div>
     
                 <!-- session metadata upload dropzone -->
-                <div v-if="hasConvertedData && store.upload.isCalrFormat" class="session-import-row col-between">
+                <div class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
                   <div class="session-import-drop">
-                    <div>
-                      <strong v-if="!sessionImportName">Have an existing session CSV?</strong>
-                      <strong v-else>Session settings loaded</strong>
+                    <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
+                    <div
+                      v-if="showEditingSessionDownload"
+                      class="session-import-download detected-calr"
+                    >
+                      <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
+                        Download Session
+                      </BButton>
                     </div>
                     <div
+                      v-else
                       class="dropzone"
-                      :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName }"
+                      :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
                       @click="openSessionFileDialog"
                       @dragover.prevent="sessionDragover = true"
                       @dragleave="sessionDragover = false"
@@ -308,7 +397,7 @@
                         <div>{{ sessionImportName }}</div>
                       </div>  
                     </div>
-                    <div v-if="!sessionImportName">
+                    <div v-if="!showEditingSessionDownload && !sessionImportName">
                       Otherwise you can configure your session below.
                     </div>
                     <div v-if="sessionImportName" class="row-end">
@@ -325,10 +414,22 @@
                     />
                   </div>
     
-                  <div v-if="sessionImportName" class="upload-summary-grid">
+                  <div v-if="sessionImportName || showEditingSessionDownload" class="upload-summary-grid">
                     <div>
                       <strong>Groups</strong>
                       <div>{{ sessionEditor.groups.length }}</div>
+                    </div>
+                    <div>
+                      <strong>Light Start</strong>
+                      <div>{{ sessionEditor.light_cycle_start === '' ? 'NA' : sessionEditor.light_cycle_start }}</div>
+                    </div>
+                    <div>
+                      <strong>Dark Start</strong>
+                      <div>{{ sessionEditor.dark_cycle_start === '' ? 'NA' : sessionEditor.dark_cycle_start }}</div>
+                    </div>
+                    <div>
+                      <strong>Session Hours</strong>
+                      <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
                     </div>
                   </div>
                   <!--
@@ -338,18 +439,7 @@
                   -->
                 </div>
               </div>
-    
-              <div v-if="canContinueToConfigure" class="row-end">
-                <BButton variant="primary" @click="goToBuilderStep('configure')">
-                  Continue to Configure
-                </BButton>
-              </div>
-              </section>
 
-              <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
-                <div v-if="!canContinueToConfigure" class="message-text">
-                  Upload or convert a CalR file to configure the session.
-                </div>
                 <div>
                   <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
     
@@ -422,6 +512,7 @@
                         <label class="control-stack" style="width:80%">
                           Diet
                           <select v-model="group.diet_key" @change="applyGroupDietSelection(group)">
+                            <option value="">Select Diet</option>
                             <option v-for="option in dietOptions" :key="option.id" :value="option.id">
                               {{ option.label }}
                             </option>
@@ -633,7 +724,7 @@
     
                 <div class="session-step__footer">
                   <div v-if="!canContinueToReview" class="message-text row-end">
-                    Assign at least one mouse to each group before continuing to metadata.
+                    Complete groups and diets, assign at least one subject to each group, and fill in light/dark cycle hours before continuing to metadata.
                   </div>
                   <div class="row-end">
                     <BButton variant="primary" :disabled="!canContinueToReview" @click="goToBuilderStep('review')">
@@ -761,6 +852,7 @@
 import { appStore } from '../store/appStore'
 import MetadataFieldInput from '../components/MetadataFieldInput.vue'
 import experimentMetadataSections from '../config/experimentMetadata.json'
+import sessionDiagramImage from '../assets/session.png'
 import {
   convertInstrumentFiles,
   deleteExperiment,
@@ -812,6 +904,22 @@ function createEmptyMetadataDraft() {
   }, {})
 }
 
+function createIncompleteSessionEditor(basePayload = {}) {
+  const sessionEditor = normalizeSessionPayload(basePayload)
+
+  sessionEditor.groups = sessionEditor.groups.map((group, index) => ({
+    ...group,
+    name: `${group?.name || `Group ${index + 1}`}`.trim(),
+    diet_name: '',
+    diet_kcal: null,
+    diet_key: '',
+  }))
+  sessionEditor.light_cycle_start = ''
+  sessionEditor.dark_cycle_start = ''
+
+  return sessionEditor
+}
+
 export default {
   name: 'AccountView',
   components: {
@@ -820,14 +928,17 @@ export default {
   data() {
     return {
       store: appStore,
+      sessionDiagramImage,
       maxGroups: 4,
       baseGroupCount: 2,
       metadataSections: EXPERIMENT_METADATA_SECTIONS,
       metadataFields: EXPERIMENT_METADATA_FIELDS,
       userFilesFields: ['name', 'description', 'public', 'uploaded_at', {key: 'actions', label: 'Actions', class: 'txt-right'}],
-      sessionEditor: normalizeSessionPayload(),
+      sessionEditor: createIncompleteSessionEditor(),
       presetDietOptions: PRESET_DIETS,
       activeBuilderStep: 'upload',
+      calrPreviewPage: 1,
+      calrPreviewPageSize: 10,
       customDietOptions: [],
       showCustomDietEditor: false,
       customDietDraft: {
@@ -839,6 +950,9 @@ export default {
         description: '',
         public: false,
       },
+      editingExperimentFile: null,
+      editingStandardFileEntry: null,
+      editingSessionFileEntry: null,
       editingExperimentId: null,
       editingSessionId: null,
       metadataDraft: createEmptyMetadataDraft(),
@@ -882,10 +996,52 @@ export default {
     isEditingExperiment() {
       return this.editingExperimentId !== null
     },
+    showEditingCalrDownload() {
+      return this.isEditingExperiment && Boolean(this.editingExperimentFile) && Boolean(this.editingStandardFileEntry)
+    },
+    showEditingSessionDownload() {
+      return this.isEditingExperiment && Boolean(this.editingExperimentFile) && Boolean(this.editingSessionFileEntry)
+    },
     canContinueToConfigure() {
       return this.hasConvertedData
     },
-    canContinueToReview() {
+    totalCalrHours() {
+      let minMinute = Infinity
+      let maxMinute = -Infinity
+
+      this.calrPreviewSourceRows.forEach((row) => {
+        const minute = Number(row?.['exp.minute'])
+        if (!Number.isFinite(minute)) {
+          return
+        }
+
+        if (minute < minMinute) {
+          minMinute = minute
+        }
+
+        if (minute > maxMinute) {
+          maxMinute = minute
+        }
+      })
+
+      if (!Number.isFinite(minMinute) || !Number.isFinite(maxMinute)) {
+        return 'NA'
+      }
+
+      return Math.max(0, Math.round(((maxMinute - minMinute) / 60) * 100) / 100)
+    },
+    isSessionImportEnabled() {
+      return this.canContinueToConfigure
+    },
+    isGroupsAndDietsComplete() {
+      return this.sessionEditor.groups.length > 0 && this.sessionEditor.groups.every((group, index) => (
+        Boolean(this.normalizedGroupName(group, index))
+        && Boolean(group.color)
+        && Boolean(group.diet_key)
+        && Boolean(group.diet_name?.trim())
+      ))
+    },
+    isSubjectsComplete() {
       if (!this.hasConvertedData || !this.sessionEditor.groups.length || !this.sessionEditor.subjects.length) {
         return false
       }
@@ -897,6 +1053,53 @@ export default {
       )
 
       return this.sessionEditor.groups.every((_, index) => assignedGroups.has(index))
+    },
+    isRangesComplete() {
+      return this.sessionEditor.light_cycle_start !== ''
+        && this.sessionEditor.light_cycle_start !== null
+        && this.sessionEditor.light_cycle_start !== undefined
+        && this.sessionEditor.dark_cycle_start !== ''
+        && this.sessionEditor.dark_cycle_start !== null
+        && this.sessionEditor.dark_cycle_start !== undefined
+    },
+    calrPreviewSourceRows() {
+      return Array.isArray(this.store.upload.convertedJSON) ? this.store.upload.convertedJSON : []
+    },
+    calrPreviewPageCount() {
+      return Math.max(1, Math.ceil(this.calrPreviewSourceRows.length / this.calrPreviewPageSize))
+    },
+    calrPreviewRows() {
+      const previewFields = this.calrPreviewFields
+      const startIndex = (this.calrPreviewPage - 1) * this.calrPreviewPageSize
+      const pageRows = this.calrPreviewSourceRows.slice(startIndex, startIndex + this.calrPreviewPageSize)
+
+      return pageRows.map((row) => previewFields.reduce((sanitizedRow, field) => {
+        sanitizedRow[field.key] = row?.[field.label] ?? ''
+        return sanitizedRow
+      }, {}))
+    },
+    calrPreviewFields() {
+      const firstRow = this.calrPreviewSourceRows[0]
+
+      return firstRow
+        ? Object.keys(firstRow).map((key, index) => ({
+            key: this.getCalrPreviewFieldKey(key, index),
+            label: key,
+          }))
+        : []
+    },
+    calrPreviewRangeStart() {
+      if (!this.calrPreviewSourceRows.length) {
+        return 0
+      }
+
+      return (this.calrPreviewPage - 1) * this.calrPreviewPageSize + 1
+    },
+    calrPreviewRangeEnd() {
+      return Math.min(this.calrPreviewPage * this.calrPreviewPageSize, this.calrPreviewSourceRows.length)
+    },
+    canContinueToReview() {
+      return this.isGroupsAndDietsComplete && this.isSubjectsComplete && this.isRangesComplete
     },
     canSaveExperiment() {
       return Boolean(this.experimentDraft.name.trim()) && Boolean(this.experimentDraft.description.trim())
@@ -913,6 +1116,16 @@ export default {
       await this.loadUserFiles()
     }
   },
+  watch: {
+    'store.upload.convertedCSV'() {
+      this.calrPreviewPage = 1
+    },
+    calrPreviewPageCount(nextPageCount) {
+      if (this.calrPreviewPage > nextPageCount) {
+        this.calrPreviewPage = nextPageCount
+      }
+    },
+  },
   methods: {
     formatDate,
     formatFileSize,
@@ -928,6 +1141,13 @@ export default {
     },
     formatDietKcal(value) {
       return value === null || value === '' || value === undefined ? '' : `${value}`
+    },
+    getCalrPreviewFieldKey(key, index) {
+      return `field_${index}_${key.replace(/[^a-zA-Z0-9_]/g, '_')}`
+    },
+    goToCalrPreviewPage(page) {
+      const safePage = Math.min(Math.max(Number(page) || 1, 1), this.calrPreviewPageCount)
+      this.calrPreviewPage = safePage
     },
     getSystemForDetectedFormat(format) {
       if (format === 'oxymax') {
@@ -1035,7 +1255,7 @@ export default {
       }
 
       if (!group.diet_name || group.diet_kcal === null || group.diet_kcal === undefined || group.diet_kcal === '') {
-        return this.presetDietOptions[fallbackIndex]?.id || this.presetDietOptions[0]?.id || ''
+        return ''
       }
 
       const customOption = {
@@ -1048,11 +1268,6 @@ export default {
     },
     syncGroupDietSelections() {
       this.sessionEditor.groups.forEach((group, index) => {
-        if (!group.diet_name && this.presetDietOptions[index]) {
-          group.diet_name = this.presetDietOptions[index].name
-          group.diet_kcal = this.presetDietOptions[index].kcal
-        }
-
         group.diet_key = this.ensureDietOption(group, index)
         this.applyGroupDietSelection(group, false)
       })
@@ -1238,6 +1453,10 @@ export default {
       this.$refs.fileInput?.click()
     },
     openSessionFileDialog() {
+      if (!this.isSessionImportEnabled) {
+        return
+      }
+
       this.$refs.sessionFileInput?.click()
     },
     async handleFileSelect(event) {
@@ -1249,6 +1468,10 @@ export default {
       await this.importSessionFile(file)
     },
     async handleSessionFileDrop(event) {
+      if (!this.isSessionImportEnabled) {
+        return
+      }
+
       this.sessionDragover = false
       const [file] = Array.from(event.dataTransfer.files || [])
       await this.importSessionFile(file)
@@ -1318,7 +1541,8 @@ export default {
       this.store.upload.detectedFileFormat = ''
       this.store.upload.convertedCSV = ''
       this.store.upload.convertedJSON = null
-      this.sessionEditor = normalizeSessionPayload()
+      this.calrPreviewPage = 1
+      this.sessionEditor = createIncompleteSessionEditor()
       this.customDietOptions = []
       this.showCustomDietEditor = false
       this.customDietDraft = {
@@ -1327,6 +1551,9 @@ export default {
       }
       this.closeTemplateUploadModal()
       this.activeBuilderStep = 'upload'
+      this.editingExperimentFile = null
+      this.editingStandardFileEntry = null
+      this.editingSessionFileEntry = null
       this.editingExperimentId = null
       this.editingSessionId = null
       this.resetMetadataDraft()
@@ -1450,7 +1677,9 @@ export default {
       const parsedRows = ensureExpMinute(parseCsv(csvText))
       this.store.upload.convertedCSV = csvText
       this.store.upload.convertedJSON = parsedRows
-      this.sessionEditor = normalizeSessionPayload(sessionPayload || inferSessionPayloadFromCalrData(parsedRows))
+      this.sessionEditor = sessionPayload
+        ? normalizeSessionPayload(sessionPayload)
+        : createIncompleteSessionEditor(inferSessionPayloadFromCalrData(parsedRows))
       this.sessionEditor.hour_range = this.floorHourRange(this.sessionEditor.hour_range)
       this.syncGroupDietSelections()
     },
@@ -1493,9 +1722,9 @@ export default {
       const nextIndex = this.sessionEditor.groups.length
       this.sessionEditor.groups.push({
         name: `Group ${nextIndex + 1}`,
-        diet_name: this.presetDietOptions[0]?.name || '',
-        diet_kcal: this.presetDietOptions[0]?.kcal ?? null,
-        diet_key: this.presetDietOptions[0]?.id || '',
+        diet_name: '',
+        diet_kcal: null,
+        diet_key: '',
         color: DEFAULT_GROUP_COLORS[nextIndex % DEFAULT_GROUP_COLORS.length],
       })
     },
@@ -1675,6 +1904,9 @@ export default {
 
         this.store.account.userCreatingNew = true
         this.activeBuilderStep = 'configure'
+        this.editingExperimentFile = file
+        this.editingStandardFileEntry = standard
+        this.editingSessionFileEntry = session
         this.editingExperimentId = file.id
         this.editingSessionId = session.id
         this.latestCreatedExperimentId = null
@@ -1702,6 +1934,20 @@ export default {
         : await fetchDataFile(entry.id, this.store.auth.token, experiment.public)
 
       this.triggerCsvDownload(entry.file_name || `${experiment.id}_${entry.file_type}.csv`, content)
+    },
+    async downloadEditingStandardFile() {
+      if (!this.editingExperimentFile || !this.editingStandardFileEntry) {
+        return
+      }
+
+      await this.downloadExperimentFile(this.editingExperimentFile, this.editingStandardFileEntry)
+    },
+    async downloadEditingSessionFile() {
+      if (!this.editingExperimentFile || !this.editingSessionFileEntry) {
+        return
+      }
+
+      await this.downloadExperimentFile(this.editingExperimentFile, this.editingSessionFileEntry)
     },
     async openExperiment(file) {
       const session = file.files.find((item) => item.file_type === 'session')
