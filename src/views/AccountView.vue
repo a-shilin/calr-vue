@@ -203,7 +203,7 @@
                 Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
               </div>
               <div class="session-uploads">
-                <div>
+                <div style="display:flex; flex-direction:column; gap:20px;">
                   <div class="session-uploads-convert">
                     <div class="session-uploads-intruments">
                       <div class="session-uploads-intrument" :class="{'detected': store.upload.detectedFileFormat==='sable'}">SABLE</div>
@@ -212,6 +212,64 @@
                     </div>
                     <div class="session-uploads-arrow">➧</div>
                     <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
+                  </div>
+                  <div v-if="hasConvertedData" class="upload-qc-list">
+                    <div
+                      class="upload-qc-check"
+                      :class="{ 'upload-qc-check--pass': energyExpenditureQc.passed, 'upload-qc-check--fail': !energyExpenditureQc.passed }"
+                    >
+                      <strong>Energy Expenditure QC</strong>
+                      <div>
+                        {{ energyExpenditureQc.passed
+                          ? `Passed: all RER values are > 0.6 and < 1.5.`
+                          : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
+                      </div>
+                      <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
+                        <button
+                          v-if="!isQcActive('energyExpenditure')"
+                          class="upload-qc-nav__show"
+                          @click="showQcInTable('energyExpenditure')"
+                        >
+                          Show in table
+                        </button>
+                        <template v-else>
+                          <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', -1)">&lt;</button>
+                          <button class="upload-qc-nav__current" @click="focusQcFailure('energyExpenditure')">
+                            {{ currentQcInvalidLabel('energyExpenditure') }}
+                          </button>
+                          <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', 1)">&gt;</button>
+                          <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                        </template>
+                      </div>
+                    </div>
+                    <div
+                      class="upload-qc-check"
+                      :class="{ 'upload-qc-check--pass': foodIntakeQc.passed, 'upload-qc-check--fail': !foodIntakeQc.passed }"
+                    >
+                      <strong>Food Intake QC</strong>
+                      <div>
+                        {{ foodIntakeQc.passed
+                          ? `Passed: all feed values are non-negative.`
+                          : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
+                      </div>
+                      <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
+                        <button
+                          v-if="!isQcActive('foodIntake')"
+                          class="upload-qc-nav__show"
+                          @click="showQcInTable('foodIntake')"
+                        >
+                          Show in table
+                        </button>
+                        <template v-else>
+                          <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', -1)">&lt;</button>
+                          <button class="upload-qc-nav__current" @click="focusQcFailure('foodIntake')">
+                            {{ currentQcInvalidLabel('foodIntake') }}
+                          </button>
+                          <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', 1)">&gt;</button>
+                          <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                        </template>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <!-- session data upload dropzone -->
@@ -313,6 +371,7 @@
                     class="preview-table"
                     :items="calrPreviewRows"
                     :fields="calrPreviewFields"
+                    :tbody-tr-class="getCalrPreviewRowClass"
                     responsive
                     small
                     striped
@@ -710,7 +769,14 @@
                     <div class="session-settings-grid">
                       <label class="control-stack">
                         Food cutoff (kcal/hr)
-                        <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" />
+                        <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" @input="handleFoodCutoffInput" />
+                        <div class="muted-copy">
+                          Minimum: {{ minimumFoodCutoffKcalPerHour }} kcal/hr
+                          (100 mg/min using {{ foodCutoffReferenceKcalPerG }} kcal/g).
+                        </div>
+                        <div v-if="!isFoodCutoffValid" class="session-validation-message">
+                          Food cutoff must be at least {{ minimumFoodCutoffKcalPerHour }} kcal/hr to meet the 100 mg/min minimum.
+                        </div>
                       </label>
                     </div>
                     <div class="session-settings-grid">
@@ -724,7 +790,7 @@
     
                 <div class="session-step__footer">
                   <div v-if="!canContinueToReview" class="message-text row-end">
-                    Complete groups and diets, assign at least one subject to each group, and fill in light/dark cycle hours before continuing to metadata.
+                    Complete groups and diets, assign at least one subject to each group, fill in light/dark cycle hours, and keep food cutoff at or above the 100 mg/min minimum before continuing to metadata.
                   </div>
                   <div class="row-end">
                     <BButton variant="primary" :disabled="!canContinueToReview" @click="goToBuilderStep('review')">
@@ -852,7 +918,6 @@
 import { appStore } from '../store/appStore'
 import MetadataFieldInput from '../components/MetadataFieldInput.vue'
 import experimentMetadataSections from '../config/experimentMetadata.json'
-import sessionDiagramImage from '../assets/session.png'
 import {
   convertInstrumentFiles,
   deleteExperiment,
@@ -891,11 +956,31 @@ const numericalColumns = [
 ]
 
 const PRESET_DIETS = [
-  { id: 'labdiet-5008', name: 'LabDiet 5008', kcal: 3.56 },
-  { id: 'rd-60-fat', name: 'Research Diet 60 kcal% Fat', kcal: 5.21 },
+  { id: 'ld-5008',              name: 'LabDiet 5008 3.56kcal/g',                            kcal: 3.56 },
+  { id: 'ld-5053',              name: 'LabDiet 5053 3.43kcal/g',                            kcal: 3.43 },
+  { id: 'ld-5058',              name: 'LabDiet 5058 3.76kcal/g',                            kcal: 3.76 },
+  { id: 'rd-60-fat',            name: 'ResearchDiet 60 kcal% Fat 5.21kcal/g',               kcal: 5.21 },
+  { id: 'rd-45-fat',            name: 'ResearchDiet 45 kcal% Fat 4.7kcal/g',                kcal: 4.7 },
+  { id: 'rd-10-fat-35-sucrose', name: 'ResearchDiet 10 kcal% Fat 35% sucrose 3.82kcal/g',   kcal: 3.82 },
+  { id: 'rd-10-fat-17-sucrose', name: 'ResearchDiet 10 kcal% Fat 17% sucrose 3.82kcal/g',   kcal: 3.82 },
+  { id: 'rd-10-fat-7-sucrose',  name: 'ResearchDiet 10 kcal% Fat 7% sucrose 3.82kcal/g',    kcal: 3.82 },
+  { id: 'rd-10-fat-0-sucrose',  name: 'ResearchDiet 10 kcal% Fat no sucrose 3.82kcal/g',    kcal: 3.82 },
+  { id: 'sf04-27',              name: 'Specialty Feeds SF04-027 Fat 23% 4.06kcal/g',        kcal: 4.06 },
 ]
+
+
+const FOOD_CUTOFF_MIN_MG_PER_MIN = 100
+const DEFAULT_FOOD_CUTOFF_KCAL_PER_G = PRESET_DIETS[0].kcal
 const EXPERIMENT_METADATA_SECTIONS = experimentMetadataSections
 const EXPERIMENT_METADATA_FIELDS = EXPERIMENT_METADATA_SECTIONS.flatMap((section) => section.fields)
+
+function roundToTwo(value) {
+  return Math.round(value * 100) / 100
+}
+
+function convertFoodCutoffMgPerMinToKcalPerHour(mgPerMin, kcalPerG = DEFAULT_FOOD_CUTOFF_KCAL_PER_G) {
+  return roundToTwo((Number(mgPerMin) / 1000) * 60 * Number(kcalPerG))
+}
 
 function createEmptyMetadataDraft() {
   return EXPERIMENT_METADATA_FIELDS.reduce((draft, field) => {
@@ -916,8 +1001,27 @@ function createIncompleteSessionEditor(basePayload = {}) {
   }))
   sessionEditor.light_cycle_start = ''
   sessionEditor.dark_cycle_start = ''
+  sessionEditor.food_cutoff = convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN)
 
   return sessionEditor
+}
+
+function summarizeCalrColumnQc(rows, columnName, validator) {
+  const invalidRows = []
+
+  rows.forEach((row, index) => {
+    const value = Number(row?.[columnName])
+    if (!Number.isFinite(value) || !validator(value)) {
+      invalidRows.push(index + 1)
+    }
+  })
+
+  return {
+    checkedRowCount: rows.length,
+    invalidCount: invalidRows.length,
+    invalidRows,
+    passed: rows.length > 0 && invalidRows.length === 0,
+  }
 }
 
 export default {
@@ -928,7 +1032,6 @@ export default {
   data() {
     return {
       store: appStore,
-      sessionDiagramImage,
       maxGroups: 4,
       baseGroupCount: 2,
       metadataSections: EXPERIMENT_METADATA_SECTIONS,
@@ -939,6 +1042,11 @@ export default {
       activeBuilderStep: 'upload',
       calrPreviewPage: 1,
       calrPreviewPageSize: 10,
+      activeQcKey: '',
+      qcFailureCursor: {
+        energyExpenditure: 0,
+        foodIntake: 0,
+      },
       customDietOptions: [],
       showCustomDietEditor: false,
       customDietDraft: {
@@ -958,6 +1066,7 @@ export default {
       metadataDraft: createEmptyMetadataDraft(),
       latestCreatedExperimentId: null,
       saveMessage: '',
+      foodCutoffManuallyEdited: false,
       sessionDragover: false,
       sessionImportName: '',
       sessionImportMessage: '',
@@ -987,7 +1096,7 @@ export default {
     dietOptions() {
       return [...this.presetDietOptions, ...this.customDietOptions].map((diet) => ({
         ...diet,
-        label: `${diet.name} (${diet.kcal} kcal/g)`,
+        label: diet.name,
       }))
     },
     canSaveCustomDiet() {
@@ -1062,8 +1171,38 @@ export default {
         && this.sessionEditor.dark_cycle_start !== null
         && this.sessionEditor.dark_cycle_start !== undefined
     },
+    foodCutoffReferenceKcalPerG() {
+      const selectedDietCalories = this.sessionEditor.groups
+        .map((group) => Number(group?.diet_kcal))
+        .filter((value) => Number.isFinite(value) && value > 0)
+
+      return selectedDietCalories.length
+        ? Math.max(...selectedDietCalories)
+        : DEFAULT_FOOD_CUTOFF_KCAL_PER_G
+    },
+    minimumFoodCutoffKcalPerHour() {
+      return convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN, this.foodCutoffReferenceKcalPerG)
+    },
+    isFoodCutoffValid() {
+      const cutoff = Number(this.sessionEditor.food_cutoff)
+      return Number.isFinite(cutoff) && cutoff >= this.minimumFoodCutoffKcalPerHour
+    },
     calrPreviewSourceRows() {
       return Array.isArray(this.store.upload.convertedJSON) ? this.store.upload.convertedJSON : []
+    },
+    energyExpenditureQc() {
+      return summarizeCalrColumnQc(this.calrPreviewSourceRows, 'rer', (value) => value > 0.6 && value < 1.5)
+    },
+    foodIntakeQc() {
+      return summarizeCalrColumnQc(this.calrPreviewSourceRows, 'feed', (value) => value >= 0)
+    },
+    highlightedPreviewRow() {
+      const qc = this.getQcSummaryByKey(this.activeQcKey)
+      if (!qc || !qc.invalidCount) {
+        return null
+      }
+
+      return this.currentQcInvalidRow(this.activeQcKey)
     },
     calrPreviewPageCount() {
       return Math.max(1, Math.ceil(this.calrPreviewSourceRows.length / this.calrPreviewPageSize))
@@ -1073,8 +1212,9 @@ export default {
       const startIndex = (this.calrPreviewPage - 1) * this.calrPreviewPageSize
       const pageRows = this.calrPreviewSourceRows.slice(startIndex, startIndex + this.calrPreviewPageSize)
 
-      return pageRows.map((row) => previewFields.reduce((sanitizedRow, field) => {
+      return pageRows.map((row, rowOffset) => previewFields.reduce((sanitizedRow, field) => {
         sanitizedRow[field.key] = row?.[field.label] ?? ''
+        sanitizedRow._rowIndex = startIndex + rowOffset + 1
         return sanitizedRow
       }, {}))
     },
@@ -1099,10 +1239,10 @@ export default {
       return Math.min(this.calrPreviewPage * this.calrPreviewPageSize, this.calrPreviewSourceRows.length)
     },
     canContinueToReview() {
-      return this.isGroupsAndDietsComplete && this.isSubjectsComplete && this.isRangesComplete
+      return this.isGroupsAndDietsComplete && this.isSubjectsComplete && this.isRangesComplete && this.isFoodCutoffValid
     },
     canSaveExperiment() {
-      return Boolean(this.experimentDraft.name.trim()) && Boolean(this.experimentDraft.description.trim())
+      return Boolean(this.experimentDraft.name.trim()) && Boolean(this.experimentDraft.description.trim()) && this.isFoodCutoffValid
     },
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
@@ -1119,6 +1259,9 @@ export default {
   watch: {
     'store.upload.convertedCSV'() {
       this.calrPreviewPage = 1
+      this.activeQcKey = ''
+      this.qcFailureCursor.energyExpenditure = 0
+      this.qcFailureCursor.foodIntake = 0
     },
     calrPreviewPageCount(nextPageCount) {
       if (this.calrPreviewPage > nextPageCount) {
@@ -1139,6 +1282,93 @@ export default {
     formatHourRange(range) {
       return `${Math.floor(Number(range[0]) || 0)} to ${Math.floor(Number(range[1]) || 0)}`
     },
+    getQcSummaryByKey(qcKey) {
+      if (qcKey === 'energyExpenditure') {
+        return this.energyExpenditureQc
+      }
+
+      if (qcKey === 'foodIntake') {
+        return this.foodIntakeQc
+      }
+
+      return null
+    },
+    currentQcInvalidRow(qcKey) {
+      const qc = this.getQcSummaryByKey(qcKey)
+      if (!qc?.invalidCount) {
+        return null
+      }
+
+      const cursor = Math.min(this.qcFailureCursor[qcKey] || 0, qc.invalidRows.length - 1)
+      return qc.invalidRows[cursor]
+    },
+    currentQcInvalidLabel(qcKey) {
+      const qc = this.getQcSummaryByKey(qcKey)
+      if (!qc?.invalidCount) {
+        return ''
+      }
+
+      const cursor = Math.min(this.qcFailureCursor[qcKey] || 0, qc.invalidRows.length - 1)
+      return `${cursor + 1} of ${qc.invalidCount}`
+    },
+    getFoodCutoffFromValue(value) {
+      const numericValue = Number(value)
+      return Number.isFinite(numericValue) ? numericValue : null
+    },
+    syncFoodCutoffDefault() {
+      if (this.foodCutoffManuallyEdited) {
+        return
+      }
+
+      this.sessionEditor.food_cutoff = this.minimumFoodCutoffKcalPerHour
+    },
+    initializeFoodCutoffState() {
+      const cutoff = this.getFoodCutoffFromValue(this.sessionEditor.food_cutoff)
+      this.foodCutoffManuallyEdited = cutoff !== null && cutoff > 0
+
+      if (!this.foodCutoffManuallyEdited) {
+        this.syncFoodCutoffDefault()
+      }
+    },
+    handleFoodCutoffInput() {
+      this.foodCutoffManuallyEdited = true
+    },
+    isQcActive(qcKey) {
+      return this.activeQcKey === qcKey
+    },
+    showQcInTable(qcKey) {
+      const qc = this.getQcSummaryByKey(qcKey)
+      if (!qc?.invalidCount) {
+        return
+      }
+
+      this.qcFailureCursor[qcKey] = 0
+      this.activeQcKey = qcKey
+      this.goToCalrPreviewRow(qc.invalidRows[0])
+    },
+    clearQcTableFocus() {
+      this.activeQcKey = ''
+    },
+    focusQcFailure(qcKey) {
+      const targetRow = this.currentQcInvalidRow(qcKey)
+      if (!targetRow) {
+        return
+      }
+
+      this.activeQcKey = qcKey
+      this.goToCalrPreviewRow(targetRow)
+    },
+    stepQcFailure(qcKey, direction) {
+      const qc = this.getQcSummaryByKey(qcKey)
+      if (!qc?.invalidCount) {
+        return
+      }
+
+      const currentCursor = this.qcFailureCursor[qcKey] || 0
+      const nextCursor = (currentCursor + direction + qc.invalidRows.length) % qc.invalidRows.length
+      this.qcFailureCursor[qcKey] = nextCursor
+      this.focusQcFailure(qcKey)
+    },
     formatDietKcal(value) {
       return value === null || value === '' || value === undefined ? '' : `${value}`
     },
@@ -1148,6 +1378,22 @@ export default {
     goToCalrPreviewPage(page) {
       const safePage = Math.min(Math.max(Number(page) || 1, 1), this.calrPreviewPageCount)
       this.calrPreviewPage = safePage
+    },
+    goToCalrPreviewRow(rowNumber) {
+      const numericRow = Number(rowNumber)
+      if (!Number.isFinite(numericRow) || numericRow < 1) {
+        return
+      }
+
+      const targetPage = Math.ceil(numericRow / this.calrPreviewPageSize)
+      this.goToCalrPreviewPage(targetPage)
+    },
+    getCalrPreviewRowClass(item, type) {
+      if (type !== 'row' || !item) {
+        return ''
+      }
+
+      return item._rowIndex === this.highlightedPreviewRow ? 'preview-table__row--highlighted' : ''
     },
     getSystemForDetectedFormat(format) {
       if (format === 'oxymax') {
@@ -1271,6 +1517,8 @@ export default {
         group.diet_key = this.ensureDietOption(group, index)
         this.applyGroupDietSelection(group, false)
       })
+
+      this.syncFoodCutoffDefault()
     },
     applyGroupDietSelection(group, overwrite = true) {
       const selectedDiet = this.findDietOptionById(group.diet_key)
@@ -1285,6 +1533,8 @@ export default {
       if (overwrite || group.diet_kcal === null || group.diet_kcal === undefined || group.diet_kcal === '') {
         group.diet_kcal = selectedDiet.kcal
       }
+
+      this.syncFoodCutoffDefault()
     },
     saveCustomDiet() {
       if (!this.canSaveCustomDiet) {
@@ -1486,6 +1736,7 @@ export default {
         const csvText = await file.text()
         const rows = parseCsv(csvText)
         this.sessionEditor = mergeSessionCsvIntoPayload(rows, this.sessionEditor)
+        this.initializeFoodCutoffState()
         this.syncGroupDietSelections()
         this.sessionImportName = file.name
         this.sessionImportMessage = 'Session CSV imported into the form.'
@@ -1556,6 +1807,7 @@ export default {
       this.editingSessionFileEntry = null
       this.editingExperimentId = null
       this.editingSessionId = null
+      this.foodCutoffManuallyEdited = false
       this.resetMetadataDraft()
       this.latestCreatedExperimentId = null
       this.sessionDragover = false
@@ -1662,7 +1914,7 @@ export default {
       this.cancelCreateExperiment()
     },
     defaultExperimentName() {
-      return `Experiment ${this.store.account.userFiles.length + 1}`
+      return ``
     },
     clearImportedSession() {
       if (!this.store.upload.convertedCSV) {
@@ -1681,6 +1933,7 @@ export default {
         ? normalizeSessionPayload(sessionPayload)
         : createIncompleteSessionEditor(inferSessionPayloadFromCalrData(parsedRows))
       this.sessionEditor.hour_range = this.floorHourRange(this.sessionEditor.hour_range)
+      this.initializeFoodCutoffState()
       this.syncGroupDietSelections()
     },
     hydrateSessionEditorFromCalrCsv(csvText) {
@@ -1903,7 +2156,7 @@ export default {
         const mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
 
         this.store.account.userCreatingNew = true
-        this.activeBuilderStep = 'configure'
+        this.activeBuilderStep = 'upload'
         this.editingExperimentFile = file
         this.editingStandardFileEntry = standard
         this.editingSessionFileEntry = session

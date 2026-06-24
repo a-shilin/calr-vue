@@ -36,6 +36,8 @@ The app uses hash routing for GitHub Pages compatibility.
 ## Current Structure
 
 - [src/views](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/views): page-level screens
+- [src/components/MetadataFieldInput.vue](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/components/MetadataFieldInput.vue): shared text/select/select-plus-free-text metadata field input
+- [src/config/experimentMetadata.json](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/config/experimentMetadata.json): data-only experiment metadata field definitions
 - [src/router/index.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/router/index.js): app routes
 - [src/services/registryService.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/services/registryService.js): live CalR backend API calls
 - [src/utils/prep-for-analysis.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/prep-for-analysis.js): normalize backend enriched payloads into frontend analysis data
@@ -52,6 +54,11 @@ The app uses hash routing for GitHub Pages compatibility.
 - Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
 - The account-side create/edit experiment flow opens in an overlay modal with step tabs for upload, session configuration, and metadata.
+- Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
+- The upload step shows a paginated CalR data preview once a CalR file exists, and computes total data duration from the uploaded rows.
+- The session step includes a session-completeness indicator for groups/diets, subjects, and ranges.
+- When editing an experiment that already has saved CalR or session files, the relevant dropzone is replaced with a download button instead of another upload prompt.
+- Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with a legend/icon instead of inline text labels.
 
 ## Analysis Data Flow
 
@@ -102,9 +109,19 @@ and renders the returned results in the analysis screen.
 The account-side experiment builder currently supports:
 
 - upload or convert instrument data into CalR CSV
+- paginated preview of uploaded CalR rows in the upload step
 - import a session CSV to hydrate groups, diets, subjects, exclusions, food cutoff, and subject mass fields
 - edit existing experiments by loading the saved CalR CSV plus backend session config/session CSV
+- editing existing experiments with direct download access to the saved CalR and session files from the builder
 - subject designation with always-visible tables for groups, weights, mass change, and exclusions
+- session completion tracking:
+  - groups/diets are complete when every group has a name, color, and diet
+  - subjects are complete when each group has at least one assigned subject
+  - ranges are complete when light and dark cycle start hours are filled in
+- config-driven metadata entry with:
+  - JSON-defined fields
+  - select and select-plus-free-text inputs
+  - required-for-public markers for future publication validation
 - template-based import helpers for weights and mass change, including blank CSV template download and CSV upload from the builder modal
 
 ## Current Status
@@ -113,8 +130,11 @@ The account-side experiment builder currently supports:
 
 - public and private dataset browsing
 - account-side create, edit, download, and open flows
+- account-side CalR preview pagination for large uploaded datasets
 - enriched session loading for analysis
 - session metadata editing and upload/update flows
+- config-driven experiment metadata form
+- session completion indicator and session-step gating
 - subject session CSV import and builder hydration
 - subject weights and mass-change template import/export helpers
 - time-series plot
@@ -130,6 +150,7 @@ The account-side experiment builder currently supports:
 
 - The current analysis path is backend-enriched first. Older local preprocessing paths have been removed from the analysis view.
 - The analysis view now guards large datasets more carefully; `maxHour` is computed without array spreading to avoid call-stack failures on large sessions.
+- The account builder now also avoids array-spread min/max patterns when deriving upload-side duration summaries from large CalR tables.
 - Plot parity work has recently aligned time-series, distribution, and regression behavior more closely with the legacy app.
 - `JS_REBUILD_FILES_REFERENCE` is still the main behavior reference when checking rebuilt frontend logic against the older app.
 - Avoid dataset-specific fixes unless a backend/data contract issue has been confirmed.
