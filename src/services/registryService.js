@@ -237,6 +237,23 @@ export async function uploadCalrFile(convertedCSV, experimentName, description, 
   return parseJsonResponse(response)
 }
 
+export async function updateCalrFile(submissionId, convertedCSV, token) {
+  const file = new File([convertedCSV], 'calr_converted.csv', {
+    type: 'text/csv',
+  })
+  const form = new FormData()
+
+  form.append('standard_file', file)
+
+  const response = await fetch(`${API_BASE}/files/${submissionId}`, {
+    method: 'PUT',
+    headers: createHeaders(token),
+    body: form,
+  })
+
+  return parseJsonResponse(response)
+}
+
 export async function uploadSessionFile(submissionId, sessionPayload, token) {
   const response = await fetch(`${API_BASE}/sessions`, {
     method: 'POST',

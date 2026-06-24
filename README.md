@@ -51,14 +51,18 @@ The app uses hash routing for GitHub Pages compatibility.
 - The analysis page always shows dataset tabs. Before login, only the public-datasets tab is available.
 - On the analysis page, once a dataset is opened the dataset list auto-hides and can be reopened with the header toggle.
 - The account page shows the experiment list inline under a `Your Experiments` heading.
+- The account experiment list now includes a computed status column: `Draft`, `Ready for Analysis`, or `Ready for Public`.
 - Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
 - The account-side create/edit experiment flow opens in an overlay modal with step tabs for upload, session configuration, and metadata.
 - Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
-- The upload step shows a paginated CalR data preview once a CalR file exists, and computes total data duration from the uploaded rows.
+- The upload step shows a paginated CalR data preview once a CalR file exists, computes total data duration from the uploaded rows, and places upload QC cards beside the preview table on wider layouts.
+- Upload QC checks for `rer` and `feed` are currently informative only; they do not block save or step navigation.
 - The session step includes a session-completeness indicator for groups/diets, subjects, and ranges.
-- When editing an experiment that already has saved CalR or session files, the relevant dropzone is replaced with a download button instead of another upload prompt.
+- When editing an experiment that already has a saved CalR file, the upload dropzone is replaced with `Re-upload` and download actions. Re-upload keeps the same experiment and replaces the saved CalR file instead of creating a new one.
+- When editing an experiment that already has a meaningful saved session file, the session dropzone is replaced with a download action; draft-only placeholder session state is ignored on reload.
 - Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with a legend/icon instead of inline text labels.
+- On edit, the saved metadata `system` value also highlights the matching upload-system card until a new upload/re-upload flow starts.
 
 ## Analysis Data Flow
 
@@ -109,19 +113,30 @@ and renders the returned results in the analysis screen.
 The account-side experiment builder currently supports:
 
 - upload or convert instrument data into CalR CSV
+- replace an existing saved CalR file during edit via `PUT /api/calr/files/{submission_id}`
 - paginated preview of uploaded CalR rows in the upload step
+- informative upload-side QC checks for:
+  - `rer` values between `0.6` and `1.5`
+  - non-negative `feed` values
 - import a session CSV to hydrate groups, diets, subjects, exclusions, food cutoff, and subject mass fields
-- edit existing experiments by loading the saved CalR CSV plus backend session config/session CSV
+- edit existing experiments by loading the saved CalR CSV plus saved session data when that session is meaningful
 - editing existing experiments with direct download access to the saved CalR and session files from the builder
+- draft save behavior:
+  - minimum draft save: experiment name, description, and converted CalR file
+  - ready for analysis: draft requirements plus minimal session setup
+  - ready for public: ready-for-analysis requirements plus required metadata fields
+- session update behavior:
+  - replace an existing saved session via `PUT /api/calr/sessions/{session_id}`
+  - create a session during edit only when needed for meaningful draft session data or analysis-ready state
 - subject designation with always-visible tables for groups, weights, mass change, and exclusions
 - session completion tracking:
   - groups/diets are complete when every group has a name, color, and diet
   - subjects are complete when each group has at least one assigned subject
-  - ranges are complete when light and dark cycle start hours are filled in
+  - ranges are complete when light and dark cycle hours are no longer the default `0 / 0`
 - config-driven metadata entry with:
   - JSON-defined fields
   - select and select-plus-free-text inputs
-  - required-for-public markers for future publication validation
+  - required-for-public markers used by the `Ready for Public` status
 - template-based import helpers for weights and mass change, including blank CSV template download and CSV upload from the builder modal
 
 ## Current Status
@@ -130,11 +145,14 @@ The account-side experiment builder currently supports:
 
 - public and private dataset browsing
 - account-side create, edit, download, and open flows
+- draft saves with CalR-only minimum requirements
+- computed experiment readiness states in the account list and builder
 - account-side CalR preview pagination for large uploaded datasets
+- account-side CalR replacement during edit
 - enriched session loading for analysis
-- session metadata editing and upload/update flows
+- session metadata editing and session upload/update flows
 - config-driven experiment metadata form
-- session completion indicator and session-step gating
+- session completion indicator and analysis/public readiness gating
 - subject session CSV import and builder hydration
 - subject weights and mass-change template import/export helpers
 - time-series plot
@@ -151,6 +169,7 @@ The account-side experiment builder currently supports:
 - The current analysis path is backend-enriched first. Older local preprocessing paths have been removed from the analysis view.
 - The analysis view now guards large datasets more carefully; `maxHour` is computed without array spreading to avoid call-stack failures on large sessions.
 - The account builder now also avoids array-spread min/max patterns when deriving upload-side duration summaries from large CalR tables.
+- Draft editing now distinguishes between meaningful saved session data and placeholder/default session state when deciding what to restore into the session editor.
 - Plot parity work has recently aligned time-series, distribution, and regression behavior more closely with the legacy app.
 - `JS_REBUILD_FILES_REFERENCE` is still the main behavior reference when checking rebuilt frontend logic against the older app.
 - Avoid dataset-specific fixes unless a backend/data contract issue has been confirmed.

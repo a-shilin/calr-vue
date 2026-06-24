@@ -62,6 +62,12 @@
               <template #cell(description)="slot">
                 {{ slot.item.description || '' }}
               </template>
+
+              <template #cell(status)="slot">
+                <BBadge :variant="slot.item.statusInfo?.variant || 'secondary'">
+                  {{ slot.item.statusInfo?.label || 'Incomplete' }}
+                </BBadge>
+              </template>
       
               <template #cell(public)="slot">
                 <BBadge
@@ -82,7 +88,12 @@
                   <BSpinner v-if="slot.item.loading" small />
                   <span v-if="slot.item.loading" class="muted-copy">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
                 </span>
-                <BButton size="sm" variant="link" @click="openExperiment(slot.item)">
+                <BButton
+                  v-if="isExperimentReadyForAnalysis(slot.item.statusInfo)"
+                  size="sm"
+                  variant="link"
+                  @click="openExperiment(slot.item)"
+                >
                   Analysis
                 </BButton>
                 <BButton size="sm" variant="link" @click="toggleMetadataDetails(slot.item)">
@@ -146,6 +157,9 @@
                 <div class="muted-copy">
                   {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
                 </div>
+                <div class="muted-copy">
+                  Status: <strong>{{ currentDraftStatus.label }}</strong>
+                </div>
               </div>
               <div class="button-row" style="align-items: center;">
                 <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
@@ -158,7 +172,7 @@
                   <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
                 </button>
                 <BButton
-                  v-if="latestCreatedExperiment && !isEditingExperiment"
+                  v-if="latestCreatedExperiment && !isEditingExperiment && isExperimentReadyForAnalysis(latestCreatedExperiment.statusInfo)"
                   variant="success"
                   @click="openExperiment(latestCreatedExperiment)"
                 >
@@ -206,88 +220,35 @@
                 <div style="display:flex; flex-direction:column; gap:20px;">
                   <div class="session-uploads-convert">
                     <div class="session-uploads-intruments">
-                      <div class="session-uploads-intrument" :class="{'detected': store.upload.detectedFileFormat==='sable'}">SABLE</div>
-                      <div class="session-uploads-intrument" :class="{'detected': store.upload.detectedFileFormat==='oxymax'}">CLAMS</div>
-                      <div class="session-uploads-intrument" :class="{'detected': store.upload.detectedFileFormat==='tse'}">TSE</div>
+                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='sable'}">SABLE</div>
+                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='oxymax'}">CLAMS</div>
+                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='tse'}">TSE</div>
                     </div>
                     <div class="session-uploads-arrow">➧</div>
                     <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
                   </div>
-                  <div v-if="hasConvertedData" class="upload-qc-list">
-                    <div
-                      class="upload-qc-check"
-                      :class="{ 'upload-qc-check--pass': energyExpenditureQc.passed, 'upload-qc-check--fail': !energyExpenditureQc.passed }"
-                    >
-                      <strong>Energy Expenditure QC</strong>
-                      <div>
-                        {{ energyExpenditureQc.passed
-                          ? `Passed: all RER values are > 0.6 and < 1.5.`
-                          : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
-                      </div>
-                      <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
-                        <button
-                          v-if="!isQcActive('energyExpenditure')"
-                          class="upload-qc-nav__show"
-                          @click="showQcInTable('energyExpenditure')"
-                        >
-                          Show in table
-                        </button>
-                        <template v-else>
-                          <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', -1)">&lt;</button>
-                          <button class="upload-qc-nav__current" @click="focusQcFailure('energyExpenditure')">
-                            {{ currentQcInvalidLabel('energyExpenditure') }}
-                          </button>
-                          <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', 1)">&gt;</button>
-                          <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
-                        </template>
-                      </div>
-                    </div>
-                    <div
-                      class="upload-qc-check"
-                      :class="{ 'upload-qc-check--pass': foodIntakeQc.passed, 'upload-qc-check--fail': !foodIntakeQc.passed }"
-                    >
-                      <strong>Food Intake QC</strong>
-                      <div>
-                        {{ foodIntakeQc.passed
-                          ? `Passed: all feed values are non-negative.`
-                          : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
-                      </div>
-                      <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
-                        <button
-                          v-if="!isQcActive('foodIntake')"
-                          class="upload-qc-nav__show"
-                          @click="showQcInTable('foodIntake')"
-                        >
-                          Show in table
-                        </button>
-                        <template v-else>
-                          <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', -1)">&lt;</button>
-                          <button class="upload-qc-nav__current" @click="focusQcFailure('foodIntake')">
-                            {{ currentQcInvalidLabel('foodIntake') }}
-                          </button>
-                          <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', 1)">&gt;</button>
-                          <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
-                        </template>
-                      </div>
-                    </div>
-                  </div>
                 </div>
                 <!-- session data upload dropzone -->
-                <div class="session-import-row col-center">
+                <div
+                  v-if="showEditingCalrDownload"
+                  class="session-import-download"
+                >
+                <BButton variant="outline-secondary" @click="beginCalrReupload">
+                    Re-upload
+                  </BButton>
+                  <BButton variant="outline-secondary" @click="downloadEditingStandardFile">
+                    Download CalR
+                  </BButton>
+                </div>
+
+
+                <div v-else class="session-import-row col-center">
                   <div v-if="store.upload.detectedFileFormat" class="message-text">
                     <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
                   </div>
                   
+                  
                   <div
-                    v-if="showEditingCalrDownload"
-                    class="session-import-download detected-calr"
-                  >
-                    <BButton variant="outline-secondary" @click="downloadEditingStandardFile">
-                      Download CalR
-                    </BButton>
-                  </div>
-                  <div
-                    v-else
                     class="dropzone"
                     :class="{ 
                       dragover: store.upload.dragover, 
@@ -340,7 +301,60 @@
                   </div>
                   -->
     
-                  <div v-if="hasConvertedData" class="upload-summary-grid">
+                </div>
+              </div>
+    
+              <!--
+              <div v-if="canContinueToConfigure" class="row-end">
+                <BButton variant="primary" @click="goToBuilderStep('configure')">
+                  Continue to Configure
+                </BButton>
+              </div>
+              -->
+              <div v-if="hasConvertedData" class="upload-preview-layout">
+                <div class="page-column upload-preview-layout__table">
+                  <div class="row-between">
+                    <strong>CalR Data Preview</strong>
+                  </div>
+                  <div class="table-scroll-shell">
+                    <BTable
+                      class="preview-table"
+                      :items="calrPreviewRows"
+                      :fields="calrPreviewFields"
+                      :tbody-tr-class="getCalrPreviewRowClass"
+                      responsive
+                      small
+                      striped
+                      hover
+                    />
+                  </div>
+                  <div class="row-between">
+                    <div class="muted-copy">
+                      Showing {{ calrPreviewRangeStart }}-{{ calrPreviewRangeEnd }} of {{ calrPreviewSourceRows.length }} row(s)
+                    </div>
+                    <div v-if="calrPreviewPageCount > 1" class="preview-pagination">
+                      <BButton
+                        size="sm"
+                        variant="outline-secondary"
+                        :disabled="calrPreviewPage <= 1"
+                        @click="goToCalrPreviewPage(calrPreviewPage - 1)"
+                      >
+                        Previous
+                      </BButton>
+                      <span class="muted-copy">Page {{ calrPreviewPage }} of {{ calrPreviewPageCount }}</span>
+                      <BButton
+                        size="sm"
+                        variant="outline-secondary"
+                        :disabled="calrPreviewPage >= calrPreviewPageCount"
+                        @click="goToCalrPreviewPage(calrPreviewPage + 1)"
+                      >
+                        Next
+                      </BButton>
+                    </div>
+                  </div>
+                </div>
+                <div class="upload-preview-layout__qc">
+                  <div class="upload-summary-grid" style="flex:1">
                     <div>
                       <strong>Subjects</strong>
                       <div>{{ sessionEditor.subjects.length }}</div>
@@ -350,52 +364,63 @@
                       <div>{{ totalCalrHours }}</div>
                     </div>
                   </div>
-                </div>
-              </div>
-    
-              <div v-if="canContinueToConfigure" class="row-end">
-                <BButton variant="primary" @click="goToBuilderStep('configure')">
-                  Continue to Configure
-                </BButton>
-              </div>
-
-              <div v-if="hasConvertedData" class="page-column">
-                <div class="row-between">
-                  <strong>CalR Data Preview</strong>
-                  <div class="muted-copy">
-                    Showing {{ calrPreviewRangeStart }}-{{ calrPreviewRangeEnd }} of {{ calrPreviewSourceRows.length }} row(s)
+                  <div
+                    class="upload-qc-check"
+                    :class="{ 'upload-qc-check--pass': energyExpenditureQc.passed, 'upload-qc-check--fail': !energyExpenditureQc.passed }"
+                  >
+                    <strong>Energy Expenditure QC</strong>
+                    <div>
+                      {{ energyExpenditureQc.passed
+                        ? `Passed: all RER values are > 0.6 and < 1.5.`
+                        : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
+                    </div>
+                    <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
+                      <button
+                        v-if="!isQcActive('energyExpenditure')"
+                        class="upload-qc-nav__show"
+                        @click="showQcInTable('energyExpenditure')"
+                      >
+                        Show in table
+                      </button>
+                      <template v-else>
+                        <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', -1)">&lt;</button>
+                        <button class="upload-qc-nav__current" @click="focusQcFailure('energyExpenditure')">
+                          {{ currentQcInvalidLabel('energyExpenditure') }}
+                        </button>
+                        <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', 1)">&gt;</button>
+                        <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                      </template>
+                    </div>
                   </div>
-                </div>
-                <div class="table-scroll-shell">
-                  <BTable
-                    class="preview-table"
-                    :items="calrPreviewRows"
-                    :fields="calrPreviewFields"
-                    :tbody-tr-class="getCalrPreviewRowClass"
-                    responsive
-                    small
-                    striped
-                    hover
-                  />
-                </div>
-                <div v-if="calrPreviewPageCount > 1" class="preview-pagination">
-                  <BButton
-                    size="sm"
-                    variant="outline-secondary"
-                    :disabled="calrPreviewPage <= 1"
-                    @click="goToCalrPreviewPage(calrPreviewPage - 1)"
+
+                  <div
+                    class="upload-qc-check"
+                    :class="{ 'upload-qc-check--pass': foodIntakeQc.passed, 'upload-qc-check--fail': !foodIntakeQc.passed }"
                   >
-                    Previous
-                  </BButton>
-                  <span class="muted-copy">Page {{ calrPreviewPage }} of {{ calrPreviewPageCount }}</span>
-                  <BButton
-                    size="sm"
-                    variant="outline-secondary"
-                    :disabled="calrPreviewPage >= calrPreviewPageCount"
-                    @click="goToCalrPreviewPage(calrPreviewPage + 1)"
-                  >
-                    Next
-                  </BButton>
+                    <strong>Food Intake QC</strong>
+                    <div>
+                      {{ foodIntakeQc.passed
+                        ? `Passed: all feed values are non-negative.`
+                        : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
+                    </div>
+                    <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
+                      <button
+                        v-if="!isQcActive('foodIntake')"
+                        class="upload-qc-nav__show"
+                        @click="showQcInTable('foodIntake')"
+                      >
+                        Show in table
+                      </button>
+                      <template v-else>
+                        <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', -1)">&lt;</button>
+                        <button class="upload-qc-nav__current" @click="focusQcFailure('foodIntake')">
+                          {{ currentQcInvalidLabel('foodIntake') }}
+                        </button>
+                        <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', 1)">&gt;</button>
+                        <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
               </section>
@@ -473,18 +498,18 @@
                     />
                   </div>
     
-                  <div v-if="sessionImportName || showEditingSessionDownload" class="upload-summary-grid">
+                  <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
                     <div>
                       <strong>Groups</strong>
                       <div>{{ sessionEditor.groups.length }}</div>
                     </div>
                     <div>
                       <strong>Light Start</strong>
-                      <div>{{ sessionEditor.light_cycle_start === '' ? 'NA' : sessionEditor.light_cycle_start }}</div>
+                      <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
                     </div>
                     <div>
                       <strong>Dark Start</strong>
-                      <div>{{ sessionEditor.dark_cycle_start === '' ? 'NA' : sessionEditor.dark_cycle_start }}</div>
+                      <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
                     </div>
                     <div>
                       <strong>Session Hours</strong>
@@ -790,10 +815,10 @@
     
                 <div class="session-step__footer">
                   <div v-if="!canContinueToReview" class="message-text row-end">
-                    Complete groups and diets, assign at least one subject to each group, fill in light/dark cycle hours, and keep food cutoff at or above the 100 mg/min minimum before continuing to metadata.
+                    Session setup is still incomplete for analysis, but you can still continue and save this experiment as a draft.
                   </div>
                   <div class="row-end">
-                    <BButton variant="primary" :disabled="!canContinueToReview" @click="goToBuilderStep('review')">
+                    <BButton variant="primary" @click="goToBuilderStep('review')">
                       Continue to Metadata
                     </BButton>
                   </div>
@@ -804,10 +829,10 @@
 
               <section v-else class="session-step">
                 <div v-if="!canContinueToReview" class="message-text">
-                  Configure session setup to save.
+                  This experiment can still be saved as a draft. Finish session setup later to make it ready for analysis.
                 </div>
                 <div>
-                  <fieldset class="builder-fieldset page-column" :disabled="!canContinueToReview">
+                  <fieldset class="builder-fieldset page-column">
                 <div class="metadata-section">
                   <div class="metadata-legend">
                     <span class="metadata-legend__item">
@@ -927,6 +952,7 @@ import {
   fetchSessionFile,
   fetchUserFiles,
   login,
+  updateCalrFile,
   updateExperimentMetadata,
   updateExperimentPublicStatus,
   updateSessionFile,
@@ -982,6 +1008,35 @@ function convertFoodCutoffMgPerMinToKcalPerHour(mgPerMin, kcalPerG = DEFAULT_FOO
   return roundToTwo((Number(mgPerMin) / 1000) * 60 * Number(kcalPerG))
 }
 
+function hasConfiguredCycleRange(lightCycleStart, darkCycleStart) {
+  const light = Number(lightCycleStart)
+  const dark = Number(darkCycleStart)
+
+  if (!Number.isFinite(light) || !Number.isFinite(dark)) {
+    return false
+  }
+
+  return !(light === 0 && dark === 0)
+}
+
+function normalizeSystemToUploadFormat(systemValue) {
+  const normalizedValue = `${systemValue || ''}`.trim().toLowerCase()
+
+  if (normalizedValue === 'clams') {
+    return 'oxymax'
+  }
+
+  if (normalizedValue === 'tse') {
+    return 'tse'
+  }
+
+  if (normalizedValue === 'sable') {
+    return 'sable'
+  }
+
+  return ''
+}
+
 function createEmptyMetadataDraft() {
   return EXPERIMENT_METADATA_FIELDS.reduce((draft, field) => {
     draft[field.key] = ''
@@ -999,11 +1054,101 @@ function createIncompleteSessionEditor(basePayload = {}) {
     diet_kcal: null,
     diet_key: '',
   }))
-  sessionEditor.light_cycle_start = ''
-  sessionEditor.dark_cycle_start = ''
+  sessionEditor.light_cycle_start = 0
+  sessionEditor.dark_cycle_start = 0
   sessionEditor.food_cutoff = convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN)
 
   return sessionEditor
+}
+
+function hasNonEmptyValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+
+  if (typeof value === 'string') {
+    return Boolean(value.trim())
+  }
+
+  return value !== null && value !== undefined && value !== ''
+}
+
+function getRequiredPublicMetadataFields() {
+  return EXPERIMENT_METADATA_FIELDS.filter((field) => field.requiredForPublic)
+}
+
+function getStatusMetadataValue(source = {}, key) {
+  if (key === 'experiment_id') {
+    return source?.metadata?.[key] ?? source?.[key] ?? source?.submission_id ?? source?.id ?? ''
+  }
+
+  return source?.metadata?.[key] ?? source?.[key]
+}
+
+function hasRequiredPublicMetadata(source = {}) {
+  return getRequiredPublicMetadataFields().every((field) => hasNonEmptyValue(getStatusMetadataValue(source, field.key)))
+}
+
+function isSessionReadyForAnalysis(sessionPayload = {}) {
+  const normalized = normalizeSessionPayload(sessionPayload)
+  const groups = normalized.groups || []
+  const subjects = normalized.subjects || []
+
+  const groupsComplete = groups.length > 0 && groups.every((group, index) => (
+    Boolean(`${group?.name || `Group ${index + 1}`}`.trim())
+    && Boolean(group?.color)
+    && group?.diet_kcal !== null
+    && group?.diet_kcal !== undefined
+    && group?.diet_kcal !== ''
+    && Boolean(group?.diet_name?.trim())
+  ))
+
+  if (!groupsComplete || !subjects.length) {
+    return false
+  }
+
+  const assignedGroups = new Set(
+    subjects
+      .map((subject) => Number(subject.groupIndex))
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < groups.length),
+  )
+
+  const subjectsComplete = groups.every((_, index) => assignedGroups.has(index))
+  const rangesComplete = hasConfiguredCycleRange(normalized.light_cycle_start, normalized.dark_cycle_start)
+
+  return subjectsComplete && rangesComplete
+}
+
+function buildExperimentStatus({ hasConvertedData, sessionPayload, metadata }) {
+  if (!hasConvertedData) {
+    return {
+      key: 'incomplete',
+      label: 'Incomplete',
+      variant: 'secondary',
+    }
+  }
+
+  if (hasRequiredPublicMetadata(metadata) && isSessionReadyForAnalysis(sessionPayload)) {
+    return {
+      key: 'ready_public',
+      label: 'Ready for Public',
+      variant: 'success',
+    }
+  }
+
+  if (isSessionReadyForAnalysis(sessionPayload)) {
+    return {
+      key: 'ready_analysis',
+      label: 'Ready for Analysis',
+      variant: 'primary',
+    }
+  }
+
+  return {
+    key: 'draft',
+    label: 'Draft',
+    variant: 'warning',
+  }
 }
 
 function summarizeCalrColumnQc(rows, columnName, validator) {
@@ -1036,7 +1181,7 @@ export default {
       baseGroupCount: 2,
       metadataSections: EXPERIMENT_METADATA_SECTIONS,
       metadataFields: EXPERIMENT_METADATA_FIELDS,
-      userFilesFields: ['name', 'description', 'public', 'uploaded_at', {key: 'actions', label: 'Actions', class: 'txt-right'}],
+      userFilesFields: ['name', 'description', 'status', 'public', 'uploaded_at', {key: 'actions', label: 'Actions', class: 'txt-right'}],
       sessionEditor: createIncompleteSessionEditor(),
       presetDietOptions: PRESET_DIETS,
       activeBuilderStep: 'upload',
@@ -1063,6 +1208,7 @@ export default {
       editingSessionFileEntry: null,
       editingExperimentId: null,
       editingSessionId: null,
+      editingOriginalConvertedCsv: '',
       metadataDraft: createEmptyMetadataDraft(),
       latestCreatedExperimentId: null,
       saveMessage: '',
@@ -1110,6 +1256,13 @@ export default {
     },
     showEditingSessionDownload() {
       return this.isEditingExperiment && Boolean(this.editingExperimentFile) && Boolean(this.editingSessionFileEntry)
+    },
+    highlightedUploadSystemFormat() {
+      if (this.store.upload.detectedFileFormat) {
+        return this.store.upload.detectedFileFormat
+      }
+
+      return this.showEditingCalrDownload ? normalizeSystemToUploadFormat(this.metadataDraft.system) : ''
     },
     canContinueToConfigure() {
       return this.hasConvertedData
@@ -1164,12 +1317,7 @@ export default {
       return this.sessionEditor.groups.every((_, index) => assignedGroups.has(index))
     },
     isRangesComplete() {
-      return this.sessionEditor.light_cycle_start !== ''
-        && this.sessionEditor.light_cycle_start !== null
-        && this.sessionEditor.light_cycle_start !== undefined
-        && this.sessionEditor.dark_cycle_start !== ''
-        && this.sessionEditor.dark_cycle_start !== null
-        && this.sessionEditor.dark_cycle_start !== undefined
+      return hasConfiguredCycleRange(this.sessionEditor.light_cycle_start, this.sessionEditor.dark_cycle_start)
     },
     foodCutoffReferenceKcalPerG() {
       const selectedDietCalories = this.sessionEditor.groups
@@ -1239,10 +1387,19 @@ export default {
       return Math.min(this.calrPreviewPage * this.calrPreviewPageSize, this.calrPreviewSourceRows.length)
     },
     canContinueToReview() {
-      return this.isGroupsAndDietsComplete && this.isSubjectsComplete && this.isRangesComplete && this.isFoodCutoffValid
+      return this.isGroupsAndDietsComplete && this.isSubjectsComplete && this.isRangesComplete
     },
     canSaveExperiment() {
-      return Boolean(this.experimentDraft.name.trim()) && Boolean(this.experimentDraft.description.trim()) && this.isFoodCutoffValid
+      return this.hasConvertedData
+        && Boolean(this.experimentDraft.name.trim())
+        && Boolean(this.experimentDraft.description.trim())
+    },
+    currentDraftStatus() {
+      return buildExperimentStatus({
+        hasConvertedData: this.hasConvertedData,
+        sessionPayload: this.buildSessionPayload(),
+        metadata: this.buildMetadataPayload(),
+      })
     },
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
@@ -1474,6 +1631,16 @@ export default {
       })
 
       return payload
+    },
+    buildExperimentStatusInfo(hasConvertedData, sessionPayload, metadata) {
+      return buildExperimentStatus({
+        hasConvertedData,
+        sessionPayload,
+        metadata,
+      })
+    },
+    isExperimentReadyForAnalysis(statusInfo) {
+      return statusInfo?.key === 'ready_analysis' || statusInfo?.key === 'ready_public'
     },
     normalizedGroupName(group, index) {
       return group.name.trim() || `Group ${index + 1}`
@@ -1755,7 +1922,7 @@ export default {
       await this.processSelectedFiles(files)
     },
     async processSelectedFiles(files) {
-      this.clearSelectedFiles(false)
+      this.resetUploadSelection(false)
       this.store.upload.files = files
       this.saveMessage = ''
       this.sessionImportName = ''
@@ -1783,7 +1950,7 @@ export default {
         this.store.upload.textResponse = error.message || 'Unable to detect file format.'
       }
     },
-    clearSelectedFiles(clearInput = true) {
+    resetUploadSelection(clearInput = true) {
       this.store.upload.files = []
       this.store.upload.dragover = false
       this.store.upload.loading = false
@@ -1802,14 +1969,7 @@ export default {
       }
       this.closeTemplateUploadModal()
       this.activeBuilderStep = 'upload'
-      this.editingExperimentFile = null
-      this.editingStandardFileEntry = null
-      this.editingSessionFileEntry = null
-      this.editingExperimentId = null
-      this.editingSessionId = null
       this.foodCutoffManuallyEdited = false
-      this.resetMetadataDraft()
-      this.latestCreatedExperimentId = null
       this.sessionDragover = false
       this.sessionImportName = ''
       this.sessionImportMessage = ''
@@ -1819,6 +1979,26 @@ export default {
       if (clearInput && this.$refs.sessionFileInput) {
         this.$refs.sessionFileInput.value = ''
       }
+    },
+    beginCalrReupload() {
+      this.resetUploadSelection()
+      this.editingStandardFileEntry = null
+      this.editingSessionFileEntry = null
+      this.editingSessionId = null
+      this.activeQcKey = ''
+      this.qcFailureCursor.energyExpenditure = 0
+      this.qcFailureCursor.foodIntake = 0
+    },
+    clearSelectedFiles(clearInput = true) {
+      this.resetUploadSelection(clearInput)
+      this.editingExperimentFile = null
+      this.editingStandardFileEntry = null
+      this.editingSessionFileEntry = null
+      this.editingExperimentId = null
+      this.editingSessionId = null
+      this.editingOriginalConvertedCsv = ''
+      this.resetMetadataDraft()
+      this.latestCreatedExperimentId = null
     },
     resetCreateFlow() {
       this.clearSelectedFiles()
@@ -1995,11 +2175,12 @@ export default {
         }
       })
     },
-    buildSessionPayload() {
+    buildSessionPayloadFromEditor(sessionEditor = this.sessionEditor) {
       const toNumberOrNull = (value) => (value === '' || value === null || value === undefined ? null : Number(value))
+      const normalizedEditor = sessionEditor || createIncompleteSessionEditor()
       const usedNames = new Set()
-      const groups = this.sessionEditor.groups.map((group, index) => {
-        const baseName = this.normalizedGroupName(group, index)
+      const groups = normalizedEditor.groups.map((group, index) => {
+        const baseName = group.name.trim() || `Group ${index + 1}`
         let name = baseName
         let suffix = 2
 
@@ -2020,7 +2201,7 @@ export default {
 
       return {
         groups: groups.map(({ color, ...group }) => group),
-        subjects: this.sessionEditor.subjects.map((subject) => ({
+        subjects: normalizedEditor.subjects.map((subject) => ({
           subject: subject.subject,
           groupIndex: Math.min(Math.max(Number(subject.groupIndex) || 0, 0), groups.length - 1),
           total_mass: toNumberOrNull(subject.total_mass),
@@ -2030,19 +2211,48 @@ export default {
           exc_hour: toNumberOrNull(subject.exc_hour),
           exc_reason: subject.exc_reason?.trim() || '',
         })),
-        light_cycle_start: Number(this.sessionEditor.light_cycle_start || 0),
-        dark_cycle_start: Number(this.sessionEditor.dark_cycle_start || 0),
+        light_cycle_start: toNumberOrNull(normalizedEditor.light_cycle_start),
+        dark_cycle_start: toNumberOrNull(normalizedEditor.dark_cycle_start),
         hour_range: [
-          Math.floor(Number(this.sessionEditor.hour_range[0]) || 0),
-          Math.floor(Number(this.sessionEditor.hour_range[1]) || 0),
+          Math.floor(Number(normalizedEditor.hour_range?.[0]) || 0),
+          Math.floor(Number(normalizedEditor.hour_range?.[1]) || 0),
         ],
-        food_cutoff: Number(this.sessionEditor.food_cutoff || 0),
-        remove_outliers: Boolean(this.sessionEditor.remove_outliers),
+        food_cutoff: Number(normalizedEditor.food_cutoff || 0),
+        remove_outliers: Boolean(normalizedEditor.remove_outliers),
         group_colors: groups.reduce((accumulator, group) => {
           accumulator[group.name] = group.color
           return accumulator
         }, {}),
       }
+    },
+    buildSessionPayload() {
+      return this.buildSessionPayloadFromEditor(this.sessionEditor)
+    },
+    buildDefaultSessionPayloadFromCsv(csvText) {
+      const parsedRows = ensureExpMinute(parseCsv(csvText))
+      return this.buildSessionPayloadFromEditor(createIncompleteSessionEditor(inferSessionPayloadFromCalrData(parsedRows)))
+    },
+    buildSessionPayloadForApi(sessionPayload = this.buildSessionPayload(), baselineSessionPayload = null) {
+      return {
+        ...sessionPayload,
+        light_cycle_start: sessionPayload.light_cycle_start ?? 0,
+        dark_cycle_start: sessionPayload.dark_cycle_start ?? 0,
+      }
+    },
+    hasMeaningfulSessionData(sessionPayload = this.buildSessionPayload(), baselineSessionPayload = null) {
+      const baselinePayload = baselineSessionPayload || this.buildDefaultSessionPayloadFromCsv(this.store.upload.convertedCSV)
+      return JSON.stringify(sessionPayload) !== JSON.stringify(baselinePayload)
+    },
+    buildDraftRestoreComparisonPayload(sessionPayload = {}, baselineSessionPayload = {}) {
+      return {
+        ...sessionPayload,
+        food_cutoff: sessionPayload.food_cutoff === 0 ? baselineSessionPayload.food_cutoff : sessionPayload.food_cutoff,
+      }
+    },
+    hasMeaningfulDraftSessionDataForRestore(sessionPayload = {}, baselineSessionPayload = {}) {
+      const normalizedSessionPayload = this.buildDraftRestoreComparisonPayload(sessionPayload, baselineSessionPayload)
+      const normalizedBaselinePayload = this.buildDraftRestoreComparisonPayload(baselineSessionPayload, baselineSessionPayload)
+      return JSON.stringify(normalizedSessionPayload) !== JSON.stringify(normalizedBaselinePayload)
     },
     async saveExperiment() {
       if (!this.store.upload.convertedCSV || !this.canSaveExperiment) {
@@ -2053,13 +2263,35 @@ export default {
       this.saveMessage = ''
 
       try {
+        const sessionPayload = this.buildSessionPayload()
+        const apiSessionPayload = this.buildSessionPayloadForApi(sessionPayload)
+        const shouldPersistSession = this.isExperimentReadyForAnalysis(this.currentDraftStatus)
+          || this.hasMeaningfulSessionData(sessionPayload)
+        const shouldReplaceCalrFile = this.isEditingExperiment
+          && Boolean(this.editingOriginalConvertedCsv)
+          && this.store.upload.convertedCSV !== this.editingOriginalConvertedCsv
+
         if (this.isEditingExperiment) {
-          await updateSessionFile(
-            this.editingSessionId,
-            this.editingExperimentId,
-            this.buildSessionPayload(),
-            this.store.auth.token,
-          )
+          if (shouldReplaceCalrFile) {
+            await updateCalrFile(
+              this.editingExperimentId,
+              this.store.upload.convertedCSV,
+              this.store.auth.token,
+            )
+            this.editingOriginalConvertedCsv = this.store.upload.convertedCSV
+          }
+
+          if (this.editingSessionId) {
+            await updateSessionFile(
+              this.editingSessionId,
+              this.editingExperimentId,
+              apiSessionPayload,
+              this.store.auth.token,
+            )
+          } else if (shouldPersistSession) {
+            await uploadSessionFile(this.editingExperimentId, apiSessionPayload, this.store.auth.token)
+          }
+
           await updateExperimentMetadata(
             this.editingExperimentId,
             this.buildMetadataPayload(),
@@ -2078,7 +2310,10 @@ export default {
           this.experimentDraft.public,
         )
 
-        await uploadSessionFile(uploadedExperiment.submission_id, this.buildSessionPayload(), this.store.auth.token)
+        if (shouldPersistSession) {
+          await uploadSessionFile(uploadedExperiment.submission_id, apiSessionPayload, this.store.auth.token)
+        }
+
         await updateExperimentMetadata(
           uploadedExperiment.submission_id,
           this.buildMetadataPayload(),
@@ -2125,16 +2360,41 @@ export default {
 
       try {
         const files = await fetchUserFiles(this.store.auth.token)
-        this.store.account.userFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
+        const filesWithStatus = await Promise.all(files.map(async (file) => {
+          const standard = file.files?.find((item) => item.file_type === 'standard')
+          const session = file.files?.find((item) => item.file_type === 'session')
+          let sessionPayload = {}
+
+          if (session) {
+            try {
+              sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
+            } catch (error) {
+              sessionPayload = {}
+            }
+          }
+
+          return {
+            ...file,
+            loading: false,
+            loadingProgress: null,
+            statusInfo: this.buildExperimentStatusInfo(
+              Boolean(standard),
+              sessionPayload,
+              file.metadata || file,
+            ),
+          }
+        }))
+
+        this.store.account.userFiles = filesWithStatus
       } finally {
         this.store.loaders.getUserFiles = false
       }
     },
     async editExperiment(file) {
-      const session = file.files.find((item) => item.file_type === 'session')
       const standard = file.files.find((item) => item.file_type === 'standard')
+      const session = file.files.find((item) => item.file_type === 'session')
 
-      if (!session || !standard) {
+      if (!standard) {
         return
       }
 
@@ -2148,20 +2408,30 @@ export default {
       file.loading = true
 
       try {
-        const [dataCsv, sessionConfig, sessionCsv] = await Promise.all([
-          fetchDataFile(standard.id, this.store.auth.token, file.public),
-          fetchSessionConfig(session.id, this.store.auth.token, file.public),
-          fetchSessionFile(session.id, this.store.auth.token, file.public),
-        ])
-        const mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
+        const dataCsv = await fetchDataFile(standard.id, this.store.auth.token, file.public)
+        const defaultSessionPayload = this.buildDefaultSessionPayloadFromCsv(dataCsv)
+        let mergedSessionConfig = null
+        let shouldUseSavedSession = false
+
+        if (session) {
+          const [sessionConfig, sessionCsv] = await Promise.all([
+            fetchSessionConfig(session.id, this.store.auth.token, file.public),
+            fetchSessionFile(session.id, this.store.auth.token, file.public),
+          ])
+          mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
+          const persistedSessionPayload = this.buildSessionPayloadFromEditor(normalizeSessionPayload(mergedSessionConfig))
+          shouldUseSavedSession = this.isExperimentReadyForAnalysis(file.statusInfo)
+            || this.hasMeaningfulDraftSessionDataForRestore(persistedSessionPayload, defaultSessionPayload)
+        }
 
         this.store.account.userCreatingNew = true
         this.activeBuilderStep = 'upload'
         this.editingExperimentFile = file
         this.editingStandardFileEntry = standard
-        this.editingSessionFileEntry = session
+        this.editingSessionFileEntry = shouldUseSavedSession ? session : null
         this.editingExperimentId = file.id
-        this.editingSessionId = session.id
+        this.editingSessionId = shouldUseSavedSession ? session?.id || null : null
+        this.editingOriginalConvertedCsv = dataCsv
         this.latestCreatedExperimentId = null
         this.sessionImportName = ''
         this.sessionImportMessage = ''

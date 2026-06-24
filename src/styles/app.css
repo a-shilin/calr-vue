@@ -668,7 +668,28 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 }
 
 .upload-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.upload-session-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.upload-preview-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.upload-preview-layout__table {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.upload-preview-layout__qc {
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .upload-qc-list {
@@ -746,6 +767,17 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 .upload-qc-nav__dismiss {
   padding: 0;
   font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .upload-preview-layout {
+    flex-direction: column;
+  }
+
+  .upload-preview-layout__qc {
+    flex-basis: auto;
+    width: 100%;
+  }
 }
 
 .group-editor-grid {
