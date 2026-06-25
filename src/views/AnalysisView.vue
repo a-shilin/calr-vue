@@ -52,13 +52,34 @@
       </div>
     </section>
 
-    <div v-if="!store.experiment.current" class="empty-state panel">
+    <div v-if="sharedRouteLoading" class="empty-state panel">
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <BSpinner small />
+        <span>{{ formatLoadingProgress(sharedRouteProgress) }}</span>
+      </div>
+    </div>
+
+    <div v-if="sharedRouteError" class="panel warn-copy">
+      {{ sharedRouteError }}
+    </div>
+
+    <div v-if="!sharedRouteLoading && !store.experiment.current" class="empty-state panel">
       Select a dataset to see analysis plots.
     </div>
 
-    <template v-else>
+    <template v-else-if="store.experiment.current">
       <section class="panel panel--spaced">
-        <strong>Dataset Info</strong>
+        <div class="row-between">
+          <strong>Dataset Info</strong>
+          <span
+            v-if="isViewingSharedDataset"
+            class="dataset-privacy-pill inline-tooltip"
+            tabindex="0"
+            data-tooltip="This is a private dataset being viewed through a share link."
+          >
+            Private
+          </span>
+        </div>
         <div class="dataset-grid">
           <div>
             <div><strong>Experiment ID:</strong> {{ metadata.experimentId }}</div>
@@ -465,7 +486,7 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchEnrichedSession, fetchPublicFiles, fetchSessionConfig, fetchUserFiles, runAnalysis } from '../services/registryService'
+import { fetchEnrichedSession, fetchPublicFiles, fetchSessionConfig, fetchSharedFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { formatDate } from '../utils/format'
 import { clearProcessCaches } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
@@ -591,6 +612,9 @@ export default {
         hourEnd: 24,
       },
       loadingPublicFiles: false,
+      sharedRouteLoading: false,
+      sharedRouteProgress: null,
+      sharedRouteError: '',
       analysisDirty: {
         qc: true,
         power: true,
@@ -814,6 +838,9 @@ export default {
     showDatasetToggle() {
       return Boolean(this.store.experiment.current)
     },
+    isViewingSharedDataset() {
+      return Boolean(this.store.experiment.current?.shared && this.$route.query.share)
+    },
   },
   watch: {
     analysisRows() {
@@ -905,6 +932,11 @@ export default {
         this.syncDatasetSourceTab()
       },
     },
+    '$route.query.share': {
+      async handler() {
+        await this.handleSharedRoute()
+      },
+    },
   },
   async mounted() {
     this.syncDatasetSourceTab()
@@ -923,7 +955,9 @@ export default {
       await this.loadPrivateFiles()
     }
 
-    if (this.store.experiment.current && this.store.experiment.analysisData?.rows?.length) {
+    const handledSharedRoute = await this.handleSharedRoute()
+
+    if (!handledSharedRoute && this.store.experiment.current && this.store.experiment.analysisData?.rows?.length) {
       clearProcessCaches()
       this.ensureExperimentAnalysisCache()
       this.initializeGroupColors(this.sessionMetadata)
@@ -950,6 +984,11 @@ export default {
       this.datasetSourceTab = tab
     },
     syncDatasetSourceTab() {
+      if (this.store.experiment.current?._datasetSourceTab) {
+        this.datasetSourceTab = this.store.experiment.current._datasetSourceTab
+        return
+      }
+
       if (this.store.auth.token && this.store.experiment.current && !this.store.experiment.current.public) {
         this.datasetSourceTab = 'private'
         return
@@ -960,6 +999,56 @@ export default {
     async loadPrivateFiles() {
       const files = await fetchUserFiles(this.store.auth.token)
       this.store.account.userFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
+    },
+    async handleSharedRoute() {
+      const shareId = `${this.$route.query.share || ''}`.trim()
+
+      if (!shareId) {
+        this.sharedRouteLoading = false
+        this.sharedRouteProgress = null
+        this.sharedRouteError = ''
+        return false
+      }
+
+      if (this.store.experiment.current?.id === shareId && this.store.experiment.analysisData?.rows?.length) {
+        this.sharedRouteLoading = false
+        this.sharedRouteProgress = null
+        this.sharedRouteError = ''
+        this.store.experiment.current._datasetSourceTab = 'public'
+        return true
+      }
+
+      this.sharedRouteLoading = true
+      this.sharedRouteProgress = 0
+      this.sharedRouteError = ''
+
+      try {
+        const sharedFile = await fetchSharedFile(shareId)
+        const preparedFile = {
+          ...sharedFile,
+          id: sharedFile.id || sharedFile.submission_id || shareId,
+          public: true,
+          shared: true,
+          loading: false,
+          loadingProgress: null,
+          _datasetSourceTab: 'public',
+        }
+
+        await this.openExperimentForAnalysis(preparedFile, true, {
+          preserveShareQuery: true,
+          sourceTab: 'public',
+          onLoadingProgress: (progress) => {
+            this.sharedRouteProgress = progress
+          },
+        })
+        return true
+      } catch (error) {
+        this.sharedRouteError = error.message || 'Unable to load shared dataset.'
+        return false
+      } finally {
+        this.sharedRouteLoading = false
+        this.sharedRouteProgress = null
+      }
     },
     lookupVariableLabel(variable) {
       const labelMaps = [
@@ -1075,7 +1164,7 @@ export default {
       this.store.experiment.analysisErrors.power = null
       this.store.experiment.analysisErrors.ancova = null
     },
-    async openExperimentForAnalysis(file, isPublic) {
+    async openExperimentForAnalysis(file, isPublic, { preserveShareQuery = false, sourceTab = null, onLoadingProgress = null } = {}) {
       const session = file.files.find((item) => item.file_type === 'session')
 
       if (!session) {
@@ -1084,6 +1173,9 @@ export default {
 
       file.loading = true
       file.loadingProgress = 0
+      if (typeof onLoadingProgress === 'function') {
+        onLoadingProgress(0)
+      }
       try {
         clearProcessCaches()
         const [enrichedPayload, sessionConfig] = await Promise.all([
@@ -1091,10 +1183,16 @@ export default {
             onProgress: (progress) => {
               const safeProgress = Number.isFinite(progress) ? progress : 0
               file.loadingProgress = Math.max(5, Math.min(95, Math.round(safeProgress * 0.9 + 5)))
+              if (typeof onLoadingProgress === 'function') {
+                onLoadingProgress(file.loadingProgress)
+              }
             },
           }),
           fetchSessionConfig(session.id, this.store.auth.token, isPublic).then((result) => {
             file.loadingProgress = Math.max(Number(file.loadingProgress) || 0, 10)
+            if (typeof onLoadingProgress === 'function') {
+              onLoadingProgress(file.loadingProgress)
+            }
             return result
           }),
         ])
@@ -1105,6 +1203,7 @@ export default {
         })
 
         this.store.experiment.current = file
+        this.store.experiment.current._datasetSourceTab = sourceTab || (isPublic ? 'public' : 'private')
         this.store.experiment.detailRows = analysisData.rows
         this.store.experiment.analysisData = analysisData
         this.syncDatasetSourceTab()
@@ -1114,6 +1213,12 @@ export default {
         this.syncAnalysisDirtyWithStoredResults()
         this.powerViewTab = 'plot'
         file.loadingProgress = 100
+        if (typeof onLoadingProgress === 'function') {
+          onLoadingProgress(100)
+        }
+        if (!preserveShareQuery && this.$route.query.share) {
+          await this.$router.replace('/analysis')
+        }
         await this.runInitialAnalyses()
       } finally {
         file.loading = false
@@ -1121,10 +1226,10 @@ export default {
       }
     },
     async openPublicExperiment(file) {
-      await this.openExperimentForAnalysis(file, true)
+      await this.openExperimentForAnalysis(file, true, { sourceTab: 'public' })
     },
     async openPrivateExperiment(file) {
-      await this.openExperimentForAnalysis(file, false)
+      await this.openExperimentForAnalysis(file, false, { sourceTab: 'private' })
     },
     schedulePlotRenders(plotKeys = []) {
       plotKeys.forEach((key) => this.pendingPlotRenders.add(key))

@@ -29,6 +29,7 @@ npm run preview
 - `#/`: dashboard
 - `#/account`: account and experiment management
 - `#/analysis`: dataset analysis
+- `#/analysis?share={submission_id}`: shared private dataset analysis
 - `#/community`: community summary comparison
 
 The app uses hash routing for GitHub Pages compatibility.
@@ -49,16 +50,19 @@ The app uses hash routing for GitHub Pages compatibility.
 ## Current UX Notes
 
 - The analysis page always shows dataset tabs. Before login, only the public-datasets tab is available.
-- On the analysis page, once a dataset is opened the dataset list auto-hides and can be reopened with the header toggle.
 - The account page shows the experiment list inline under a `Your Experiments` heading.
-- The account experiment list now includes a computed status column: `Draft`, `Ready for Analysis`, or `Ready for Public`.
+- The account experiment list includes computed readiness states: `Draft`, `Ready for Analysis`, or `Ready for Public`.
+- Account-side dataset rows render as soon as the file list is available, then status badges update progressively as session configs finish loading.
+- The account experiment list includes `Public` and `Share` controls. Share is enabled only for datasets that are ready for analysis.
 - Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
+- Shared private dataset links open through `#/analysis?share={submission_id}`, show a percent-loaded indicator while loading, and render a `Private` pill in the dataset header.
 - The account-side create/edit experiment flow opens in an overlay modal with step tabs for upload, session configuration, and metadata.
 - Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
 - The upload step shows a paginated CalR data preview once a CalR file exists, computes total data duration from the uploaded rows, and places upload QC cards beside the preview table on wider layouts.
 - Upload QC checks for `rer` and `feed` are currently informative only; they do not block save or step navigation.
 - The session step includes a session-completeness indicator for groups/diets, subjects, and ranges.
+- During create, the upload step keeps the green dropzone completion state after CalR upload/conversion. During edit, the saved CalR file is shown with `Re-upload` and download actions instead.
 - When editing an experiment that already has a saved CalR file, the upload dropzone is replaced with `Re-upload` and download actions. Re-upload keeps the same experiment and replaces the saved CalR file instead of creating a new one.
 - When editing an experiment that already has a meaningful saved session file, the session dropzone is replaced with a download action; draft-only placeholder session state is ignored on reload.
 - Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with a legend/icon instead of inline text labels.
@@ -74,6 +78,14 @@ Current frontend analysis flow:
 2. load enriched analysis data from `GET /api/calr/sessions/{session_id}/enriched`
 3. normalize that payload with `normalizeEnrichedAnalysisData(...)`
 4. pass the resulting `analysisData` into the plot-specific renderers
+
+Shared private dataset entry points add one discovery step before the standard analysis flow:
+
+1. resolve the shared dataset record from `GET /api/calr/shared/{submission_id}`
+2. load session config from `GET /api/calr/sessions/{session_id}`
+3. load enriched analysis data from `GET /api/calr/sessions/{session_id}/enriched`
+4. normalize that payload with `normalizeEnrichedAnalysisData(...)`
+5. pass the resulting `analysisData` into the plot-specific renderers
 
 `analysisData` has the shared shape:
 
@@ -121,6 +133,7 @@ The account-side experiment builder currently supports:
 - import a session CSV to hydrate groups, diets, subjects, exclusions, food cutoff, and subject mass fields
 - edit existing experiments by loading the saved CalR CSV plus saved session data when that session is meaningful
 - editing existing experiments with direct download access to the saved CalR and session files from the builder
+- account-table readiness status loading that resolves incrementally after the file list is shown
 - draft save behavior:
   - minimum draft save: experiment name, description, and converted CalR file
   - ready for analysis: draft requirements plus minimal session setup
@@ -144,15 +157,18 @@ The account-side experiment builder currently supports:
 ### Working
 
 - public and private dataset browsing
+- shared private dataset browsing by share URL
 - account-side create, edit, download, and open flows
 - draft saves with CalR-only minimum requirements
 - computed experiment readiness states in the account list and builder
+- progressive account-list status hydration after initial dataset-list load
 - account-side CalR preview pagination for large uploaded datasets
 - account-side CalR replacement during edit
 - enriched session loading for analysis
 - session metadata editing and session upload/update flows
 - config-driven experiment metadata form
 - session completion indicator and analysis/public readiness gating
+- per-dataset public and shared access toggles in the account list
 - subject session CSV import and builder hydration
 - subject weights and mass-change template import/export helpers
 - time-series plot
@@ -167,6 +183,7 @@ The account-side experiment builder currently supports:
 ### Current Notes
 
 - The current analysis path is backend-enriched first. Older local preprocessing paths have been removed from the analysis view.
+- Shared links are generated from the current browser origin plus the hash-router analysis route; no deployment domain is hardcoded in the frontend.
 - The analysis view now guards large datasets more carefully; `maxHour` is computed without array spreading to avoid call-stack failures on large sessions.
 - The account builder now also avoids array-spread min/max patterns when deriving upload-side duration summaries from large CalR tables.
 - Draft editing now distinguishes between meaningful saved session data and placeholder/default session state when deciding what to restore into the session editor.
@@ -188,7 +205,9 @@ This frontend depends on the live CalR backend APIs for:
 
 - auth
 - file listing
+- shared dataset lookup
 - experiment metadata
+- public/share flag updates
 - session config loading
 - enriched session loading
 - QC analysis

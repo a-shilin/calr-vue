@@ -3,7 +3,7 @@ body {
   background: #f5f5f5;
   color: #1f2933;
   font-family: Arial, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 * {
@@ -1048,7 +1048,8 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   position: relative;
 }
 
-.session-table-option-btn[data-tooltip]::after {
+.session-table-option-btn[data-tooltip]::after,
+.inline-tooltip[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
   right: 0;
@@ -1069,9 +1070,15 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 }
 
 .session-table-option-btn[data-tooltip]:hover::after,
-.session-table-option-btn[data-tooltip]:focus-visible::after {
+.session-table-option-btn[data-tooltip]:focus-visible::after,
+.inline-tooltip[data-tooltip]:hover::after,
+.inline-tooltip[data-tooltip]:focus-visible::after {
   opacity: 1;
   transform: translateY(0);
+}
+
+.inline-tooltip[data-tooltip] {
+  position: relative;
 }
 
 .confirm-dialog-backdrop {
@@ -1104,6 +1111,62 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .confirm-dialog__actions {
   justify-content: flex-end;
+}
+
+.account-experiments-table > :not(caption) > * > * {
+  vertical-align: middle;
+}
+
+.account-experiments-table__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.account-experiments-table tbody tr.user-file-row--sharing > * {
+  background: #eef6ff !important;
+}
+
+.share-dialog {
+  width: min(560px, 100%);
+}
+
+.share-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.share-dialog__dataset {
+  padding: 10px 12px;
+  border: 1px solid #d5d9dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2933;
+}
+
+.share-dialog__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d5d9dd;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.dataset-privacy-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .btn-info{

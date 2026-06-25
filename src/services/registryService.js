@@ -150,6 +150,16 @@ export async function fetchPublicFiles() {
   return normalizeListPayload(await parseJsonResponse(response))
 }
 
+export async function fetchSharedFile(submissionId) {
+  const response = await fetch(`${API_BASE}/shared/${submissionId}`, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return parseJsonResponse(response)
+}
+
 export async function fetchDataFile(fileId, token, isPublic = false) {
   const response = await fetch(`${API_BASE}/files/${fileId}`, {
     headers: isPublic ? {} : createHeaders(token),
@@ -184,6 +194,15 @@ export async function fetchEnrichedSession(sessionId, token, isPublic = false, {
 
 export async function updateExperimentPublicStatus(fileId, makePublic, token) {
   const response = await fetch(`${API_BASE}/files/${fileId}?public=${makePublic}`, {
+    method: 'PATCH',
+    headers: createHeaders(token),
+  })
+
+  return parseJsonResponse(response)
+}
+
+export async function updateExperimentSharedStatus(fileId, makeShared, token) {
+  const response = await fetch(`${API_BASE}/files/${fileId}?shared=${makeShared}`, {
     method: 'PATCH',
     headers: createHeaders(token),
   })

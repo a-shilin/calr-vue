@@ -48,8 +48,10 @@
     
           <div v-else-if="store.account.userFiles.length">
             <BTable
+              class="account-experiments-table"
               :items="store.account.userFiles"
               :fields="userFilesFields"
+              :tbody-tr-class="getUserFileRowClass"
               responsive
               small
               hover
@@ -79,33 +81,46 @@
                   {{ slot.item.public ? 'Yes' : 'No' }}
                 </BBadge>
               </template>
+
+              <template #cell(shared)="slot">
+                <BButton
+                  size="sm"
+                  :variant="slot.item.shared ? 'success' : 'outline-secondary'"
+                  :disabled="slot.item.shareSaving || slot.item.statusLoading || !isExperimentReadyForAnalysis(slot.item.statusInfo)"
+                  @click="openShareDialog(slot.item)"
+                >
+                  {{ slot.item.shareSaving ? 'Saving...' : 'Share' }}
+                </BButton>
+              </template>
       
               <template #cell(uploaded_at)="slot">
                 {{ formatDate(slot.item.uploaded_at) }}
               </template>
       
               <template #cell(actions)="slot">
-                <span style="display:inline-flex; align-items:center; gap:0.35rem; min-width:4.5rem;">
-                  <BSpinner v-if="slot.item.loading" small />
-                  <span v-if="slot.item.loading" class="muted-copy">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
-                </span>
-                <BButton
-                  v-if="isExperimentReadyForAnalysis(slot.item.statusInfo)"
-                  size="sm"
-                  variant="link"
-                  @click="openExperiment(slot.item)"
-                >
-                  Analysis
-                </BButton>
-                <BButton size="sm" variant="link" @click="toggleMetadataDetails(slot.item)">
-                  {{ slot.item._showDetails ? 'Hide Info' : 'Info' }}
-                </BButton>
-                <BButton size="sm" variant="link" @click="editExperiment(slot.item)">
-                  Edit
-                </BButton>
-                <BButton size="sm" variant="link" class="text-danger" @click="removeExperiment(slot.item)">
-                  Delete
-                </BButton>
+                <div class="account-experiments-table__actions">
+                  <span style="display:inline-flex; align-items:center; gap:0.35rem; min-width:4.5rem;">
+                    <BSpinner v-if="slot.item.loading" small />
+                    <span v-if="slot.item.loading" class="muted-copy">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
+                  </span>
+                  <BButton
+                    v-if="isExperimentReadyForAnalysis(slot.item.statusInfo)"
+                    size="sm"
+                    variant="outline-primary"
+                    @click="openExperiment(slot.item)"
+                  >
+                    Analysis
+                  </BButton>
+                  <BButton size="sm" variant="outline-secondary" @click="toggleMetadataDetails(slot.item)">
+                    {{ slot.item._showDetails ? 'Hide Info' : 'Info' }}
+                  </BButton>
+                  <BButton size="sm" variant="outline-secondary" @click="editExperiment(slot.item)">
+                    Edit
+                  </BButton>
+                  <BButton size="sm" variant="outline-danger" @click="removeExperiment(slot.item)">
+                    Delete
+                  </BButton>
+                </div>
               </template>
       
               <template #row-details="slot">
@@ -947,6 +962,48 @@
       </div>
     </div>
   </div>
+
+  <div v-if="shareDialog.visible" class="confirm-dialog-backdrop" @click.self="closeShareDialog">
+    <div class="confirm-dialog share-dialog">
+      <div class="confirm-dialog__header row-between">
+        <strong>Share Dataset</strong>
+        <button class="btn btn-outline-secondary btn-sm" @click="closeShareDialog">
+          Close
+        </button>
+      </div>
+      <div class="confirm-dialog__body share-dialog__body">
+        <div class="share-dialog__dataset">
+          <strong>{{ shareDialog.file?.name || shareDialog.file?.title || shareDialog.file?.id }}</strong>
+        </div>
+        <div class="muted-copy">Anyone with this link can see.</div>
+        <label class="share-dialog__toggle">
+          <span>Sharing</span>
+          <input
+            :checked="Boolean(shareDialog.file?.shared)"
+            type="checkbox"
+            :disabled="shareDialog.saving"
+            @change="toggleShareDialogSharing($event.target.checked)"
+          />
+        </label>
+        <label class="control-stack">
+          Share URL
+          <input :value="shareDialog.url" readonly />
+        </label>
+        <div v-if="shareDialog.message" class="message-text">
+          {{ shareDialog.message }}
+        </div>
+      </div>
+      <div class="button-row confirm-dialog__actions">
+        <BButton variant="outline-secondary" :disabled="shareDialog.saving" @click="closeShareDialog">
+          Done
+        </BButton>
+        <BButton variant="primary" :disabled="shareDialog.saving || !shareDialog.file" @click="copyShareUrl">
+          <BSpinner v-if="shareDialog.saving" small />
+          <span v-else>Copy Share URL</span>
+        </BButton>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -965,6 +1022,7 @@ import {
   updateCalrFile,
   updateExperimentMetadata,
   updateExperimentPublicStatus,
+  updateExperimentSharedStatus,
   updateSessionFile,
   uploadCalrFile,
   uploadSessionFile,
@@ -1215,7 +1273,15 @@ export default {
       baseGroupCount: 2,
       metadataSections: EXPERIMENT_METADATA_SECTIONS,
       metadataFields: EXPERIMENT_METADATA_FIELDS,
-      userFilesFields: ['name', 'description', 'status', 'public', 'uploaded_at', {key: 'actions', label: 'Actions', class: 'txt-right'}],
+      userFilesFields: [
+        'name',
+        'description',
+        'uploaded_at',
+        'status',
+        'public',
+        { key: 'shared', label: 'Share' },
+        { key: 'actions', label: 'Actions', class: 'txt-right' },
+      ],
       sessionEditor: createIncompleteSessionEditor(),
       presetDietOptions: PRESET_DIETS,
       activeBuilderStep: 'upload',
@@ -1257,6 +1323,13 @@ export default {
         title: '',
         dragover: false,
         fileName: '',
+        message: '',
+      },
+      shareDialog: {
+        visible: false,
+        file: null,
+        url: '',
+        saving: false,
         message: '',
       },
       confirmDialog: {
@@ -1464,6 +1537,13 @@ export default {
   methods: {
     formatDate,
     formatFileSize,
+    getUserFileRowClass(item) {
+      if (!item) {
+        return ''
+      }
+
+      return this.shareDialog.file?.id === item.id ? 'user-file-row--sharing' : ''
+    },
     formatMetadataValue(value) {
       if (Array.isArray(value)) {
         return value.length ? value.join(', ') : 'NA'
@@ -1674,6 +1754,20 @@ export default {
         metadata,
       })
     },
+    buildShareUrl(submissionId) {
+      if (!submissionId) {
+        return ''
+      }
+
+      const resolvedRoute = this.$router.resolve({
+        path: '/analysis',
+        query: {
+          share: submissionId,
+        },
+      })
+
+      return new URL(resolvedRoute.href, window.location.origin).href
+    },
     buildLoadingStatusInfo(hasConvertedData, metadata) {
       if (!hasConvertedData) {
         return this.buildExperimentStatusInfo(hasConvertedData, {}, metadata)
@@ -1695,6 +1789,7 @@ export default {
         ...file,
         loading: false,
         loadingProgress: null,
+        shareSaving: false,
         statusLoading: hasSession,
         statusInfo: hasSession
           ? this.buildLoadingStatusInfo(hasConvertedData, file)
@@ -1893,6 +1988,85 @@ export default {
 
       if (this.$refs.templateUploadInput) {
         this.$refs.templateUploadInput.value = ''
+      }
+    },
+    openShareDialog(file) {
+      if (!this.isExperimentReadyForAnalysis(file.statusInfo)) {
+        return
+      }
+
+      this.shareDialog.visible = true
+      this.shareDialog.file = file
+      this.shareDialog.url = this.buildShareUrl(file.id)
+      this.shareDialog.saving = false
+      this.shareDialog.message = ''
+    },
+    closeShareDialog() {
+      this.shareDialog.visible = false
+      this.shareDialog.file = null
+      this.shareDialog.url = ''
+      this.shareDialog.saving = false
+      this.shareDialog.message = ''
+    },
+    async setExperimentShared(file, makeShared) {
+      if (!file) {
+        return
+      }
+
+      file.shareSaving = true
+      if (this.shareDialog.file?.id === file.id) {
+        this.shareDialog.saving = true
+        this.shareDialog.message = ''
+      }
+
+      try {
+        const response = await updateExperimentSharedStatus(file.id, makeShared, this.store.auth.token)
+        file.shared = Boolean(response.shared)
+        if (this.shareDialog.file?.id === file.id) {
+          this.shareDialog.file = file
+          this.shareDialog.url = this.buildShareUrl(file.id)
+        }
+      } catch (error) {
+        if (this.shareDialog.file?.id === file.id) {
+          this.shareDialog.message = error.message || 'Unable to update share status.'
+        }
+        throw error
+      } finally {
+        file.shareSaving = false
+        if (this.shareDialog.file?.id === file.id) {
+          this.shareDialog.saving = false
+        }
+      }
+    },
+    async toggleShareDialogSharing(makeShared) {
+      if (!this.shareDialog.file) {
+        return
+      }
+
+      try {
+        await this.setExperimentShared(this.shareDialog.file, makeShared)
+      } catch (error) {
+        // Dialog message already set.
+      }
+    },
+    async copyShareUrl() {
+      if (!this.shareDialog.file) {
+        return
+      }
+
+      try {
+        if (!this.shareDialog.file.shared) {
+          await this.setExperimentShared(this.shareDialog.file, true)
+        }
+
+        if (!navigator?.clipboard?.writeText) {
+          throw new Error('Clipboard access is unavailable in this browser.')
+        }
+
+        await navigator.clipboard.writeText(this.shareDialog.url)
+        this.shareDialog.message = 'Share URL copied.'
+      } catch (error) {
+        this.shareDialog.message = error.message || 'Unable to copy share URL.'
       }
     },
     openTemplateUploadFileDialog() {
