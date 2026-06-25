@@ -65,6 +65,7 @@
 
               <template #cell(status)="slot">
                 <BBadge :variant="slot.item.statusInfo?.variant || 'secondary'">
+                  <BSpinner v-if="slot.item.statusLoading" small style="margin-right: 0.35rem;" />
                   {{ slot.item.statusInfo?.label || 'Incomplete' }}
                 </BBadge>
               </template>
@@ -213,96 +214,97 @@
               </div>
 
               <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
-              <div class="muted-copy">
-                Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
-              </div>
-              <div class="session-uploads">
-                <div style="display:flex; flex-direction:column; gap:20px;">
-                  <div class="session-uploads-convert">
-                    <div class="session-uploads-intruments">
-                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='sable'}">SABLE</div>
-                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='oxymax'}">CLAMS</div>
-                      <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='tse'}">TSE</div>
-                    </div>
-                    <div class="session-uploads-arrow">➧</div>
-                    <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
+                <div style="display:flex; flex-direction: column;">
+                  <div class="muted-copy">
+                    Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
                   </div>
-                </div>
-                <!-- session data upload dropzone -->
-                <div
-                  v-if="showEditingCalrDownload"
-                  class="session-import-download"
-                >
-                <BButton variant="outline-secondary" @click="beginCalrReupload">
-                    Re-upload
-                  </BButton>
-                  <BButton variant="outline-secondary" @click="downloadEditingStandardFile">
-                    Download CalR
-                  </BButton>
-                </div>
-
-
-                <div v-else class="session-import-row col-center">
-                  <div v-if="store.upload.detectedFileFormat" class="message-text">
-                    <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
-                  </div>
-                  
-                  
-                  <div
-                    class="dropzone"
-                    :class="{ 
-                      dragover: store.upload.dragover, 
-                      'detected': store.upload.detectedFileFormat.trim() && store.upload.detectedFileFormat!=='calr', 
-                      'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON 
-                    }"
-                    @click="openFileDialog"
-                    @dragover.prevent="store.upload.dragover = true"
-                    @dragleave="store.upload.dragover = false"
-                    @drop.prevent="handleDrop"
-                  >
-                    <div v-if="!store.upload.files.length">
-                      Drag and drop CSV files here, or click to select.
+                  <div class="session-uploads">
+                    <div class="session-upload-row">
+                      <div class="session-uploads-convert">
+                        <div class="session-uploads-intruments">
+                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='sable'}">SABLE</div>
+                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='oxymax'}">CLAMS</div>
+                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='tse'}">TSE</div>
+                        </div>
+                        <div class="session-uploads-arrow">➧</div>
+                        <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
+                      </div>
+                      <div v-if="store.upload.detectedFileFormat && !hasConvertedData" class="message-text">
+                        <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
+                      </div>
                     </div>
-        
-                    <div v-else class="dropzone-files">
-                      <strong>{{ store.upload.files.length }} file(s) selected</strong>
-                      <div v-for="file in store.upload.files" :key="file.name">{{ file.name }}</div>
-                    </div>
-                  </div>
-        
-                  <input
-                    ref="fileInput"
-                    type="file"
-                    multiple
-                    hidden
-                    @change="handleFileSelect"
-                  />
-        
-                  <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
-                    <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
-                      Clear
-                    </button>
-                    <button
-                      v-if="!store.upload.isCalrFormat"
-                      class="btn btn-sm"
-                      :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
-                      :disabled="store.loaders.convertFile || store.upload.convertedJSON"
-                      @click="convertSelectedFiles"
+                    <!-- session data upload dropzone -->
+                    <div
+                      v-if="showEditingCalrDownload"
+                      class="session-import-download"
                     >
-                      <BSpinner v-if="store.loaders.convertFile" small />
-                      <span v-else-if="store.upload.convertedJSON">Converted</span>
-                      <span v-else>Convert</span>
-                    </button>
-                  </div>
-                  
-                  <!--
-                  <div v-if="store.upload.textResponse" class="message-text">
-                    {{ store.upload.textResponse }}
-                  </div>
-                  -->
+                    <BButton variant="outline-secondary" @click="beginCalrReupload">
+                        Re-upload
+                      </BButton>
+                      <BButton variant="outline-secondary" @click="downloadCurrentCalrFile">
+                        Download CalR
+                      </BButton>
+                    </div>
     
+    
+                    <div v-else class="session-import-row col-center">
+                      
+                      <div
+                        class="dropzone"
+                        :class="{ 
+                          dragover: store.upload.dragover, 
+                          'detected': store.upload.detectedFileFormat.trim() && store.upload.detectedFileFormat!=='calr', 
+                          'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON 
+                        }"
+                        @click="openFileDialog"
+                        @dragover.prevent="store.upload.dragover = true"
+                        @dragleave="store.upload.dragover = false"
+                        @drop.prevent="handleDrop"
+                      >
+                        <div v-if="!store.upload.files.length">
+                          Drag and drop CSV files here<br/>or click to select.
+                        </div>
+            
+                        <div v-else class="dropzone-files">
+                          <strong>{{ store.upload.files.length }} file(s) selected</strong>
+                          <div v-for="file in store.upload.files" :key="file.name">{{ file.name }}</div>
+                        </div>
+                      </div>
+            
+                      <input
+                        ref="fileInput"
+                        type="file"
+                        multiple
+                        hidden
+                        @change="handleFileSelect"
+                      />
+            
+                      <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
+                        <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
+                          Clear
+                        </button>
+                        <button
+                          v-if="!store.upload.isCalrFormat"
+                          class="btn btn-sm"
+                          :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
+                          :disabled="store.loaders.convertFile || store.upload.convertedJSON"
+                          @click="convertSelectedFiles"
+                        >
+                          <BSpinner v-if="store.loaders.convertFile" small />
+                          <span v-else-if="store.upload.convertedJSON">Converted</span>
+                          <span v-else>Convert</span>
+                        </button>
+                      </div>
+                      
+                      <!--
+                      <div v-if="store.upload.textResponse" class="message-text">
+                        {{ store.upload.textResponse }}
+                      </div>
+                      -->
+        
+                    </div>
+                  </div>
                 </div>
-              </div>
     
               <!--
               <div v-if="canContinueToConfigure" class="row-end">
@@ -429,98 +431,100 @@
                 <div v-if="!canContinueToConfigure" class="alert alert-warning" role="alert"">
                   Upload or convert a CalR file to configure a session.
                 </div>
-
-                <div class="muted-copy">
-                  Designate groups, diets, subjects, and experiment ranges.
-                </div>
-                <div class="session-uploads">
-                <div>
-                  <div class="session-uploads-convert">
-                      <div class="session-uploads-session">
-                      <div>Session</div>
-                      <div class="session-uploads-intruments">
-                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
-                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects</div>
-                        <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Ranges</div>
+                <div style="display:flex; flex-direction: column;">
+                  <div class="muted-copy">
+                    Designate groups, diets, subjects, and experiment ranges.
+                  </div>
+                  <div class="session-uploads">
+                    <div>
+                      <div class="session-uploads-convert">
+                          <div class="session-uploads-session">
+                          <div>Session</div>
+                          <div class="session-uploads-intruments" style="padding:0">
+                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
+                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects & Weights</div>
+                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Time Ranges</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <!--
-                  <div class="session-diagram">
-                    <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
-                  </div>
-                  -->
-                </div>
-    
-                <!-- session metadata upload dropzone -->
-                <div class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
-                  <div class="session-import-drop">
-                    <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
-                    <div
-                      v-if="showEditingSessionDownload"
-                      class="session-import-download detected-calr"
-                    >
-                      <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
-                        Download Session
-                      </BButton>
-                    </div>
-                    <div
-                      v-else
-                      class="dropzone"
-                      :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
-                      @click="openSessionFileDialog"
-                      @dragover.prevent="sessionDragover = true"
-                      @dragleave="sessionDragover = false"
-                      @drop.prevent="handleSessionFileDrop"
-                    >
-                      <div v-if="!sessionImportName">
-                        Drag and drop a session CSV here, or click to select.
+                      <!--
+                      <div class="session-diagram">
+                        <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
                       </div>
-                      <div v-else class="dropzone-files">
-                        <strong>1 file(s) selected</strong>
-                        <div>{{ sessionImportName }}</div>
-                      </div>  
+                      -->
                     </div>
-                    <div v-if="!showEditingSessionDownload && !sessionImportName">
-                      Otherwise you can configure your session below.
+      
+                    <!-- session metadata upload dropzone -->
+                     <div
+                        v-if="showEditingSessionDownload"
+                        class="session-import-download"
+                      >
+                        <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
+                          Download Session
+                        </BButton>
                     </div>
-                    <div v-if="sessionImportName" class="row-end">
-                      <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
-                        Clear
-                      </button>
+                    <div v-else class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
+                      <div class="session-import-drop">
+                        <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
+                        <div
+                          class="dropzone"
+                          :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
+                          @click="openSessionFileDialog"
+                          @dragover.prevent="sessionDragover = true"
+                          @dragleave="sessionDragover = false"
+                          @drop.prevent="handleSessionFileDrop"
+                        >
+                          <div v-if="!sessionImportName">
+                            Drag and drop a session CSV here<br/>or click to select.
+                          </div>
+                          <div v-else class="dropzone-files">
+                            <strong>1 file(s) selected</strong>
+                            <div>{{ sessionImportName }}</div>
+                          </div>  
+                        </div>
+                        <div v-if="!showEditingSessionDownload && !sessionImportName">
+                          Otherwise you can configure your session below.
+                        </div>
+                        <div v-if="sessionImportName" class="row-end">
+                          <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
+                            Clear
+                          </button>
+                        </div>
+                        <input
+                          ref="sessionFileInput"
+                          type="file"
+                          accept=".csv,text/csv"
+                          hidden
+                          @change="handleSessionFileSelect"
+                        />
+                      </div>
+                      
+                      <!--
+                      <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
+                        <div>
+                          <strong>Groups</strong>
+                          <div>{{ sessionEditor.groups.length }}</div>
+                        </div>
+                        <div>
+                          <strong>Light Start</strong>
+                          <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
+                        </div>
+                        <div>
+                          <strong>Dark Start</strong>
+                          <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
+                        </div>
+                        <div>
+                          <strong>Session Hours</strong>
+                          <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
+                        </div>
+                      </div>
+                      -->
+                      <!--
+                      <div v-if="sessionImportMessage" class="message-text">
+                        {{ sessionImportMessage }}
+                      </div>
+                      -->
                     </div>
-                    <input
-                      ref="sessionFileInput"
-                      type="file"
-                      accept=".csv,text/csv"
-                      hidden
-                      @change="handleSessionFileSelect"
-                    />
-                  </div>
-    
-                  <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
-                    <div>
-                      <strong>Groups</strong>
-                      <div>{{ sessionEditor.groups.length }}</div>
-                    </div>
-                    <div>
-                      <strong>Light Start</strong>
-                      <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
-                    </div>
-                    <div>
-                      <strong>Dark Start</strong>
-                      <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
-                    </div>
-                    <div>
-                      <strong>Session Hours</strong>
-                      <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
-                    </div>
-                  </div>
-                  <!--
-                  <div v-if="sessionImportMessage" class="message-text">
-                    {{ sessionImportMessage }}
-                  </div>
-                  -->
                 </div>
               </div>
 
@@ -804,12 +808,14 @@
                         </div>
                       </label>
                     </div>
+                    <!--
                     <div class="session-settings-grid">
                       <label class="checkbox-row session-settings-grid__checkbox">
                         <input v-model="sessionEditor.remove_outliers" type="checkbox" />
                         Remove outliers
                       </label>
                     </div>
+                    -->
                   </div>
                 </div>
     
@@ -828,20 +834,22 @@
               </section>
 
               <section v-else class="session-step">
-                <div v-if="!canContinueToReview" class="message-text">
-                  This experiment can still be saved as a draft. Finish session setup later to make it ready for analysis.
-                </div>
                 <div>
                   <fieldset class="builder-fieldset page-column">
                 <div class="metadata-section">
-                  <div class="metadata-legend">
-                    <span class="metadata-legend__item">
-                      <span class="metadata-required-icon" aria-hidden="true"></span>
-                      Required for public
-                    </span>
+                  <div class="row-between">
+                    <div class="muted-copy">
+                    Update experiment metadata in order to submit to the public repository.
+                    </div>
+                    <div class="metadata-legend">
+                      <span class="metadata-legend__item">
+                        <span class="metadata-required-icon" aria-hidden="true"></span>
+                        Required for public
+                      </span>
+                    </div>
                   </div>
                   <div class="metadata-columns">
-                    <section v-for="section in metadataSections" :key="section.title" class="metadata-section">
+                    <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
                       <strong>{{ section.title }}</strong>
                       <label v-for="field in section.fields" :key="field.key" class="control-stack">
                         <span class="metadata-field-label">
@@ -857,10 +865,12 @@
                       </label>
                     </section>
                   </div>
+                  <!--
                   <label class="checkbox-row session-settings-grid__checkbox">
                     <input v-model="experimentDraft.public" type="checkbox" :disabled="isEditingExperiment" />
                     Make public
                   </label>
+                  -->
                 </div>
                   </fieldset>
                 </div>
@@ -1077,12 +1087,36 @@ function getRequiredPublicMetadataFields() {
   return EXPERIMENT_METADATA_FIELDS.filter((field) => field.requiredForPublic)
 }
 
-function getStatusMetadataValue(source = {}, key) {
-  if (key === 'experiment_id') {
-    return source?.metadata?.[key] ?? source?.[key] ?? source?.submission_id ?? source?.id ?? ''
+function normalizeMetadataObject(value) {
+  if (!value) {
+    return {}
   }
 
-  return source?.metadata?.[key] ?? source?.[key]
+  if (typeof value === 'string') {
+    try {
+      return normalizeMetadataObject(JSON.parse(value))
+    } catch (error) {
+      return {}
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value
+  }
+
+  return {}
+}
+
+function getStatusMetadataValue(source = {}, key) {
+  const metadata = normalizeMetadataObject(
+    source?.metadata ?? source?.submission_metadata ?? source?.metadata_json,
+  )
+
+  if (key === 'experiment_id') {
+    return metadata[key] ?? source?.[key] ?? source?.submission_id ?? source?.id ?? ''
+  }
+
+  return metadata[key] ?? source?.[key]
 }
 
 function hasRequiredPublicMetadata(source = {}) {
@@ -1211,6 +1245,7 @@ export default {
       editingOriginalConvertedCsv: '',
       metadataDraft: createEmptyMetadataDraft(),
       latestCreatedExperimentId: null,
+      userFilesStatusRequestId: 0,
       saveMessage: '',
       foodCutoffManuallyEdited: false,
       sessionDragover: false,
@@ -1574,7 +1609,7 @@ export default {
       ]
     },
     readMetadataValue(source, key) {
-      return source?.metadata?.[key] ?? source?.[key] ?? ''
+      return getStatusMetadataValue(source, key) ?? ''
     },
     normalizeConfiguredMetadataValue(field, value) {
       if (typeof value !== 'string' || !Array.isArray(field.options)) {
@@ -1638,6 +1673,66 @@ export default {
         sessionPayload,
         metadata,
       })
+    },
+    buildLoadingStatusInfo(hasConvertedData, metadata) {
+      if (!hasConvertedData) {
+        return this.buildExperimentStatusInfo(hasConvertedData, {}, metadata)
+      }
+
+      return {
+        key: 'loading',
+        label: 'Checking...',
+        variant: 'secondary',
+      }
+    },
+    buildUserFileRecord(file) {
+      const standard = file.files?.find((item) => item.file_type === 'standard')
+      const session = file.files?.find((item) => item.file_type === 'session')
+      const hasConvertedData = Boolean(standard)
+      const hasSession = Boolean(session)
+
+      return {
+        ...file,
+        loading: false,
+        loadingProgress: null,
+        statusLoading: hasSession,
+        statusInfo: hasSession
+          ? this.buildLoadingStatusInfo(hasConvertedData, file)
+          : this.buildExperimentStatusInfo(hasConvertedData, {}, file),
+      }
+    },
+    async hydrateUserFileStatuses(requestId, files) {
+      await Promise.allSettled(files.map(async (file) => {
+        const session = file.files?.find((item) => item.file_type === 'session')
+
+        if (!session) {
+          return
+        }
+
+        let sessionPayload = {}
+
+        try {
+          sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
+        } catch (error) {
+          sessionPayload = {}
+        }
+
+        if (requestId !== this.userFilesStatusRequestId) {
+          return
+        }
+
+        const targetFile = this.store.account.userFiles.find((item) => item.id === file.id)
+        if (!targetFile) {
+          return
+        }
+
+        targetFile.statusInfo = this.buildExperimentStatusInfo(
+          Boolean(file.files?.find((item) => item.file_type === 'standard')),
+          sessionPayload,
+          file,
+        )
+        targetFile.statusLoading = false
+      }))
     },
     isExperimentReadyForAnalysis(statusInfo) {
       return statusInfo?.key === 'ready_analysis' || statusInfo?.key === 'ready_public'
@@ -2357,37 +2452,23 @@ export default {
     },
     async loadUserFiles() {
       this.store.loaders.getUserFiles = true
+      const requestId = this.userFilesStatusRequestId + 1
+      this.userFilesStatusRequestId = requestId
 
       try {
         const files = await fetchUserFiles(this.store.auth.token)
-        const filesWithStatus = await Promise.all(files.map(async (file) => {
-          const standard = file.files?.find((item) => item.file_type === 'standard')
-          const session = file.files?.find((item) => item.file_type === 'session')
-          let sessionPayload = {}
+        const filesWithStatus = files.map((file) => this.buildUserFileRecord(file))
 
-          if (session) {
-            try {
-              sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
-            } catch (error) {
-              sessionPayload = {}
-            }
-          }
-
-          return {
-            ...file,
-            loading: false,
-            loadingProgress: null,
-            statusInfo: this.buildExperimentStatusInfo(
-              Boolean(standard),
-              sessionPayload,
-              file.metadata || file,
-            ),
-          }
-        }))
+        if (requestId !== this.userFilesStatusRequestId) {
+          return
+        }
 
         this.store.account.userFiles = filesWithStatus
+        this.hydrateUserFileStatuses(requestId, files)
       } finally {
-        this.store.loaders.getUserFiles = false
+        if (requestId === this.userFilesStatusRequestId) {
+          this.store.loaders.getUserFiles = false
+        }
       }
     },
     async editExperiment(file) {
@@ -2464,6 +2545,20 @@ export default {
       }
 
       await this.downloadExperimentFile(this.editingExperimentFile, this.editingStandardFileEntry)
+    },
+    async downloadCurrentCalrFile() {
+      if (this.showEditingCalrDownload) {
+        await this.downloadEditingStandardFile()
+        return
+      }
+
+      if (!this.store.upload.convertedCSV) {
+        return
+      }
+
+      const baseName = this.experimentDraft.name.trim() || this.defaultExperimentName()
+      const safeBaseName = baseName.replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'calr_experiment'
+      this.triggerCsvDownload(`${safeBaseName}.csv`, this.store.upload.convertedCSV)
     },
     async downloadEditingSessionFile() {
       if (!this.editingExperimentFile || !this.editingSessionFileEntry) {

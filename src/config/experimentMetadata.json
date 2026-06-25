@@ -87,7 +87,7 @@
         "label": "Sex",
         "type": "selectOrText",
         "requiredForPublic": true,
-        "options": ["Female", "Male", "Both", "Other"],
+        "options": ["Female", "Male", "Both"],
         "placeholder": "Select or enter sex"
       },
       {
@@ -100,7 +100,7 @@
       },
       {
         "key": "litter",
-        "label": "Litter",
+        "label": "Litter Size",
         "type": "number",
         "requiredForPublic": true,
         "placeholder": "Enter litter value",

@@ -321,6 +321,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   border: 1px solid #ccc;
   padding: 15px;
   background: white;
+  border-radius: 8px;
 }
 
 .table-scroll-shell table {
@@ -473,7 +474,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   background: #fff;
-  padding: 16px;
+  padding: 30px 15px;
 }
 
 @media (max-width: 900px) {
@@ -497,6 +498,14 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 }
 .session-uploads>div{
   flex:1;
+}
+
+.session-upload-row{
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 12px;
+    align-items: center;
 }
 
 .session-diagram {
@@ -523,6 +532,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 12px;
 }
 .session-uploads-intruments {
     display: flex;
@@ -536,8 +546,8 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
     background: #fafbfc;
     border-radius: 5px;
     padding: 5px;
-    width: 70px;
-    height: 90px;
+    width: 90px;
+    height: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -571,6 +581,8 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   border: 1px solid #d8dee6;
   border-radius: 8px;
   background: #f8fafc;
+  max-width: 350px;
+  gap: 10px;
 }
 
 .session-step__header {
@@ -620,6 +632,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 }
 
 .upload-summary-grid,
+.upload-session-grid,
 .group-editor-grid,
 .session-settings-grid {
   display: grid;
@@ -640,6 +653,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   border: 1px solid #d8dee6;
   border-radius: 6px;
   background: #fff;
+  max-width: 350px;
 }
 
 .session-import-row--disabled {
@@ -669,9 +683,11 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .upload-summary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 10px;
 }
 .upload-session-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+
 }
 
 .upload-preview-layout {
@@ -683,11 +699,12 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 .upload-preview-layout__table {
   flex: 1 1 auto;
   min-width: 0;
+  gap: 31px;
 }
 
 .upload-preview-layout__qc {
   display: flex;
-  flex: 0 0 320px;
+  flex: 0 0 350px;
   flex-direction: column;
   gap: 10px;
 }
@@ -787,17 +804,21 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 .metadata-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 40px;
+}
+.metadata-section-columns{
+  display: flex;
+  flex-direction: column;
+  gap:10px;
 }
 
 .metadata-legend {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #d8dee6;
-  border-radius: 6px;
   background: #fff;
+  width: fit-content;
+  margin-left: auto;
 }
 
 .metadata-legend__item {
