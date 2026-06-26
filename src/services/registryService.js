@@ -130,6 +130,21 @@ export async function login(username, password) {
   return parseJsonResponse(response)
 }
 
+export async function createUser(userName, password) {
+  const response = await fetch(`${API_BASE}/create-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_name: userName,
+      password,
+    }),
+  })
+
+  return parseJsonOrTextResponse(response)
+}
+
 export async function fetchUserFiles(token) {
   const response = await fetch(`${API_BASE}/files`, {
     headers: createHeaders(token, {

@@ -1,46 +1,838 @@
 <template>
   <div class="page-column">
-    <section class="panel panel--spaced">
-      <div v-if="!store.auth.token" class="login-layout">
-        <div class="login-form">
-          <strong>Login</strong>
-          <div class="field-grid">
-            <label class="field-grid__label">Username</label>
-            <input v-model="store.auth.username" type="text" @keyup.enter="handleLogin" />
-            <label class="field-grid__label">Password</label>
-            <input v-model="store.auth.password" type="password" @keyup.enter="handleLogin" />
+    <section v-if="store.auth.token" class="panel panel--spaced">
+      <div class="row-between">
+          <div>
+            Logged in as <strong>{{ store.auth.userInfo?.user?.username }}</strong>
           </div>
-          <button class="btn btn-primary" :disabled="store.loaders.login" @click="handleLogin">
-            <BSpinner v-if="store.loaders.login" small />
-            <span v-else>Login</span>
-          </button>
-          <div class="message-text">{{ store.auth.message }}</div>
+          <button class="btn btn-outline-secondary btn-sm" @click="handleLogout">Logout</button>
+        </div>
+    </section>
+    <section class="panel panel--spaced">
+      <div v-if="!store.auth.token" class="row-between login-layout">
+        <div class="login-copy">
+          <strong>Account Access</strong>
+          <p>
+            Log in to upload, standardize, and analyze your own data. Then contribute to the CalR community repository.
+          </p>
         </div>
 
-        <div class="login-copy">
-          <strong>CalR Accounts</strong>
-          <p>
-            Login or create an account to upload, standardize and analyze your own data, and optionally
-            contribute it to the public CalR community repository.
-          </p>
+        <div class="login-card">
+          <div class="card-tabs">
+            <button class="card-tab" :class="{ active: store.auth.mode === 'login' }" @click="setAuthMode('login')">
+              Login
+            </button>
+            <button class="card-tab" :class="{ active: store.auth.mode === 'create' }" @click="setAuthMode('create')">
+              Create Account
+            </button>
+          </div>
+          <div class="login-body">
+            <form v-if="store.auth.mode === 'login'" class="login-form" key="login-form" @submit.prevent="handleLogin">
+              <div class="field-grid">
+                <label class="field-grid__label">Email</label>
+              <input
+                v-model="store.auth.username"
+                name="login_email"
+                type="text"
+                autocomplete="username"
+                placeholder="Username or email"
+              />
+                <label class="field-grid__label">Password</label>
+                <input
+                  v-model="store.auth.password"
+                  name="login_password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Password"
+                />
+              </div>
+              <button
+                class="btn btn-primary"
+                :disabled="store.loaders.login || store.loaders.createAccount"
+                type="submit"
+              >
+                <BSpinner v-if="store.loaders.login" small />
+                <span v-else>Login</span>
+              </button>
+            </form>
+  
+            <form v-else key="create-form" autocomplete="off" class="login-form" @submit.prevent="handleCreateAccount">
+              <div class="field-grid">
+                <label class="field-grid__label">Email</label>
+                <input
+                  v-model="store.auth.username"
+                  name="create_email"
+                  type="email"
+                  autocomplete="off"
+                />
+                <label class="field-grid__label">Password</label>
+                <input
+                  v-model="store.auth.password"
+                  name="create_password"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </div>
+              <button
+                class="btn btn-primary"
+                :disabled="store.loaders.login || store.loaders.createAccount"
+                type="submit"
+              >
+                <BSpinner v-if="store.loaders.createAccount" small />
+                <span v-else>Create Account</span>
+              </button>
+            </form>
+  
+            <div v-if="store.auth.message" class="message-text">{{ store.auth.message }}</div>
+          </div>
         </div>
       </div>
 
       <template v-else>
-        <div class="row-between">
+        <div class="page-column" v-if="store.auth.token && store.account.userCreatingNew">
           <div>
-            Logged in as <strong>{{ store.auth.userInfo?.user?.username }}</strong>
+            <div class="row-between">
+              <div>
+                <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
+              </div>
+              <div class="button-row" style="align-items: center;">
+                <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
+                <button
+                  class="btn btn-primary"
+                  :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
+                  @click="saveExperiment"
+                >
+                  <BSpinner v-if="store.loaders.uploadExperiment" small />
+                  <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
+                </button>
+                <BButton
+                  v-if="latestCreatedExperiment && !isEditingExperiment && isExperimentReadyForAnalysis(latestCreatedExperiment.statusInfo)"
+                  variant="success"
+                  @click="openExperiment(latestCreatedExperiment)"
+                >
+                  Open in Analysis
+                </BButton>
+                <BButton v-if="store.account.userCreatingNew" variant="outline-secondary" @click="closeBuilderTab">
+                  Close
+                </BButton>
+              </div>
+            </div>
+            <!--
+            <div class="muted-copy">
+              {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
+            </div>
+            -->
+            <div class="muted-copy">
+              Status: <strong>{{ currentDraftStatus.label }}</strong>
+            </div>
           </div>
-          <div class="button-row">
-            <BButton v-if="!store.account.userCreatingNew" variant="info" @click="startCreateExperiment">
-              Create New Experiment
-            </BButton>
+          <div class="session-builder">
+            <div class="builder-core-fields">
+              <label class="control-stack builder-core-fields__name">
+                <span class="bold">Experiment name</span>
+                <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
+              </label>
+
+              <label class="control-stack builder-core-fields__description">
+                <span class="bold">Description</span>
+                <textarea
+                  v-model="experimentDraft.description"
+                  rows="1"
+                  placeholder="Short experiment description"
+                ></textarea>
+              </label>
+            </div>
+            <div class="card-tabs session-builder-tabs">
+              <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
+                1. Upload Data
+              </button>
+              <button class="card-tab" :class="{ active: activeBuilderStep === 'configure' }" @click="goToBuilderStep('configure')">
+                2. Configure Session
+              </button>
+              <button class="card-tab" :class="{ active: activeBuilderStep === 'review' }" @click="goToBuilderStep('review')">
+                3. Add Metadata
+              </button>
+            </div>
+
+            <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
+              <div style="display:flex; flex-direction: column;">
+                <div class="muted-copy">
+                  Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
+                </div>
+                <div class="session-uploads">
+                  <div class="session-upload-row">
+                    <div class="session-uploads-convert">
+                      <div class="session-uploads-intruments">
+                        <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='sable'}">SABLE</div>
+                        <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='oxymax'}">CLAMS</div>
+                        <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='tse'}">TSE</div>
+                      </div>
+                      <div class="session-uploads-arrow">➧</div>
+                      <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
+                    </div>
+                    <div v-if="store.upload.detectedFileFormat && !hasConvertedData" class="message-text">
+                      <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
+                    </div>
+                  </div>
+                  <!-- session data upload dropzone -->
+                  <div
+                    v-if="showEditingCalrDownload"
+                    class="session-import-download"
+                  >
+                  <BButton variant="outline-secondary" @click="beginCalrReupload">
+                      Re-upload
+                    </BButton>
+                    <BButton variant="outline-secondary" @click="downloadCurrentCalrFile">
+                      Download CalR
+                    </BButton>
+                  </div>
+  
+  
+                  <div v-else class="session-import-row col-center">
+                    
+                    <div
+                      class="dropzone"
+                      :class="{ 
+                        dragover: store.upload.dragover, 
+                        'detected': store.upload.detectedFileFormat.trim() && store.upload.detectedFileFormat!=='calr', 
+                        'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON 
+                      }"
+                      @click="openFileDialog"
+                      @dragover.prevent="store.upload.dragover = true"
+                      @dragleave="store.upload.dragover = false"
+                      @drop.prevent="handleDrop"
+                    >
+                      <div v-if="!store.upload.files.length">
+                        Drag and drop CSV files here<br/>or click to select.
+                      </div>
+          
+                      <div v-else class="dropzone-files">
+                        <strong>{{ store.upload.files.length }} file(s) selected</strong>
+                        <div v-for="file in store.upload.files" :key="file.name">{{ file.name }}</div>
+                      </div>
+                    </div>
+          
+                    <input
+                      ref="fileInput"
+                      type="file"
+                      multiple
+                      hidden
+                      @change="handleFileSelect"
+                    />
+          
+                    <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
+                      <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
+                        Clear
+                      </button>
+                      <button
+                        v-if="!store.upload.isCalrFormat"
+                        class="btn btn-sm"
+                        :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
+                        :disabled="store.loaders.convertFile || store.upload.convertedJSON"
+                        @click="convertSelectedFiles"
+                      >
+                        <BSpinner v-if="store.loaders.convertFile" small />
+                        <span v-else-if="store.upload.convertedJSON">Converted</span>
+                        <span v-else>Convert</span>
+                      </button>
+                    </div>
+                    
+                    <!--
+                    <div v-if="store.upload.textResponse" class="message-text">
+                      {{ store.upload.textResponse }}
+                    </div>
+                    -->
+      
+                  </div>
+                </div>
+              </div>
+  
+            <!--
+            <div v-if="canContinueToConfigure" class="row-end">
+              <BButton variant="primary" @click="goToBuilderStep('configure')">
+                Continue to Configure
+              </BButton>
+            </div>
+            -->
+            <div v-if="hasConvertedData" class="upload-preview-layout">
+              <div class="page-column upload-preview-layout__table">
+                <div class="row-between">
+                  <strong>CalR Data Preview</strong>
+                </div>
+                <div class="table-scroll-shell">
+                  <BTable
+                    class="preview-table"
+                    :items="calrPreviewRows"
+                    :fields="calrPreviewFields"
+                    :tbody-tr-class="getCalrPreviewRowClass"
+                    responsive
+                    small
+                    striped
+                    hover
+                  />
+                </div>
+                <div class="row-between">
+                  <div class="muted-copy">
+                    Showing {{ calrPreviewRangeStart }}-{{ calrPreviewRangeEnd }} of {{ calrPreviewSourceRows.length }} row(s)
+                  </div>
+                  <div v-if="calrPreviewPageCount > 1" class="preview-pagination">
+                    <BButton
+                      size="sm"
+                      variant="outline-secondary"
+                      :disabled="calrPreviewPage <= 1"
+                      @click="goToCalrPreviewPage(calrPreviewPage - 1)"
+                    >
+                      Previous
+                    </BButton>
+                    <span class="muted-copy">Page {{ calrPreviewPage }} of {{ calrPreviewPageCount }}</span>
+                    <BButton
+                      size="sm"
+                      variant="outline-secondary"
+                      :disabled="calrPreviewPage >= calrPreviewPageCount"
+                      @click="goToCalrPreviewPage(calrPreviewPage + 1)"
+                    >
+                      Next
+                    </BButton>
+                  </div>
+                </div>
+              </div>
+              <div class="upload-preview-layout__qc">
+                <div class="upload-summary-grid" style="flex:1">
+                  <div>
+                    <strong>Subjects</strong>
+                    <div>{{ sessionEditor.subjects.length }}</div>
+                  </div>
+                  <div>
+                    <strong>Total Hours</strong>
+                    <div>{{ totalCalrHours }}</div>
+                  </div>
+                </div>
+                <div
+                  class="upload-qc-check"
+                  :class="{ 'upload-qc-check--pass': energyExpenditureQc.passed, 'upload-qc-check--fail': !energyExpenditureQc.passed }"
+                >
+                  <strong>Energy Expenditure QC</strong>
+                  <div>
+                    {{ energyExpenditureQc.passed
+                      ? `Passed: all RER values are > 0.6 and < 1.5.`
+                      : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
+                  </div>
+                  <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
+                    <button
+                      v-if="!isQcActive('energyExpenditure')"
+                      class="upload-qc-nav__show"
+                      @click="showQcInTable('energyExpenditure')"
+                    >
+                      Show in table
+                    </button>
+                    <template v-else>
+                      <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', -1)">&lt;</button>
+                      <button class="upload-qc-nav__current" @click="focusQcFailure('energyExpenditure')">
+                        {{ currentQcInvalidLabel('energyExpenditure') }}
+                      </button>
+                      <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', 1)">&gt;</button>
+                      <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                    </template>
+                  </div>
+                </div>
+
+                <div
+                  class="upload-qc-check"
+                  :class="{ 'upload-qc-check--pass': foodIntakeQc.passed, 'upload-qc-check--fail': !foodIntakeQc.passed }"
+                >
+                  <strong>Food Intake QC</strong>
+                  <div>
+                    {{ foodIntakeQc.passed
+                      ? `Passed: all feed values are non-negative.`
+                      : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
+                  </div>
+                  <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
+                    <button
+                      v-if="!isQcActive('foodIntake')"
+                      class="upload-qc-nav__show"
+                      @click="showQcInTable('foodIntake')"
+                    >
+                      Show in table
+                    </button>
+                    <template v-else>
+                      <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', -1)">&lt;</button>
+                      <button class="upload-qc-nav__current" @click="focusQcFailure('foodIntake')">
+                        {{ currentQcInvalidLabel('foodIntake') }}
+                      </button>
+                      <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', 1)">&gt;</button>
+                      <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </section>
+
+            <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
+              
+              <div style="display:flex; flex-direction: column;">
+                <div class="row-between">
+                  <div class="muted-copy">
+                    Designate groups, diets, subjects, and experiment ranges.
+                  </div>
+                  <!--
+                  <div v-if="!canContinueToConfigure" class="alert alert-warning" role="alert"">
+                    Upload or convert a CalR file to configure a session.
+                  </div>
+                  -->
+                </div>
+                <div class="session-uploads">
+                  <div>
+                    <div class="session-uploads-convert">
+                        <div class="session-uploads-session">
+                        <div>Session</div>
+                        <div class="session-uploads-intruments" style="padding:0">
+                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
+                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects & Weights</div>
+                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Time Ranges</div>
+                        </div>
+                      </div>
+                    </div>
+                    <!--
+                    <div class="session-diagram">
+                      <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
+                    </div>
+                    -->
+                  </div>
+    
+                  <!-- session metadata upload dropzone -->
+                    <div
+                      v-if="showEditingSessionDownload"
+                      class="session-import-download"
+                    >
+                      <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
+                        Download Session
+                      </BButton>
+                  </div>
+                  <div v-else class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
+                    <div class="session-import-drop">
+                      <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
+                      <div
+                        class="dropzone"
+                        :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
+                        @click="openSessionFileDialog"
+                        @dragover.prevent="sessionDragover = true"
+                        @dragleave="sessionDragover = false"
+                        @drop.prevent="handleSessionFileDrop"
+                      >
+                        <div v-if="!sessionImportName">
+                          Drag and drop a session CSV here<br/>or click to select.
+                        </div>
+                        <div v-else class="dropzone-files">
+                          <strong>1 file(s) selected</strong>
+                          <div>{{ sessionImportName }}</div>
+                        </div>  
+                      </div>
+                      <div v-if="!showEditingSessionDownload && !sessionImportName">
+                        Otherwise you can configure your session below.
+                      </div>
+                      <div v-if="sessionImportName" class="row-end">
+                        <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
+                          Clear
+                        </button>
+                      </div>
+                      <input
+                        ref="sessionFileInput"
+                        type="file"
+                        accept=".csv,text/csv"
+                        hidden
+                        @change="handleSessionFileSelect"
+                      />
+                    </div>
+                    
+                    <!--
+                    <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
+                      <div>
+                        <strong>Groups</strong>
+                        <div>{{ sessionEditor.groups.length }}</div>
+                      </div>
+                      <div>
+                        <strong>Light Start</strong>
+                        <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
+                      </div>
+                      <div>
+                        <strong>Dark Start</strong>
+                        <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
+                      </div>
+                      <div>
+                        <strong>Session Hours</strong>
+                        <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
+                      </div>
+                    </div>
+                    -->
+                    <!--
+                    <div v-if="sessionImportMessage" class="message-text">
+                      {{ sessionImportMessage }}
+                    </div>
+                    -->
+                  </div>
+              </div>
+            </div>
+
+              <div>
+                <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
+  
+              <div class="session-subsection">
+                <div class="row-between session-subsection__header">
+                  <div>
+                    <strong>a. Set Groups and Diets</strong>
+                    <div class="muted-copy">Designate the groups and diets in this session. You can set up to 4 groups, and add custom diets.</div>
+                  </div>
+                  <div class="button-row">
+                    <button class="btn btn-outline-secondary btn-sm" @click="showCustomDietEditor = !showCustomDietEditor">
+                      {{ showCustomDietEditor ? 'Close Diet Editor' : 'Add Custom Diet' }}
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      :disabled="sessionEditor.groups.length >= maxGroups"
+                      @click="addGroup"
+                    >
+                      Add Group
+                    </button>
+                  </div>
+                </div>
+  
+                <div v-if="showCustomDietEditor">
+                  <div class="custom-diet-editor">
+                    <label class="control-stack">
+                      Diet name
+                      <input v-model="customDietDraft.name" type="text" placeholder="Enter diet name" />
+                    </label>
+                    <label class="control-stack">
+                      Kcal/g
+                      <input v-model="customDietDraft.kcal" type="number" step="0.01" placeholder="3.56" />
+                    </label>
+                    <div class="button-row custom-diet-editor__actions">
+                      <button class="btn btn-primary btn-sm" :disabled="!canSaveCustomDiet" @click="saveCustomDiet">
+                        Save Diet
+                      </button>
+                    </div>
+                  </div>
+                  <div class="muted-copy">Custom Diets will appear in the Diet dropdown in the Group cards.</div>
+                </div>
+  
+                <div class="group-editor-grid">
+                  <div v-for="(group, index) in sessionEditor.groups" :key="index" class="group-editor-card">
+                    <div class="row-between group-editor-card__header">
+                      <strong>Group {{ index + 1 }}</strong>
+                      <button
+                        v-if="index >= baseGroupCount"
+                        class="btn btn-link btn-sm text-danger"
+                        @click="removeGroup(index)"
+                      >
+                        Remove
+                      </button>
+                    </div>
+  
+                    <div class="row-between">
+                      <label class="control-stack" style="width:80%">
+                      Name
+                      <input v-model="group.name" type="text" :placeholder="`Group ${index + 1}`" />
+                    </label>
+  
+                      <label class="control-stack"  style="width:20%">
+                      Color
+                      <input v-model="group.color" type="color"/>
+                    </label>
+                    </div>
+                    
+  
+                    <div class="row-between">
+                      <label class="control-stack" style="width:80%">
+                        Diet
+                        <select v-model="group.diet_key" @change="applyGroupDietSelection(group)">
+                          <option value="">Select Diet</option>
+                          <option v-for="option in dietOptions" :key="option.id" :value="option.id">
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </label>
+    
+                      <label class="control-stack"  style="width:20%">
+                        Kcal/g
+                        <input :value="formatDietKcal(group.diet_kcal)" type="text" readonly />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+  
+              <div class="session-subsection">
+                <div class="row-between session-subsection__header">
+                  <div>
+                    <strong>b. Designate Subjects</strong>
+                    <div class="muted-copy">Assign each subject to a group. Weights, mass change, and exclusions are optional.</div>
+                  </div>
+                  <div class="button-row">
+                  </div>
+                </div>
+  
+                <div class="table-wrap table-card">
+                  <table class="data-table session-subject-table">
+                    <colgroup>
+                        <col style="width: 100px" />
+                        <col :span="sessionEditor.groups.length" style="width: 150px" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th class="txt-center" :colspan="sessionEditor.groups.length">
+                          Groups
+                          <div class="bold sub-copy">Required</div>
+                          <div class="sub-copy">Assign each subject to a group</div>
+                        </th>
+                      </tr>
+                      <tr>
+                        <th class="txt-center">Subject ID</th>
+                        <th class="txt-center" v-for="(group, index) in sessionEditor.groups" :key="`${group.name}-${index}`" :style="`border-color:${group.color}`">
+                          {{ normalizedGroupName(group, index) }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template v-if="sessionEditor.subjects.length">
+                        <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
+                          <td class="txt-center">{{ subject.subject }}</td>
+                          <td v-for="(_, groupIndex) in sessionEditor.groups" :key="`${subject.subject}-${groupIndex}`" class="session-radio-cell txt-center">
+                            <input v-model.number="subject.groupIndex" type="radio" :name="`subject-${subject.subject}`" :value="groupIndex" :style="`accent-color:${sessionEditor.groups[groupIndex].color}`"/>
+                          </td>
+                        </tr>
+                      </template>
+                      <template v-else>
+                        <tr>
+                          <td class="txt-center">1</td>
+                          <td><input type="radio" :name="`subject-1`" :value="0" :style="`accent-color:${sessionEditor.groups[0].color}`"/></td>
+                          <td><input type="radio" :name="`subject-1`" :value="1" :style="`accent-color:${sessionEditor.groups[1].color}`"/></td>
+                        </tr>
+                        <tr>
+                          <td class="txt-center">2</td>
+                          <td><input type="radio" :name="`subject-2`" :value="0" :style="`accent-color:${sessionEditor.groups[0].color}`"/></td>
+                          <td><input type="radio" :name="`subject-2`" :value="1" :style="`accent-color:${sessionEditor.groups[1].color}`"/></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <div class="relative">
+                    <table class="data-table session-subject-table">
+                      <colgroup>
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th class="txt-center relative session-subject-header" :colspan="3">
+                            <div class="session-subject-header-title-with-button">
+                              Weights
+                              <button
+                                class="btn btn-outline-secondary btn-sm session-table-option-btn"
+                                data-tooltip="Upload weights data from template"
+                                @click="openTemplateUploadModal('weights')"
+                              >
+                                <i class="bi bi-upload"></i>
+                              </button>
+                            </div>
+                            <div class="bold sub-copy">Optional</div> 
+                            <div class="sub-copy">Weights from calorimeter will be used otherwise.</div>
+                          </th>
+                        </tr>
+                        <tr>
+                          <th>Total Mass (g)</th>
+                          <th>Lean Mass (g)</th>
+                          <th>Fat Mass (g)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
+                          <td><input v-model="subject.total_mass" type="number" step="0.1" /></td>
+                          <td><input v-model="subject.lean_mass" type="number" step="0.1" /></td>
+                          <td><input v-model="subject.fat_mass" type="number" step="0.1" /></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="relative">
+                    <table class="data-table session-subject-table">
+                      <colgroup>
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th class="txt-center relative session-subject-header" :colspan="1">
+                            <div class="session-subject-header-title-with-button">
+                              Mass Change
+                              <button
+                                class="btn btn-outline-secondary btn-sm session-table-option-btn"
+                                data-tooltip="Upload mass change data from template"
+                                @click="openTemplateUploadModal('massChange')"
+                              >
+                                <i class="bi bi-upload"></i>
+                              </button>
+                            </div>
+                            <div class="bold sub-copy">Optional</div>
+                            <div class="sub-copy">Subject mass change.</div>
+                          </th>
+                        </tr>
+                        <tr>
+                          <th>Mass Change (g)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
+                          <td><input v-model="subject.mass_change" type="number" step="0.1" /></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="relative">
+                    <table class="data-table session-subject-table">
+                      <colgroup>
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th class="txt-center relative session-subject-header" :colspan="2">
+                            Exclusions
+                            <div class="bold sub-copy">Optional</div>
+                            <div class="sub-copy">Exclude subject ID's starting at hour.</div>
+                          </th>
+                        </tr>
+                        <tr>
+                          <th>Exclusion Hour</th>
+                          <th>Exclusion Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
+                          <td><input v-model="subject.exc_hour" type="number" step="0.1" /></td>
+                          <td><input v-model="subject.exc_reason" type="text" /></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+  
+              <div class="session-subsection">
+                <div class="session-subsection__header">
+                  <strong>c. Set Ranges and Filters</strong>
+                </div>
+  
+                <div class="session-settings">
+                  <div class="session-settings-grid">
+                    <label class="control-stack">
+                      Light cycle start hour
+                      <input v-model="sessionEditor.light_cycle_start" type="number" min="0" max="23" step="1" />
+                    </label>
+  
+                    <label class="control-stack">
+                      Dark cycle start hour
+                      <input v-model="sessionEditor.dark_cycle_start" type="number" min="0" max="23" step="1" />
+                    </label>
+                  </div>
+                  <div class="session-settings-grid">
+                    <label class="control-stack">
+                      Session start hour
+                      <input v-model="sessionEditor.hour_range[0]" type="number" step="1" min="0" />
+                    </label>
+    
+                    <label class="control-stack">
+                      Session end hour
+                      <input v-model="sessionEditor.hour_range[1]" type="number" step="1" min="0" />
+                    </label>
+                  </div>
+                  <div class="session-settings-grid">
+                    <label class="control-stack">
+                      Food cutoff (kcal/hr)
+                      <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" @input="handleFoodCutoffInput" />
+                      <div class="muted-copy">
+                        Minimum: {{ minimumFoodCutoffKcalPerHour }} kcal/hr
+                        (100 mg/min using {{ foodCutoffReferenceKcalPerG }} kcal/g).
+                      </div>
+                      <div v-if="!isFoodCutoffValid" class="session-validation-message">
+                        Food cutoff must be at least {{ minimumFoodCutoffKcalPerHour }} kcal/hr to meet the 100 mg/min minimum.
+                      </div>
+                    </label>
+                  </div>
+                  <!--
+                  <div class="session-settings-grid">
+                    <label class="checkbox-row session-settings-grid__checkbox">
+                      <input v-model="sessionEditor.remove_outliers" type="checkbox" />
+                      Remove outliers
+                    </label>
+                  </div>
+                  -->
+                </div>
+              </div>
+  
+              <div class="session-step__footer">
+                <div v-if="!canContinueToReview" class="message-text row-end">
+                  Session setup is still incomplete for analysis, but you can still continue and save this experiment as a draft.
+                </div>
+                <div class="row-end">
+                  <BButton variant="primary" @click="goToBuilderStep('review')">
+                    Continue to Metadata
+                  </BButton>
+                </div>
+              </div>
+                </fieldset>
+              </div>
+            </section>
+
+            <section v-else class="session-step">
+              <div>
+                <fieldset class="builder-fieldset page-column">
+              <div class="metadata-section">
+                <div class="row-between">
+                  <div class="muted-copy">
+                  Update experiment metadata in order to submit to the public repository.
+                  </div>
+                  <div class="metadata-legend">
+                    <span class="metadata-legend__item">
+                      <span class="metadata-required-icon" aria-hidden="true"></span>
+                      Required for public
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-columns">
+                  <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
+                    <strong>{{ section.title }}</strong>
+                    <label v-for="field in section.fields" :key="field.key" class="control-stack">
+                      <span class="metadata-field-label">
+                        {{ field.label }}
+                        <span
+                          v-if="field.requiredForPublic"
+                          class="metadata-required-icon"
+                          aria-label="Required for public"
+                          title="Required for public"
+                        ></span>
+                      </span>
+                      <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
+                    </label>
+                  </section>
+                </div>
+                <!--
+                <label class="checkbox-row session-settings-grid__checkbox">
+                  <input v-model="experimentDraft.public" type="checkbox" :disabled="isEditingExperiment" />
+                  Make public
+                </label>
+                -->
+              </div>
+                </fieldset>
+              </div>
+            </section>
           </div>
+
         </div>
 
-        <div class="page-column" style="padding: 0 10px">
-          <div>
+        <div class="page-column" v-else>
+          <div class="row-between">
             <h5 class="bold">Your Experiments ({{ experimentCount }})</h5>
+            <div class="button-row">
+              <BButton v-if="!store.account.userCreatingNew" variant="info" @click="startCreateExperiment">
+                + New
+              </BButton>
+            </div>
           </div>
           <div v-if="store.loaders.getUserFiles" class="empty-state">
             <BSpinner small />
@@ -163,736 +955,12 @@
 
           <div v-else class="empty-state">You have no experiments yet.</div>
         </div>
-
+        <!--
         <div v-if="store.auth.token && store.account.userCreatingNew" class="builder-overlay">
           <div class="builder-overlay__backdrop"></div>
-          <div class="builder-modal">
-            <div class="builder-modal__header row-between">
-              <div>
-                <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
-                <div class="muted-copy">
-                  {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
-                </div>
-                <div class="muted-copy">
-                  Status: <strong>{{ currentDraftStatus.label }}</strong>
-                </div>
-              </div>
-              <div class="button-row" style="align-items: center;">
-                <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
-                <button
-                  class="btn btn-primary"
-                  :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
-                  @click="saveExperiment"
-                >
-                  <BSpinner v-if="store.loaders.uploadExperiment" small />
-                  <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
-                </button>
-                <BButton
-                  v-if="latestCreatedExperiment && !isEditingExperiment && isExperimentReadyForAnalysis(latestCreatedExperiment.statusInfo)"
-                  variant="success"
-                  @click="openExperiment(latestCreatedExperiment)"
-                >
-                  Open in Analysis
-                </BButton>
-                <BButton v-if="store.account.userCreatingNew" variant="outline-secondary" @click="closeBuilderTab">
-                  Close
-                </BButton>
-              </div>
-            </div>
-            
-            <div class="session-builder builder-modal__body">
-              <div class="builder-core-fields">
-                <label class="control-stack builder-core-fields__name">
-                  Experiment name
-                  <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
-                </label>
-  
-                <label class="control-stack builder-core-fields__description">
-                  Description
-                  <textarea
-                    v-model="experimentDraft.description"
-                    rows="1"
-                    placeholder="Short experiment description"
-                  ></textarea>
-                </label>
-              </div>
-              <div class="card-tabs session-builder-tabs">
-                <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
-                  1. Upload Data
-                </button>
-                <button class="card-tab" :class="{ active: activeBuilderStep === 'configure' }" @click="goToBuilderStep('configure')">
-                  2. Configure Session
-                </button>
-                <button class="card-tab" :class="{ active: activeBuilderStep === 'review' }" @click="goToBuilderStep('review')">
-                  3. Add Metadata
-                </button>
-              </div>
-
-              <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
-                <div style="display:flex; flex-direction: column;">
-                  <div class="muted-copy">
-                    Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
-                  </div>
-                  <div class="session-uploads">
-                    <div class="session-upload-row">
-                      <div class="session-uploads-convert">
-                        <div class="session-uploads-intruments">
-                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='sable'}">SABLE</div>
-                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='oxymax'}">CLAMS</div>
-                          <div class="session-uploads-intrument" :class="{'detected': highlightedUploadSystemFormat==='tse'}">TSE</div>
-                        </div>
-                        <div class="session-uploads-arrow">➧</div>
-                        <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
-                      </div>
-                      <div v-if="store.upload.detectedFileFormat && !hasConvertedData" class="message-text">
-                        <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
-                      </div>
-                    </div>
-                    <!-- session data upload dropzone -->
-                    <div
-                      v-if="showEditingCalrDownload"
-                      class="session-import-download"
-                    >
-                    <BButton variant="outline-secondary" @click="beginCalrReupload">
-                        Re-upload
-                      </BButton>
-                      <BButton variant="outline-secondary" @click="downloadCurrentCalrFile">
-                        Download CalR
-                      </BButton>
-                    </div>
-    
-    
-                    <div v-else class="session-import-row col-center">
-                      
-                      <div
-                        class="dropzone"
-                        :class="{ 
-                          dragover: store.upload.dragover, 
-                          'detected': store.upload.detectedFileFormat.trim() && store.upload.detectedFileFormat!=='calr', 
-                          'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON 
-                        }"
-                        @click="openFileDialog"
-                        @dragover.prevent="store.upload.dragover = true"
-                        @dragleave="store.upload.dragover = false"
-                        @drop.prevent="handleDrop"
-                      >
-                        <div v-if="!store.upload.files.length">
-                          Drag and drop CSV files here<br/>or click to select.
-                        </div>
-            
-                        <div v-else class="dropzone-files">
-                          <strong>{{ store.upload.files.length }} file(s) selected</strong>
-                          <div v-for="file in store.upload.files" :key="file.name">{{ file.name }}</div>
-                        </div>
-                      </div>
-            
-                      <input
-                        ref="fileInput"
-                        type="file"
-                        multiple
-                        hidden
-                        @change="handleFileSelect"
-                      />
-            
-                      <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
-                        <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
-                          Clear
-                        </button>
-                        <button
-                          v-if="!store.upload.isCalrFormat"
-                          class="btn btn-sm"
-                          :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
-                          :disabled="store.loaders.convertFile || store.upload.convertedJSON"
-                          @click="convertSelectedFiles"
-                        >
-                          <BSpinner v-if="store.loaders.convertFile" small />
-                          <span v-else-if="store.upload.convertedJSON">Converted</span>
-                          <span v-else>Convert</span>
-                        </button>
-                      </div>
-                      
-                      <!--
-                      <div v-if="store.upload.textResponse" class="message-text">
-                        {{ store.upload.textResponse }}
-                      </div>
-                      -->
-        
-                    </div>
-                  </div>
-                </div>
-    
-              <!--
-              <div v-if="canContinueToConfigure" class="row-end">
-                <BButton variant="primary" @click="goToBuilderStep('configure')">
-                  Continue to Configure
-                </BButton>
-              </div>
-              -->
-              <div v-if="hasConvertedData" class="upload-preview-layout">
-                <div class="page-column upload-preview-layout__table">
-                  <div class="row-between">
-                    <strong>CalR Data Preview</strong>
-                  </div>
-                  <div class="table-scroll-shell">
-                    <BTable
-                      class="preview-table"
-                      :items="calrPreviewRows"
-                      :fields="calrPreviewFields"
-                      :tbody-tr-class="getCalrPreviewRowClass"
-                      responsive
-                      small
-                      striped
-                      hover
-                    />
-                  </div>
-                  <div class="row-between">
-                    <div class="muted-copy">
-                      Showing {{ calrPreviewRangeStart }}-{{ calrPreviewRangeEnd }} of {{ calrPreviewSourceRows.length }} row(s)
-                    </div>
-                    <div v-if="calrPreviewPageCount > 1" class="preview-pagination">
-                      <BButton
-                        size="sm"
-                        variant="outline-secondary"
-                        :disabled="calrPreviewPage <= 1"
-                        @click="goToCalrPreviewPage(calrPreviewPage - 1)"
-                      >
-                        Previous
-                      </BButton>
-                      <span class="muted-copy">Page {{ calrPreviewPage }} of {{ calrPreviewPageCount }}</span>
-                      <BButton
-                        size="sm"
-                        variant="outline-secondary"
-                        :disabled="calrPreviewPage >= calrPreviewPageCount"
-                        @click="goToCalrPreviewPage(calrPreviewPage + 1)"
-                      >
-                        Next
-                      </BButton>
-                    </div>
-                  </div>
-                </div>
-                <div class="upload-preview-layout__qc">
-                  <div class="upload-summary-grid" style="flex:1">
-                    <div>
-                      <strong>Subjects</strong>
-                      <div>{{ sessionEditor.subjects.length }}</div>
-                    </div>
-                    <div>
-                      <strong>Total Hours</strong>
-                      <div>{{ totalCalrHours }}</div>
-                    </div>
-                  </div>
-                  <div
-                    class="upload-qc-check"
-                    :class="{ 'upload-qc-check--pass': energyExpenditureQc.passed, 'upload-qc-check--fail': !energyExpenditureQc.passed }"
-                  >
-                    <strong>Energy Expenditure QC</strong>
-                    <div>
-                      {{ energyExpenditureQc.passed
-                        ? `Passed: all RER values are > 0.6 and < 1.5.`
-                        : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
-                    </div>
-                    <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
-                      <button
-                        v-if="!isQcActive('energyExpenditure')"
-                        class="upload-qc-nav__show"
-                        @click="showQcInTable('energyExpenditure')"
-                      >
-                        Show in table
-                      </button>
-                      <template v-else>
-                        <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', -1)">&lt;</button>
-                        <button class="upload-qc-nav__current" @click="focusQcFailure('energyExpenditure')">
-                          {{ currentQcInvalidLabel('energyExpenditure') }}
-                        </button>
-                        <button class="upload-qc-nav__button" @click="stepQcFailure('energyExpenditure', 1)">&gt;</button>
-                        <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
-                      </template>
-                    </div>
-                  </div>
-
-                  <div
-                    class="upload-qc-check"
-                    :class="{ 'upload-qc-check--pass': foodIntakeQc.passed, 'upload-qc-check--fail': !foodIntakeQc.passed }"
-                  >
-                    <strong>Food Intake QC</strong>
-                    <div>
-                      {{ foodIntakeQc.passed
-                        ? `Passed: all feed values are non-negative.`
-                        : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
-                    </div>
-                    <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
-                      <button
-                        v-if="!isQcActive('foodIntake')"
-                        class="upload-qc-nav__show"
-                        @click="showQcInTable('foodIntake')"
-                      >
-                        Show in table
-                      </button>
-                      <template v-else>
-                        <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', -1)">&lt;</button>
-                        <button class="upload-qc-nav__current" @click="focusQcFailure('foodIntake')">
-                          {{ currentQcInvalidLabel('foodIntake') }}
-                        </button>
-                        <button class="upload-qc-nav__button" @click="stepQcFailure('foodIntake', 1)">&gt;</button>
-                        <button class="upload-qc-nav__dismiss" @click="clearQcTableFocus()">X</button>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              </section>
-
-              <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
-                <div v-if="!canContinueToConfigure" class="alert alert-warning" role="alert"">
-                  Upload or convert a CalR file to configure a session.
-                </div>
-                <div style="display:flex; flex-direction: column;">
-                  <div class="muted-copy">
-                    Designate groups, diets, subjects, and experiment ranges.
-                  </div>
-                  <div class="session-uploads">
-                    <div>
-                      <div class="session-uploads-convert">
-                          <div class="session-uploads-session">
-                          <div>Session</div>
-                          <div class="session-uploads-intruments" style="padding:0">
-                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
-                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects & Weights</div>
-                            <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Time Ranges</div>
-                          </div>
-                        </div>
-                      </div>
-                      <!--
-                      <div class="session-diagram">
-                        <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
-                      </div>
-                      -->
-                    </div>
-      
-                    <!-- session metadata upload dropzone -->
-                     <div
-                        v-if="showEditingSessionDownload"
-                        class="session-import-download"
-                      >
-                        <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
-                          Download Session
-                        </BButton>
-                    </div>
-                    <div v-else class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
-                      <div class="session-import-drop">
-                        <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
-                        <div
-                          class="dropzone"
-                          :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
-                          @click="openSessionFileDialog"
-                          @dragover.prevent="sessionDragover = true"
-                          @dragleave="sessionDragover = false"
-                          @drop.prevent="handleSessionFileDrop"
-                        >
-                          <div v-if="!sessionImportName">
-                            Drag and drop a session CSV here<br/>or click to select.
-                          </div>
-                          <div v-else class="dropzone-files">
-                            <strong>1 file(s) selected</strong>
-                            <div>{{ sessionImportName }}</div>
-                          </div>  
-                        </div>
-                        <div v-if="!showEditingSessionDownload && !sessionImportName">
-                          Otherwise you can configure your session below.
-                        </div>
-                        <div v-if="sessionImportName" class="row-end">
-                          <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
-                            Clear
-                          </button>
-                        </div>
-                        <input
-                          ref="sessionFileInput"
-                          type="file"
-                          accept=".csv,text/csv"
-                          hidden
-                          @change="handleSessionFileSelect"
-                        />
-                      </div>
-                      
-                      <!--
-                      <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
-                        <div>
-                          <strong>Groups</strong>
-                          <div>{{ sessionEditor.groups.length }}</div>
-                        </div>
-                        <div>
-                          <strong>Light Start</strong>
-                          <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
-                        </div>
-                        <div>
-                          <strong>Dark Start</strong>
-                          <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
-                        </div>
-                        <div>
-                          <strong>Session Hours</strong>
-                          <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
-                        </div>
-                      </div>
-                      -->
-                      <!--
-                      <div v-if="sessionImportMessage" class="message-text">
-                        {{ sessionImportMessage }}
-                      </div>
-                      -->
-                    </div>
-                </div>
-              </div>
-
-                <div>
-                  <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
-    
-                <div class="session-subsection">
-                  <div class="row-between session-subsection__header">
-                    <div>
-                      <strong>a. Set Groups and Diets</strong>
-                      <div class="muted-copy">Designate the groups and diets in this session. You can set up to 4 groups, and add custom diets.</div>
-                    </div>
-                    <div class="button-row">
-                      <button class="btn btn-outline-secondary btn-sm" @click="showCustomDietEditor = !showCustomDietEditor">
-                        {{ showCustomDietEditor ? 'Close Diet Editor' : 'Add Custom Diet' }}
-                      </button>
-                      <button
-                        class="btn btn-outline-secondary btn-sm"
-                        :disabled="sessionEditor.groups.length >= maxGroups"
-                        @click="addGroup"
-                      >
-                        Add Group
-                      </button>
-                    </div>
-                  </div>
-    
-                  <div v-if="showCustomDietEditor">
-                    <div class="custom-diet-editor">
-                      <label class="control-stack">
-                        Diet name
-                        <input v-model="customDietDraft.name" type="text" placeholder="Enter diet name" />
-                      </label>
-                      <label class="control-stack">
-                        Kcal/g
-                        <input v-model="customDietDraft.kcal" type="number" step="0.01" placeholder="3.56" />
-                      </label>
-                      <div class="button-row custom-diet-editor__actions">
-                        <button class="btn btn-primary btn-sm" :disabled="!canSaveCustomDiet" @click="saveCustomDiet">
-                          Save Diet
-                        </button>
-                      </div>
-                    </div>
-                    <div class="muted-copy">Custom Diets will appear in the Diet dropdown in the Group cards.</div>
-                  </div>
-    
-                  <div class="group-editor-grid">
-                    <div v-for="(group, index) in sessionEditor.groups" :key="index" class="group-editor-card">
-                      <div class="row-between group-editor-card__header">
-                        <strong>Group {{ index + 1 }}</strong>
-                        <button
-                          v-if="index >= baseGroupCount"
-                          class="btn btn-link btn-sm text-danger"
-                          @click="removeGroup(index)"
-                        >
-                          Remove
-                        </button>
-                      </div>
-    
-                      <div class="row-between">
-                        <label class="control-stack" style="width:80%">
-                        Name
-                        <input v-model="group.name" type="text" :placeholder="`Group ${index + 1}`" />
-                      </label>
-    
-                        <label class="control-stack"  style="width:20%">
-                        Color
-                        <input v-model="group.color" type="color"/>
-                      </label>
-                      </div>
-                      
-    
-                      <div class="row-between">
-                        <label class="control-stack" style="width:80%">
-                          Diet
-                          <select v-model="group.diet_key" @change="applyGroupDietSelection(group)">
-                            <option value="">Select Diet</option>
-                            <option v-for="option in dietOptions" :key="option.id" :value="option.id">
-                              {{ option.label }}
-                            </option>
-                          </select>
-                        </label>
-      
-                        <label class="control-stack"  style="width:20%">
-                          Kcal/g
-                          <input :value="formatDietKcal(group.diet_kcal)" type="text" readonly />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-    
-                <div class="session-subsection">
-                  <div class="row-between session-subsection__header">
-                    <div>
-                      <strong>b. Designate Subjects</strong>
-                      <div class="muted-copy">Assign each subject to a group. Weights, mass change, and exclusions are optional.</div>
-                    </div>
-                    <div class="button-row">
-                    </div>
-                  </div>
-    
-                  <div class="table-wrap table-card">
-                    <table class="data-table session-subject-table">
-                      <colgroup>
-                          <col style="width: 100px" />
-                          <col :span="sessionEditor.groups.length" style="width: 150px" />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th></th>
-                          <th class="txt-center" :colspan="sessionEditor.groups.length">
-                            Groups
-                            <div class="bold sub-copy">Required</div>
-                            <div class="sub-copy">Assign each subject to a group</div>
-                          </th>
-                        </tr>
-                        <tr>
-                          <th class="txt-center">Subject ID</th>
-                          <th class="txt-center" v-for="(group, index) in sessionEditor.groups" :key="`${group.name}-${index}`" :style="`border-color:${group.color}`">
-                            {{ normalizedGroupName(group, index) }}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <template v-if="sessionEditor.subjects.length">
-                          <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
-                            <td class="txt-center">{{ subject.subject }}</td>
-                            <td v-for="(_, groupIndex) in sessionEditor.groups" :key="`${subject.subject}-${groupIndex}`" class="session-radio-cell txt-center">
-                              <input v-model.number="subject.groupIndex" type="radio" :name="`subject-${subject.subject}`" :value="groupIndex" :style="`accent-color:${sessionEditor.groups[groupIndex].color}`"/>
-                            </td>
-                          </tr>
-                        </template>
-                        <template v-else>
-                          <tr>
-                            <td class="txt-center">1</td>
-                            <td><input type="radio" :name="`subject-1`" :value="0" :style="`accent-color:${sessionEditor.groups[0].color}`"/></td>
-                            <td><input type="radio" :name="`subject-1`" :value="1" :style="`accent-color:${sessionEditor.groups[1].color}`"/></td>
-                          </tr>
-                          <tr>
-                            <td class="txt-center">2</td>
-                            <td><input type="radio" :name="`subject-2`" :value="0" :style="`accent-color:${sessionEditor.groups[0].color}`"/></td>
-                            <td><input type="radio" :name="`subject-2`" :value="1" :style="`accent-color:${sessionEditor.groups[1].color}`"/></td>
-                          </tr>
-                        </template>
-                      </tbody>
-                    </table>
-                    <div class="relative">
-                      <table class="data-table session-subject-table">
-                        <colgroup>
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th class="txt-center relative session-subject-header" :colspan="3">
-                              <div class="session-subject-header-title-with-button">
-                                Weights
-                                <button
-                                  class="btn btn-outline-secondary btn-sm session-table-option-btn"
-                                  data-tooltip="Upload weights data from template"
-                                  @click="openTemplateUploadModal('weights')"
-                                >
-                                  <i class="bi bi-upload"></i>
-                                </button>
-                              </div>
-                              <div class="bold sub-copy">Optional</div> 
-                              <div class="sub-copy">Weights from calorimeter will be used otherwise.</div>
-                            </th>
-                          </tr>
-                          <tr>
-                            <th>Total Mass (g)</th>
-                            <th>Lean Mass (g)</th>
-                            <th>Fat Mass (g)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
-                            <td><input v-model="subject.total_mass" type="number" step="0.1" /></td>
-                            <td><input v-model="subject.lean_mass" type="number" step="0.1" /></td>
-                            <td><input v-model="subject.fat_mass" type="number" step="0.1" /></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="relative">
-                      <table class="data-table session-subject-table">
-                        <colgroup>
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th class="txt-center relative session-subject-header" :colspan="1">
-                              <div class="session-subject-header-title-with-button">
-                                Mass Change
-                                <button
-                                  class="btn btn-outline-secondary btn-sm session-table-option-btn"
-                                  data-tooltip="Upload mass change data from template"
-                                  @click="openTemplateUploadModal('massChange')"
-                                >
-                                  <i class="bi bi-upload"></i>
-                                </button>
-                              </div>
-                              <div class="bold sub-copy">Optional</div>
-                              <div class="sub-copy">Subject mass change.</div>
-                            </th>
-                          </tr>
-                          <tr>
-                            <th>Mass Change (g)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
-                            <td><input v-model="subject.mass_change" type="number" step="0.1" /></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="relative">
-                      <table class="data-table session-subject-table">
-                        <colgroup>
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th class="txt-center relative session-subject-header" :colspan="2">
-                              Exclusions
-                              <div class="bold sub-copy">Optional</div>
-                              <div class="sub-copy">Exclude subject ID's starting at hour.</div>
-                            </th>
-                          </tr>
-                          <tr>
-                            <th>Exclusion Hour</th>
-                            <th>Exclusion Reason</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="subject in sessionEditor.subjects" :key="subject.subject">
-                            <td><input v-model="subject.exc_hour" type="number" step="0.1" /></td>
-                            <td><input v-model="subject.exc_reason" type="text" /></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-    
-                <div class="session-subsection">
-                  <div class="session-subsection__header">
-                    <strong>c. Set Ranges and Filters</strong>
-                  </div>
-    
-                  <div class="session-settings">
-                    <div class="session-settings-grid">
-                      <label class="control-stack">
-                        Light cycle start hour
-                        <input v-model="sessionEditor.light_cycle_start" type="number" min="0" max="23" step="1" />
-                      </label>
-    
-                      <label class="control-stack">
-                        Dark cycle start hour
-                        <input v-model="sessionEditor.dark_cycle_start" type="number" min="0" max="23" step="1" />
-                      </label>
-                    </div>
-                    <div class="session-settings-grid">
-                      <label class="control-stack">
-                        Session start hour
-                        <input v-model="sessionEditor.hour_range[0]" type="number" step="1" min="0" />
-                      </label>
-      
-                      <label class="control-stack">
-                        Session end hour
-                        <input v-model="sessionEditor.hour_range[1]" type="number" step="1" min="0" />
-                      </label>
-                    </div>
-                    <div class="session-settings-grid">
-                      <label class="control-stack">
-                        Food cutoff (kcal/hr)
-                        <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" @input="handleFoodCutoffInput" />
-                        <div class="muted-copy">
-                          Minimum: {{ minimumFoodCutoffKcalPerHour }} kcal/hr
-                          (100 mg/min using {{ foodCutoffReferenceKcalPerG }} kcal/g).
-                        </div>
-                        <div v-if="!isFoodCutoffValid" class="session-validation-message">
-                          Food cutoff must be at least {{ minimumFoodCutoffKcalPerHour }} kcal/hr to meet the 100 mg/min minimum.
-                        </div>
-                      </label>
-                    </div>
-                    <!--
-                    <div class="session-settings-grid">
-                      <label class="checkbox-row session-settings-grid__checkbox">
-                        <input v-model="sessionEditor.remove_outliers" type="checkbox" />
-                        Remove outliers
-                      </label>
-                    </div>
-                    -->
-                  </div>
-                </div>
-    
-                <div class="session-step__footer">
-                  <div v-if="!canContinueToReview" class="message-text row-end">
-                    Session setup is still incomplete for analysis, but you can still continue and save this experiment as a draft.
-                  </div>
-                  <div class="row-end">
-                    <BButton variant="primary" @click="goToBuilderStep('review')">
-                      Continue to Metadata
-                    </BButton>
-                  </div>
-                </div>
-                  </fieldset>
-                </div>
-              </section>
-
-              <section v-else class="session-step">
-                <div>
-                  <fieldset class="builder-fieldset page-column">
-                <div class="metadata-section">
-                  <div class="row-between">
-                    <div class="muted-copy">
-                    Update experiment metadata in order to submit to the public repository.
-                    </div>
-                    <div class="metadata-legend">
-                      <span class="metadata-legend__item">
-                        <span class="metadata-required-icon" aria-hidden="true"></span>
-                        Required for public
-                      </span>
-                    </div>
-                  </div>
-                  <div class="metadata-columns">
-                    <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
-                      <strong>{{ section.title }}</strong>
-                      <label v-for="field in section.fields" :key="field.key" class="control-stack">
-                        <span class="metadata-field-label">
-                          {{ field.label }}
-                          <span
-                            v-if="field.requiredForPublic"
-                            class="metadata-required-icon"
-                            aria-label="Required for public"
-                            title="Required for public"
-                          ></span>
-                        </span>
-                        <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
-                      </label>
-                    </section>
-                  </div>
-                  <!--
-                  <label class="checkbox-row session-settings-grid__checkbox">
-                    <input v-model="experimentDraft.public" type="checkbox" :disabled="isEditingExperiment" />
-                    Make public
-                  </label>
-                  -->
-                </div>
-                  </fieldset>
-                </div>
-              </section>
-            </div>
-          </div>
+          
         </div>
+        -->
 
       </template>
     </section>
@@ -1013,6 +1081,7 @@ import experimentMetadataSections from '../config/experimentMetadata.json'
 import {
   convertInstrumentFiles,
   deleteExperiment,
+  createUser,
   fetchDataFile,
   fetchEnrichedSession,
   fetchSessionConfig,
@@ -1522,6 +1591,11 @@ export default {
     }
   },
   watch: {
+    'store.auth.token'(nextToken) {
+      if (nextToken && !this.store.account.userFiles.length) {
+        this.loadUserFiles()
+      }
+    },
     'store.upload.convertedCSV'() {
       this.calrPreviewPage = 1
       this.activeQcKey = ''
@@ -1537,6 +1611,87 @@ export default {
   methods: {
     formatDate,
     formatFileSize,
+    setAuthMode(mode) {
+      if (this.store.auth.mode === mode) {
+        return
+      }
+
+      this.store.auth.mode = mode
+      this.store.auth.message = ''
+
+      if (mode === 'create') {
+        this.store.auth.username = ''
+        this.store.auth.password = ''
+      }
+    },
+    submitAuth() {
+      if (this.store.auth.mode === 'create') {
+        this.handleCreateAccount()
+        return
+      }
+
+      this.handleLogin()
+    },
+    validateCredentials() {
+      this.store.auth.message = ''
+
+      if (!this.store.auth.username.trim()) {
+        this.store.auth.message = 'Missing email'
+        return false
+      }
+
+      if (!this.store.auth.password.trim()) {
+        this.store.auth.message = 'Missing password'
+        return false
+      }
+
+      return true
+    },
+    async handleLogin() {
+      if (!this.validateCredentials()) {
+        return
+      }
+
+      this.store.loaders.login = true
+
+      try {
+        const response = await login(this.store.auth.username.trim(), this.store.auth.password)
+        this.store.auth.token = response.access
+        this.store.auth.userInfo = response
+        this.store.auth.message = ''
+        await this.loadUserFiles()
+      } catch (error) {
+        this.store.auth.message = error.message || 'Login failed'
+      } finally {
+        this.store.loaders.login = false
+      }
+    },
+    async handleCreateAccount() {
+      if (!this.validateCredentials()) {
+        return
+      }
+
+      this.store.loaders.createAccount = true
+
+      try {
+        await createUser(this.store.auth.username.trim(), this.store.auth.password)
+        this.store.auth.mode = 'login'
+        this.store.auth.message = 'Account created. Log in to continue.'
+      } catch (error) {
+        this.store.auth.message = error.message || 'Account creation failed'
+      } finally {
+        this.store.loaders.createAccount = false
+      }
+    },
+    handleLogout() {
+      this.store.auth.password = ''
+      this.store.auth.message = ''
+      this.store.auth.token = null
+      this.store.auth.userInfo = null
+      this.store.account.userCreatingNew = false
+      this.store.account.userFiles = []
+      this.store.auth.mode = 'login'
+    },
     getUserFileRowClass(item) {
       if (!item) {
         return ''
@@ -2595,33 +2750,6 @@ export default {
         this.saveMessage = error.message || 'Experiment save failed.'
       } finally {
         this.store.loaders.uploadExperiment = false
-      }
-    },
-    async handleLogin() {
-      this.store.auth.message = ''
-
-      if (!this.store.auth.username.trim()) {
-        this.store.auth.message = 'Missing username'
-        return
-      }
-
-      if (!this.store.auth.password.trim()) {
-        this.store.auth.message = 'Missing password'
-        return
-      }
-
-      this.store.loaders.login = true
-
-      try {
-        const response = await login(this.store.auth.username, this.store.auth.password)
-        this.store.auth.token = response.access
-        this.store.auth.userInfo = response
-        this.store.auth.message = 'Success'
-        await this.loadUserFiles()
-      } catch (error) {
-        this.store.auth.message = 'Login failed'
-      } finally {
-        this.store.loaders.login = false
       }
     },
     async loadUserFiles() {

@@ -3,6 +3,7 @@ import { reactive } from 'vue'
 export const appStore = reactive({
   loaders: {
     login: false,
+    createAccount: false,
     getUserFiles: false,
     convertFile: false,
     uploadExperiment: false,
@@ -17,6 +18,7 @@ export const appStore = reactive({
     message: '',
     token: null,
     userInfo: null,
+    mode: 'login',
   },
   account: {
     userCreatingNew: false,

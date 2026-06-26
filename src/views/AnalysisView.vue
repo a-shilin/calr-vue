@@ -7,7 +7,6 @@
             Public Datasets ({{ publicDatasetCount }})
           </button>
           <button
-            v-if="store.auth.token"
             class="card-tab"
             :class="{ active: datasetSourceTab === 'private' }"
             @click="selectDatasetTab('private')"
@@ -32,6 +31,18 @@
           </template>
           <template #cell(actions)="slot">
             <BButton v-if="isSelectedDataset(slot.item)" size="sm" variant="success" disabled>Selected</BButton>
+            <BBadge
+              v-else-if="datasetSourceTab === 'private' && slot.item.statusLoading"
+              variant="secondary"
+            >
+              Checking...
+            </BBadge>
+            <BBadge
+              v-else-if="datasetSourceTab === 'private' && !isExperimentReadyForAnalysis(slot.item.statusInfo)"
+              :variant="slot.item.statusInfo?.variant || 'warning'"
+            >
+              {{ slot.item.statusInfo?.label || 'Draft' }}
+            </BBadge>
             <BButton 
               v-else
               size="sm"
@@ -46,6 +57,14 @@
             </BButton>
           </template>
         </BTable>
+      </div>
+      <div v-else-if="datasetSourceTab === 'private' && !store.auth.token" class="empty-state panel">
+        <div class="page-column" style="gap: 8px; text-align: center;">
+          <div>To analyze your own data</div>
+          <div>
+            <RouterLink to="/account" class="btn btn-sm btn-primary">Create an account</RouterLink>
+          </div>
+        </div>
       </div>
       <div v-else class="empty-state">
         {{ datasetSourceTab === 'private' ? 'No private datasets found.' : 'No public datasets found.' }}
@@ -63,7 +82,10 @@
       {{ sharedRouteError }}
     </div>
 
-    <div v-if="!sharedRouteLoading && !store.experiment.current" class="empty-state panel">
+    <div
+      v-if="!sharedRouteLoading && !store.experiment.current && !(datasetSourceTab === 'private' && !store.auth.token)"
+      class="empty-state panel"
+    >
       Select a dataset to see analysis plots.
     </div>
 
@@ -488,7 +510,7 @@
 import { appStore } from '../store/appStore'
 import { fetchEnrichedSession, fetchPublicFiles, fetchSessionConfig, fetchSharedFile, fetchUserFiles, runAnalysis } from '../services/registryService'
 import { formatDate } from '../utils/format'
-import { clearProcessCaches } from '../utils/process'
+import { clearProcessCaches, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { purgePlot } from '../utils/plotting/core'
@@ -503,6 +525,71 @@ const numericalColumns = [
   'xytot', 'xyamb', 'pedmeter', 'allmeter', 'wheel', 'wheel.acc', 'C13', 'enviro.temp',
   'subject.mass', 'body.temp', 'enviro.sound', 'exp.minute', 'enviro.light',
 ]
+
+function hasConfiguredCycleRange(lightCycleStart, darkCycleStart) {
+  const light = Number(lightCycleStart)
+  const dark = Number(darkCycleStart)
+
+  if (!Number.isFinite(light) || !Number.isFinite(dark)) {
+    return false
+  }
+
+  return !(light === 0 && dark === 0)
+}
+
+function isSessionReadyForAnalysis(sessionPayload = {}) {
+  const normalized = normalizeSessionPayload(sessionPayload)
+  const groups = normalized.groups || []
+  const subjects = normalized.subjects || []
+
+  const groupsComplete = groups.length > 0 && groups.every((group, index) => (
+    Boolean(`${group?.name || `Group ${index + 1}`}`.trim())
+    && Boolean(group?.color)
+    && group?.diet_kcal !== null
+    && group?.diet_kcal !== undefined
+    && group?.diet_kcal !== ''
+    && Boolean(group?.diet_name?.trim())
+  ))
+
+  if (!groupsComplete || !subjects.length) {
+    return false
+  }
+
+  const assignedGroups = new Set(
+    subjects
+      .map((subject) => Number(subject.groupIndex))
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < groups.length),
+  )
+
+  const subjectsComplete = groups.every((_, index) => assignedGroups.has(index))
+  const rangesComplete = hasConfiguredCycleRange(normalized.light_cycle_start, normalized.dark_cycle_start)
+
+  return subjectsComplete && rangesComplete
+}
+
+function buildExperimentStatus({ hasConvertedData, sessionPayload }) {
+  if (!hasConvertedData) {
+    return {
+      key: 'incomplete',
+      label: 'Incomplete',
+      variant: 'secondary',
+    }
+  }
+
+  if (isSessionReadyForAnalysis(sessionPayload)) {
+    return {
+      key: 'ready_analysis',
+      label: 'Ready for Analysis',
+      variant: 'primary',
+    }
+  }
+
+  return {
+    key: 'draft',
+    label: 'Draft',
+    variant: 'warning',
+  }
+}
 
 export default {
   name: 'AnalysisView',
@@ -626,6 +713,7 @@ export default {
       groupColors: {},
       powerViewTab: 'plot',
       weightViewTab: 'total',
+      userFilesStatusRequestId: 0,
     }
   },
   computed: {
@@ -980,6 +1068,74 @@ export default {
   },
   methods: {
     formatDate,
+    buildExperimentStatusInfo(hasConvertedData, sessionPayload) {
+      return buildExperimentStatus({
+        hasConvertedData,
+        sessionPayload,
+      })
+    },
+    buildLoadingStatusInfo(hasConvertedData) {
+      if (!hasConvertedData) {
+        return this.buildExperimentStatusInfo(hasConvertedData, {})
+      }
+
+      return {
+        key: 'loading',
+        label: 'Checking...',
+        variant: 'secondary',
+      }
+    },
+    buildUserFileRecord(file) {
+      const standard = file.files?.find((item) => item.file_type === 'standard')
+      const session = file.files?.find((item) => item.file_type === 'session')
+      const hasConvertedData = Boolean(standard)
+      const hasSession = Boolean(session)
+
+      return {
+        ...file,
+        loading: false,
+        loadingProgress: null,
+        statusLoading: hasSession,
+        statusInfo: hasSession
+          ? this.buildLoadingStatusInfo(hasConvertedData)
+          : this.buildExperimentStatusInfo(hasConvertedData, {}),
+      }
+    },
+    async hydratePrivateFileStatuses(requestId, files) {
+      await Promise.allSettled(files.map(async (file) => {
+        const session = file.files?.find((item) => item.file_type === 'session')
+
+        if (!session) {
+          return
+        }
+
+        let sessionPayload = {}
+
+        try {
+          sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
+        } catch (error) {
+          sessionPayload = {}
+        }
+
+        if (requestId !== this.userFilesStatusRequestId) {
+          return
+        }
+
+        const targetFile = this.store.account.userFiles.find((item) => item.id === file.id)
+        if (!targetFile) {
+          return
+        }
+
+        targetFile.statusInfo = this.buildExperimentStatusInfo(
+          Boolean(file.files?.find((item) => item.file_type === 'standard')),
+          sessionPayload,
+        )
+        targetFile.statusLoading = false
+      }))
+    },
+    isExperimentReadyForAnalysis(statusInfo) {
+      return statusInfo?.key === 'ready_analysis' || statusInfo?.key === 'ready_public'
+    },
     selectDatasetTab(tab) {
       this.datasetSourceTab = tab
     },
@@ -997,8 +1153,11 @@ export default {
       this.datasetSourceTab = 'public'
     },
     async loadPrivateFiles() {
+      const requestId = this.userFilesStatusRequestId + 1
+      this.userFilesStatusRequestId = requestId
       const files = await fetchUserFiles(this.store.auth.token)
-      this.store.account.userFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
+      this.store.account.userFiles = files.map((file) => this.buildUserFileRecord(file))
+      this.hydratePrivateFileStatuses(requestId, files)
     },
     async handleSharedRoute() {
       const shareId = `${this.$route.query.share || ''}`.trim()
