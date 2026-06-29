@@ -1,5 +1,6 @@
 <template>
   <div class="page-column">
+    <!--
     <section v-if="store.auth.token" class="panel panel--spaced">
       <div class="row-between">
           <div>
@@ -8,6 +9,7 @@
           <button class="btn btn-outline-secondary btn-sm" @click="handleLogout">Logout</button>
         </div>
     </section>
+    -->
     <section class="panel panel--spaced">
       <div v-if="!store.auth.token" class="row-between login-layout">
         <div class="login-copy">
@@ -440,9 +442,17 @@
                   <div v-else class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
                     <div class="session-import-drop">
                       <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
+                      <div v-if="sessionImportFormatError" class="message-text upload-detect-error">
+                        Unrecognized as a CalR session CSV.
+                      </div>
                       <div
                         class="dropzone"
-                        :class="{ dragover: sessionDragover, 'detected-calr': sessionImportName, 'dropzone--disabled': !isSessionImportEnabled }"
+                        :class="{
+                          dragover: sessionDragover,
+                          'detected-calr': sessionImportName && !sessionImportFormatError,
+                          'dropzone--error': sessionImportFormatError,
+                          'dropzone--disabled': !isSessionImportEnabled,
+                        }"
                         @click="openSessionFileDialog"
                         @dragover.prevent="sessionDragover = true"
                         @dragleave="sessionDragover = false"
@@ -889,7 +899,7 @@
               </template>
 
               <template #cell(status)="slot">
-                <BBadge :variant="slot.item.statusInfo?.variant || 'secondary'">
+                <BBadge :variant="slot.item.statusInfo?.variant || 'secondary'" style="display:flex; align-items: center; width:fit-content">
                   <BSpinner v-if="slot.item.statusLoading" small style="margin-right: 0.35rem;" />
                   {{ slot.item.statusInfo?.label || 'Incomplete' }}
                 </BBadge>
@@ -1224,7 +1234,7 @@ function createIncompleteSessionEditor(basePayload = {}) {
   }))
   sessionEditor.light_cycle_start = 0
   sessionEditor.dark_cycle_start = 0
-  sessionEditor.food_cutoff = convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN)
+  sessionEditor.food_cutoff = 0
 
   return sessionEditor
 }
@@ -1416,6 +1426,7 @@ export default {
       foodCutoffManuallyEdited: false,
       sessionDragover: false,
       sessionImportName: '',
+      sessionImportFormatError: false,
       sessionImportMessage: '',
       templateUploadDialog: {
         visible: false,
@@ -1808,11 +1819,22 @@ export default {
         return
       }
 
-      this.sessionEditor.food_cutoff = this.minimumFoodCutoffKcalPerHour
+      this.sessionEditor.food_cutoff = this.isGroupsAndDietsComplete
+        ? this.minimumFoodCutoffKcalPerHour
+        : 0
     },
     initializeFoodCutoffState() {
       const cutoff = this.getFoodCutoffFromValue(this.sessionEditor.food_cutoff)
-      this.foodCutoffManuallyEdited = cutoff !== null && cutoff > 0
+
+      if (!this.isGroupsAndDietsComplete) {
+        this.foodCutoffManuallyEdited = false
+        this.sessionEditor.food_cutoff = 0
+        return
+      }
+
+      this.foodCutoffManuallyEdited = cutoff !== null
+        && cutoff > 0
+        && Math.abs(cutoff - this.minimumFoodCutoffKcalPerHour) > 0.01
 
       if (!this.foodCutoffManuallyEdited) {
         this.syncFoodCutoffDefault()
@@ -2390,13 +2412,26 @@ export default {
 
       try {
         const csvText = await file.text()
+        const sessionHeaders = this.getSessionCsvHeaders(csvText)
+        const groupColumns = sessionHeaders.filter((header) => /^group\d+$/i.test(header))
+        const hasGroupNames = sessionHeaders.includes('group_names')
+
+        this.sessionImportName = file.name
+
+        if (groupColumns.length < 2 || !hasGroupNames) {
+          this.sessionImportFormatError = true
+          this.sessionImportMessage = ''
+          return
+        }
+
         const rows = parseCsv(csvText)
         this.sessionEditor = mergeSessionCsvIntoPayload(rows, this.sessionEditor)
         this.initializeFoodCutoffState()
         this.syncGroupDietSelections()
-        this.sessionImportName = file.name
+        this.sessionImportFormatError = false
         this.sessionImportMessage = 'Session CSV imported into the form.'
       } catch (error) {
+        this.sessionImportFormatError = false
         this.sessionImportMessage = error.message || 'Unable to load session CSV.'
       } finally {
         this.sessionDragover = false
@@ -2466,6 +2501,7 @@ export default {
       this.foodCutoffManuallyEdited = false
       this.sessionDragover = false
       this.sessionImportName = ''
+      this.sessionImportFormatError = false
       this.sessionImportMessage = ''
       if (clearInput && this.$refs.fileInput) {
         this.$refs.fileInput.value = ''
@@ -2596,6 +2632,7 @@ export default {
       }
 
       this.sessionImportName = ''
+      this.sessionImportFormatError = false
       this.sessionImportMessage = ''
       this.hydrateBuilder(this.store.upload.convertedCSV)
     },
@@ -3040,6 +3077,20 @@ export default {
       }
 
       throw new Error(`Unable to detect format from ${file.name}.`)
+    },
+    getSessionCsvHeaders(csvText) {
+      const firstNonEmptyLine = `${csvText || ''}`
+        .split(/\r?\n/)
+        .find((line) => line.trim())
+
+      if (!firstNonEmptyLine) {
+        return []
+      }
+
+      return firstNonEmptyLine
+        .split(',')
+        .map((header) => header.trim().replace(/^"|"$/g, '').toLowerCase())
+        .filter(Boolean)
     },
   },
 }

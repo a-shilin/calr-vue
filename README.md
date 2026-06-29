@@ -50,7 +50,7 @@ The app uses hash routing for GitHub Pages compatibility.
 ## Current UX Notes
 
 - The main nav keeps `Account` right-aligned opposite the other primary routes.
-- The account page now owns authentication directly, with side-by-side login/create-account access and a small logout action once authenticated.
+- The account page owns authentication directly, with side-by-side login/create-account access.
 - The analysis page always shows both `Public Datasets` and `Your Datasets` tabs.
 - Before login, the `Your Datasets` tab shows an account-creation CTA instead of a dataset table.
 - The account page shows the experiment list inline under a `Your Experiments` heading.
@@ -63,14 +63,19 @@ The app uses hash routing for GitHub Pages compatibility.
 - Shared private dataset links open through `#/analysis?share={submission_id}`, show a percent-loaded indicator while loading, and render a `Private` pill in the dataset header.
 - The account-side create/edit experiment flow is inline on the account page, with step tabs for upload, session configuration, and metadata.
 - Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
+- The builder header shows the current readiness state as a pill with a hover/focus tooltip that explains each status level.
+- Required markers in the builder now use colored dots with custom hover/focus tooltips for draft-, analysis-, and public-level requirements.
 - The upload step shows a paginated CalR data preview once a CalR file exists, computes total data duration from the uploaded rows, and places upload QC cards beside the preview table on wider layouts.
 - Upload QC checks for `rer` and `feed` are currently informative only; they do not block save or step navigation.
+- Upload-file detection now distinguishes recognized `CLAMS` / `TSE` / `Sable` / `CalR` files from unrecognized inputs and shows an inline error state plus red dropzone styling for unsupported files.
 - The session step includes a session-completeness indicator for groups/diets, subjects, and ranges.
+- Session CSV upload now performs a lightweight recognition check before import. A session CSV must include `group_names` plus at least two `groupN` columns to be treated as recognized.
 - During create, the upload step keeps the green dropzone completion state after CalR upload/conversion. During edit, the saved CalR file is shown with `Re-upload` and download actions instead.
 - When editing an experiment that already has a saved CalR file, the upload dropzone is replaced with `Re-upload` and download actions. Re-upload keeps the same experiment and replaces the saved CalR file instead of creating a new one.
 - When editing an experiment that already has a meaningful saved session file, the session dropzone is replaced with a download action; draft-only placeholder session state is ignored on reload.
-- Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with a legend/icon instead of inline text labels.
+- Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with tooltip-enabled requirement dots instead of inline text labels.
 - On edit, the saved metadata `system` value also highlights the matching upload-system card until a new upload/re-upload flow starts.
+- The session-side food cutoff QC now follows the same pass/fail card pattern as the upload-side QC cards. Before groups and diets are configured, the food-cutoff minimum stays at `0` and the QC card stays hidden.
 
 ## Analysis Data Flow
 
@@ -129,12 +134,14 @@ and renders the returned results in the analysis screen.
 The account-side experiment builder currently supports:
 
 - upload or convert instrument data into CalR CSV
+- upload-side file-format detection for supported `CLAMS`, `TSE`, `Sable`, and `CalR` files, including inline unrecognized-file feedback
 - replace an existing saved CalR file during edit via `PUT /api/calr/files/{submission_id}`
 - paginated preview of uploaded CalR rows in the upload step
 - informative upload-side QC checks for:
   - `rer` values between `0.6` and `1.5`
   - non-negative `feed` values
 - import a session CSV to hydrate groups, diets, subjects, exclusions, food cutoff, and subject mass fields
+- session CSV recognition checks that require `group_names` plus at least two `groupN` columns before import
 - edit existing experiments by loading the saved CalR CSV plus saved session data when that session is meaningful
 - editing existing experiments with direct download access to the saved CalR and session files from the builder
 - account-table readiness status loading that resolves incrementally after the file list is shown
@@ -150,6 +157,9 @@ The account-side experiment builder currently supports:
   - groups/diets are complete when every group has a name, color, and diet
   - subjects are complete when each group has at least one assigned subject
   - ranges are complete when light and dark cycle hours are no longer the default `0 / 0`
+- food cutoff behavior:
+  - cutoff defaults to `0` until groups/diets are configured
+  - once groups/diets are configured, the default cutoff is derived from the selected diet calories rather than a hardcoded cutoff lookup table
 - config-driven metadata entry with:
   - JSON-defined fields
   - select and select-plus-free-text inputs
@@ -174,8 +184,11 @@ The account-side experiment builder currently supports:
 - session metadata editing and session upload/update flows
 - config-driven experiment metadata form
 - session completion indicator and analysis/public readiness gating
+- builder readiness/status tooltip and required-dot tooltips
 - per-dataset public and shared access toggles in the account list
+- upload-file recognition and unrecognized-file handling
 - subject session CSV import and builder hydration
+- session CSV recognition checks before import
 - subject weights and mass-change template import/export helpers
 - time-series plot
 - distribution plot

@@ -45,7 +45,6 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
     display: flex;
     justify-content: space-between;
     align-items: stretch;
-    border-bottom: 1px solid #c9c9c9;
     position: relative;
     font-size: 14px;
     width: 100%;
@@ -60,6 +59,7 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .tab-nav__account {
   position: relative;
+  gap:10px;
 }
 
 .tab-link {
