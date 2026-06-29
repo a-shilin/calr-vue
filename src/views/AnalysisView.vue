@@ -508,9 +508,18 @@
 
 <script>
 import { appStore } from '../store/appStore'
-import { fetchEnrichedSession, fetchPublicFiles, fetchSessionConfig, fetchSharedFile, fetchUserFiles, runAnalysis } from '../services/registryService'
+import {
+  fetchEnrichedSession,
+  fetchPublicFiles,
+  fetchSessionConfig,
+  fetchSessionFile,
+  fetchSharedFile,
+  fetchUserFiles,
+  runAnalysis,
+} from '../services/registryService'
 import { formatDate } from '../utils/format'
-import { clearProcessCaches, normalizeSessionPayload } from '../utils/process'
+import { parseCsv } from '../utils/csv'
+import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { purgePlot } from '../utils/plotting/core'
@@ -1112,7 +1121,11 @@ export default {
         let sessionPayload = {}
 
         try {
-          sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
+          const [sessionConfig, sessionCsv] = await Promise.all([
+            fetchSessionConfig(session.id, this.store.auth.token),
+            fetchSessionFile(session.id, this.store.auth.token),
+          ])
+          sessionPayload = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
         } catch (error) {
           sessionPayload = {}
         }

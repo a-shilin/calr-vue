@@ -27,7 +27,7 @@ npm run preview
 ## Routes
 
 - `#/`: dashboard
-- `#/account`: account and experiment management
+- `#/account`: login/create-account flow plus account and experiment management
 - `#/analysis`: dataset analysis
 - `#/analysis?share={submission_id}`: shared private dataset analysis
 - `#/community`: community summary comparison
@@ -49,15 +49,19 @@ The app uses hash routing for GitHub Pages compatibility.
 
 ## Current UX Notes
 
-- The analysis page always shows dataset tabs. Before login, only the public-datasets tab is available.
+- The main nav keeps `Account` right-aligned opposite the other primary routes.
+- The account page now owns authentication directly, with side-by-side login/create-account access and a small logout action once authenticated.
+- The analysis page always shows both `Public Datasets` and `Your Datasets` tabs.
+- Before login, the `Your Datasets` tab shows an account-creation CTA instead of a dataset table.
 - The account page shows the experiment list inline under a `Your Experiments` heading.
 - The account experiment list includes computed readiness states: `Draft`, `Ready for Analysis`, or `Ready for Public`.
 - Account-side dataset rows render as soon as the file list is available, then status badges update progressively as session configs finish loading.
 - The account experiment list includes `Public` and `Share` controls. Share is enabled only for datasets that are ready for analysis.
 - Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
+- In the analysis-page `Your Datasets` table, draft datasets show a `Draft` pill instead of an `Open` action.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
 - Shared private dataset links open through `#/analysis?share={submission_id}`, show a percent-loaded indicator while loading, and render a `Private` pill in the dataset header.
-- The account-side create/edit experiment flow opens in an overlay modal with step tabs for upload, session configuration, and metadata.
+- The account-side create/edit experiment flow is inline on the account page, with step tabs for upload, session configuration, and metadata.
 - Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
 - The upload step shows a paginated CalR data preview once a CalR file exists, computes total data duration from the uploaded rows, and places upload QC cards beside the preview table on wider layouts.
 - Upload QC checks for `rer` and `feed` are currently informative only; they do not block save or step navigation.
@@ -157,11 +161,13 @@ The account-side experiment builder currently supports:
 ### Working
 
 - public and private dataset browsing
+- login and create-account flow on the account page
 - shared private dataset browsing by share URL
 - account-side create, edit, download, and open flows
 - draft saves with CalR-only minimum requirements
 - computed experiment readiness states in the account list and builder
 - progressive account-list status hydration after initial dataset-list load
+- progressive private-dataset status hydration on the analysis page
 - account-side CalR preview pagination for large uploaded datasets
 - account-side CalR replacement during edit
 - enriched session loading for analysis
@@ -204,6 +210,7 @@ These are reference artifacts only; they are not part of the runtime application
 This frontend depends on the live CalR backend APIs for:
 
 - auth
+- account creation
 - file listing
 - shared dataset lookup
 - experiment metadata

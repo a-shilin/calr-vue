@@ -30,6 +30,7 @@ export const appStore = reactive({
     dragover: false,
     loading: false,
     textResponse: '',
+    formatError: false,
     isCalrFormat: false,
     detectedFileFormat: '',
     convertedCSV: '',

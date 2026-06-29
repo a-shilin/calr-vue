@@ -96,7 +96,6 @@
                 <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
               </div>
               <div class="button-row" style="align-items: center;">
-                <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
                 <button
                   class="btn btn-primary"
                   :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
@@ -122,19 +121,45 @@
               {{ isEditingExperiment ? 'Update an existing experiment and session configuration.' : 'Upload, configure, and save a new experiment.' }}
             </div>
             -->
-            <div class="muted-copy">
-              Status: <strong>{{ currentDraftStatus.label }}</strong>
+            <div class="row-between">
+              <div class="muted-copy">
+                Status:
+                <span class="status-tooltip" tabindex="0">
+                  <BBadge :variant="currentDraftStatus.variant || 'secondary'" class="editor-status-pill">
+                    {{ currentDraftStatus.label }}
+                  </BBadge>
+                  <span class="status-tooltip__panel" role="tooltip">
+                    <table class="status-tooltip__table">
+                      <tbody>
+                        <tr v-for="status in draftStatusLegend" :key="status.key">
+                          <td>
+                            <BBadge :variant="status.variant || 'secondary'" class="editor-status-pill">
+                              {{ status.label }}
+                            </BBadge>
+                          </td>
+                          <td>{{ status.description }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </span>
+                </span>
+              </div>
+              <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
             </div>
           </div>
           <div class="session-builder">
             <div class="builder-core-fields">
               <label class="control-stack builder-core-fields__name">
-                <span class="bold">Experiment name</span>
+                <div>
+                  <span class="bold">Experiment name </span><span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
+                </div>
                 <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
               </label>
 
               <label class="control-stack builder-core-fields__description">
-                <span class="bold">Description</span>
+                <div>
+                  <span class="bold">Description </span><span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
+                </div>
                 <textarea
                   v-model="experimentDraft.description"
                   rows="1"
@@ -144,13 +169,13 @@
             </div>
             <div class="card-tabs session-builder-tabs">
               <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
-                1. Upload Data
+                1. Upload Data <span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
               </button>
               <button class="card-tab" :class="{ active: activeBuilderStep === 'configure' }" @click="goToBuilderStep('configure')">
-                2. Configure Session
+                2. Configure Session <span class="required-icon required-analysis" aria-label="Required to run analysis" data-tooltip="Required to run analysis." tabindex="0"></span>
               </button>
               <button class="card-tab" :class="{ active: activeBuilderStep === 'review' }" @click="goToBuilderStep('review')">
-                3. Add Metadata
+                3. Add Metadata <span class="required-icon required-public" aria-label="Required to submit to the public repository" data-tooltip="Required to submit to the public repository." tabindex="0"></span>
               </button>
             </div>
 
@@ -170,8 +195,12 @@
                       <div class="session-uploads-arrow">➧</div>
                       <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
                     </div>
-                    <div v-if="store.upload.detectedFileFormat && !hasConvertedData" class="message-text">
-                      <strong>Detected format:</strong> {{ store.upload.detectedFileFormat }}
+                    <div
+                      v-if="(store.upload.detectedFileFormat || store.upload.formatError) && !hasConvertedData"
+                      :class="store.upload.formatError ? 'message-text upload-detect-error' : 'message-text'"
+                    >
+                      <strong>Detected format:</strong>
+                      {{ store.upload.formatError ? 'unrecognized as CLAMS, TSE, Sable, or CalR data.' : store.upload.detectedFileFormat }}
                     </div>
                   </div>
                   <!-- session data upload dropzone -->
@@ -194,6 +223,7 @@
                       class="dropzone"
                       :class="{ 
                         dragover: store.upload.dragover, 
+                        'dropzone--error': store.upload.formatError,
                         'detected': store.upload.detectedFileFormat.trim() && store.upload.detectedFileFormat!=='calr', 
                         'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON 
                       }"
@@ -225,7 +255,7 @@
                         Clear
                       </button>
                       <button
-                        v-if="!store.upload.isCalrFormat"
+                        v-if="!store.upload.isCalrFormat && !store.upload.formatError"
                         class="btn btn-sm"
                         :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
                         :disabled="store.loaders.convertFile || store.upload.convertedJSON"
@@ -237,11 +267,9 @@
                       </button>
                     </div>
                     
-                    <!--
-                    <div v-if="store.upload.textResponse" class="message-text">
+                    <div v-if="store.upload.textResponse && !store.upload.formatError" class="message-text">
                       {{ store.upload.textResponse }}
                     </div>
-                    -->
       
                   </div>
                 </div>
@@ -387,9 +415,9 @@
                         <div class="session-uploads-session">
                         <div>Session</div>
                         <div class="session-uploads-intruments" style="padding:0">
+                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Ranges & Filters</div>
                           <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
                           <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects & Weights</div>
-                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Time Ranges</div>
                         </div>
                       </div>
                     </div>
@@ -476,11 +504,68 @@
 
               <div>
                 <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
+
+              <div class="session-subsection">
+                <div class="session-subsection__header">
+                  <strong>Set Ranges and Filters</strong>
+                </div>
+  
+                <div class="session-settings">
+                  <div class="session-settings-row">
+                    <div class="session-settings-group group-editor-card">
+                      <label class="control-stack">
+                        Session start hour
+                        <input v-model="sessionEditor.hour_range[0]" type="number" step="1" min="0" />
+                      </label>
+      
+                      <label class="control-stack">
+                        Session end hour
+                        <input v-model="sessionEditor.hour_range[1]" type="number" step="1" min="0" />
+                      </label>
+                    </div>
+
+                    <div class="session-settings-group group-editor-card">
+                      <label class="control-stack">
+                        Light cycle start hour
+                        <input v-model="sessionEditor.light_cycle_start" type="number" min="0" max="23" step="1" />
+                      </label>
+    
+                      <label class="control-stack">
+                        Dark cycle start hour
+                        <input v-model="sessionEditor.dark_cycle_start" type="number" min="0" max="23" step="1" />
+                      </label>
+                    </div>
+                    
+                    <div class="session-settings-group group-editor-card">
+                      <label class="control-stack">
+                        Food cutoff (kcal/hr)
+                        <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" @input="handleFoodCutoffInput" />
+                      </label>
+                    </div>
+
+                    <div
+                      v-if="isGroupsAndDietsComplete"
+                      class="upload-qc-check"
+                      :class="{ 'upload-qc-check--pass': isFoodCutoffValid, 'upload-qc-check--fail': !isFoodCutoffValid }"
+                    >
+                      <strong>Food Cutoff QC</strong>
+                      <div>
+                        {{ isFoodCutoffValid
+                          ? `Passed: meets the minimum ${minimumFoodCutoffKcalPerHour} kcal/hr threshold.`
+                          : `Failed: must be at least ${minimumFoodCutoffKcalPerHour} kcal/hr to meet 100 mg/min minimum.` }}
+                          <span class="muted-copy">
+                            Based on {{ foodCutoffReferenceKcalPerG }} kcal/g diet.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
   
               <div class="session-subsection">
                 <div class="row-between session-subsection__header">
                   <div>
-                    <strong>a. Set Groups and Diets</strong>
+                    <strong>Set Groups and Diets</strong>
                     <div class="muted-copy">Designate the groups and diets in this session. You can set up to 4 groups, and add custom diets.</div>
                   </div>
                   <div class="button-row">
@@ -520,13 +605,14 @@
                   <div v-for="(group, index) in sessionEditor.groups" :key="index" class="group-editor-card">
                     <div class="row-between group-editor-card__header">
                       <strong>Group {{ index + 1 }}</strong>
-                      <button
+                      <a
                         v-if="index >= baseGroupCount"
-                        class="btn btn-link btn-sm text-danger"
+                        role="button"
+                        class="text-danger"
                         @click="removeGroup(index)"
                       >
-                        Remove
-                      </button>
+                          Remove
+                      </a>
                     </div>
   
                     <div class="row-between">
@@ -565,7 +651,7 @@
               <div class="session-subsection">
                 <div class="row-between session-subsection__header">
                   <div>
-                    <strong>b. Designate Subjects</strong>
+                    <strong>Designate Subjects</strong>
                     <div class="muted-copy">Assign each subject to a group. Weights, mass change, and exclusions are optional.</div>
                   </div>
                   <div class="button-row">
@@ -713,58 +799,7 @@
                 </div>
               </div>
   
-              <div class="session-subsection">
-                <div class="session-subsection__header">
-                  <strong>c. Set Ranges and Filters</strong>
-                </div>
-  
-                <div class="session-settings">
-                  <div class="session-settings-grid">
-                    <label class="control-stack">
-                      Light cycle start hour
-                      <input v-model="sessionEditor.light_cycle_start" type="number" min="0" max="23" step="1" />
-                    </label>
-  
-                    <label class="control-stack">
-                      Dark cycle start hour
-                      <input v-model="sessionEditor.dark_cycle_start" type="number" min="0" max="23" step="1" />
-                    </label>
-                  </div>
-                  <div class="session-settings-grid">
-                    <label class="control-stack">
-                      Session start hour
-                      <input v-model="sessionEditor.hour_range[0]" type="number" step="1" min="0" />
-                    </label>
-    
-                    <label class="control-stack">
-                      Session end hour
-                      <input v-model="sessionEditor.hour_range[1]" type="number" step="1" min="0" />
-                    </label>
-                  </div>
-                  <div class="session-settings-grid">
-                    <label class="control-stack">
-                      Food cutoff (kcal/hr)
-                      <input v-model="sessionEditor.food_cutoff" type="number" step="0.1" min="0" @input="handleFoodCutoffInput" />
-                      <div class="muted-copy">
-                        Minimum: {{ minimumFoodCutoffKcalPerHour }} kcal/hr
-                        (100 mg/min using {{ foodCutoffReferenceKcalPerG }} kcal/g).
-                      </div>
-                      <div v-if="!isFoodCutoffValid" class="session-validation-message">
-                        Food cutoff must be at least {{ minimumFoodCutoffKcalPerHour }} kcal/hr to meet the 100 mg/min minimum.
-                      </div>
-                    </label>
-                  </div>
-                  <!--
-                  <div class="session-settings-grid">
-                    <label class="checkbox-row session-settings-grid__checkbox">
-                      <input v-model="sessionEditor.remove_outliers" type="checkbox" />
-                      Remove outliers
-                    </label>
-                  </div>
-                  -->
-                </div>
-              </div>
-  
+              <!--
               <div class="session-step__footer">
                 <div v-if="!canContinueToReview" class="message-text row-end">
                   Session setup is still incomplete for analysis, but you can still continue and save this experiment as a draft.
@@ -775,6 +810,7 @@
                   </BButton>
                 </div>
               </div>
+              -->
                 </fieldset>
               </div>
             </section>
@@ -787,12 +823,6 @@
                   <div class="muted-copy">
                   Update experiment metadata in order to submit to the public repository.
                   </div>
-                  <div class="metadata-legend">
-                    <span class="metadata-legend__item">
-                      <span class="metadata-required-icon" aria-hidden="true"></span>
-                      Required for public
-                    </span>
-                  </div>
                 </div>
                 <div class="metadata-columns">
                   <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
@@ -802,9 +832,10 @@
                         {{ field.label }}
                         <span
                           v-if="field.requiredForPublic"
-                          class="metadata-required-icon"
-                          aria-label="Required for public"
-                          title="Required for public"
+                          class="required-icon required-public"
+                          aria-label="Required to submit to the public repository"
+                          data-tooltip="Required to submit to the public repository."
+                          tabindex="0"
                         ></span>
                       </span>
                       <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
@@ -1497,15 +1528,23 @@ export default {
       return hasConfiguredCycleRange(this.sessionEditor.light_cycle_start, this.sessionEditor.dark_cycle_start)
     },
     foodCutoffReferenceKcalPerG() {
+      if (!this.isGroupsAndDietsComplete) {
+        return 0
+      }
+
       const selectedDietCalories = this.sessionEditor.groups
         .map((group) => Number(group?.diet_kcal))
         .filter((value) => Number.isFinite(value) && value > 0)
 
       return selectedDietCalories.length
         ? Math.max(...selectedDietCalories)
-        : DEFAULT_FOOD_CUTOFF_KCAL_PER_G
+        : 0
     },
     minimumFoodCutoffKcalPerHour() {
+      if (!this.isGroupsAndDietsComplete) {
+        return 0
+      }
+
       return convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN, this.foodCutoffReferenceKcalPerG)
     },
     isFoodCutoffValid() {
@@ -1577,6 +1616,28 @@ export default {
         sessionPayload: this.buildSessionPayload(),
         metadata: this.buildMetadataPayload(),
       })
+    },
+    draftStatusLegend() {
+      return [
+        {
+          key: 'draft',
+          label: 'Draft',
+          variant: 'warning',
+          description: 'Required to save as a draft.',
+        },
+        {
+          key: 'ready_analysis',
+          label: 'Ready for Analysis',
+          variant: 'primary',
+          description: 'Required to run analysis.',
+        },
+        {
+          key: 'ready_public',
+          label: 'Ready for Public',
+          variant: 'success',
+          description: 'Required to submit to the public repository.',
+        },
+      ]
     },
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
@@ -1962,7 +2023,11 @@ export default {
         let sessionPayload = {}
 
         try {
-          sessionPayload = await fetchSessionConfig(session.id, this.store.auth.token)
+          const [sessionConfig, sessionCsv] = await Promise.all([
+            fetchSessionConfig(session.id, this.store.auth.token),
+            fetchSessionFile(session.id, this.store.auth.token),
+          ])
+          sessionPayload = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
         } catch (error) {
           sessionPayload = {}
         }
@@ -2358,20 +2423,24 @@ export default {
 
       try {
         const format = await this.detectFormat(files[0])
+        this.store.upload.formatError = false
         this.store.upload.detectedFileFormat = format
 
         if (format === 'calr') {
           const csvText = await files[0].text()
           this.hydrateSessionEditorFromCalrCsv(csvText)
           this.store.upload.isCalrFormat = true
-          this.store.upload.textResponse = `CalR format detected for ${files[0].name}.`
+          this.store.upload.textResponse = ''
           return
         }
 
         this.store.upload.isCalrFormat = false
-        this.store.upload.textResponse = `Detected ${format.toUpperCase()} instrument data. Convert to CalR to continue.`
+        this.store.upload.textResponse = ''
       } catch (error) {
-        this.store.upload.textResponse = error.message || 'Unable to detect file format.'
+        this.store.upload.formatError = true
+        this.store.upload.detectedFileFormat = ''
+        this.store.upload.isCalrFormat = false
+        this.store.upload.textResponse = ''
       }
     },
     resetUploadSelection(clearInput = true) {
@@ -2379,6 +2448,7 @@ export default {
       this.store.upload.dragover = false
       this.store.upload.loading = false
       this.store.upload.textResponse = ''
+      this.store.upload.formatError = false
       this.store.upload.isCalrFormat = false
       this.store.upload.detectedFileFormat = ''
       this.store.upload.convertedCSV = ''
@@ -2564,7 +2634,7 @@ export default {
             this.metadataDraft.system = detectedSystem
           }
         }
-        this.store.upload.textResponse = `Converted ${this.store.upload.files.length} file(s) to CalR format.`
+        this.store.upload.textResponse = ''
       } catch (error) {
         this.store.upload.textResponse = error.message || 'Conversion failed.'
       } finally {
