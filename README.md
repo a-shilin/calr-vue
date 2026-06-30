@@ -22,7 +22,12 @@ npm install
 npm run dev
 npm run build
 npm run preview
+npm run preview:live
 ```
+
+- `npm run dev`: standard Vite dev server with hot module reload on the default dev port
+- `npm run preview`: serves the built `dist` output for a production-like check; rebuild after changes
+- `npm run preview:live`: hot-reload workflow on port `4173` so you can keep using a preview-style URL without rebuilding on every edit
 
 ## Routes
 

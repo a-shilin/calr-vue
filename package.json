@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:live": "vite --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",
