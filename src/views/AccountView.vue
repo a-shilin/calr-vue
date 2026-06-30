@@ -98,14 +98,75 @@
                 <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
               </div>
               <div class="button-row" style="align-items: center;">
-                <button
-                  class="btn btn-primary"
-                  :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
-                  @click="saveExperiment"
-                >
-                  <BSpinner v-if="store.loaders.uploadExperiment" small />
-                  <span v-else>{{ isEditingExperiment ? 'Save Changes' : 'Save Experiment' }}</span>
-                </button>
+                <span class="status-tooltip builder-action-tooltip" tabindex="0">
+                  <button
+                    class="btn"
+                    :class="canSaveExperiment && !store.loaders.uploadExperiment ? 'btn-primary' : 'btn-outline-secondary'"
+                    :disabled="store.loaders.uploadExperiment || !canSaveExperiment"
+                    @click="saveExperiment"
+                  >
+                    <BSpinner v-if="store.loaders.uploadExperiment" small />
+                    <span v-else>Save</span>
+                  </button>
+                  <span class="status-tooltip__panel builder-action-tooltip__panel" role="tooltip">
+                    <span class="builder-action-tooltip__title">To save</span>
+                    <ul class="builder-action-tooltip__list">
+                      <li v-for="item in saveRequirementChecklist" :key="item.label" class="builder-action-tooltip__item">
+                        <i
+                          class="bi"
+                          :class="item.complete ? 'bi-check-circle-fill builder-action-tooltip__icon--complete' : 'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                        <span>{{ item.label }}</span>
+                      </li>
+                    </ul>
+                  </span>
+                </span>
+                <span v-if="builderExperimentRecord" class="status-tooltip builder-action-tooltip" tabindex="0">
+                  <button
+                    class="btn builder-action-icon-btn"
+                    :class="shareButtonClass"
+                    :disabled="!canShareFromBuilder"
+                    aria-label="Share"
+                    @click="openBuilderShareDialog"
+                  >
+                    <i class="bi bi-share"></i>
+                  </button>
+                  <span class="status-tooltip__panel builder-action-tooltip__panel" role="tooltip">
+                    <span class="builder-action-tooltip__title">To share</span>
+                    <ul class="builder-action-tooltip__list">
+                      <li v-for="item in shareRequirementChecklist" :key="item.label" class="builder-action-tooltip__item">
+                        <i
+                          class="bi"
+                          :class="item.complete ? 'bi-check-circle-fill builder-action-tooltip__icon--complete' : 'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                        <span>{{ item.label }}</span>
+                      </li>
+                    </ul>
+                  </span>
+                </span>
+                <span v-if="builderExperimentRecord" class="status-tooltip builder-action-tooltip" tabindex="0">
+                  <button
+                    class="btn builder-action-icon-btn"
+                    :class="contributeButtonClass"
+                    :disabled="!canContributeFromBuilder && !builderExperimentIsPublic"
+                    aria-label="Contribute to CalR community"
+                    @click="openBuilderContributeDialog"
+                  >
+                    <i class="bi bi-patch-plus"></i>
+                  </button>
+                  <span class="status-tooltip__panel builder-action-tooltip__panel" role="tooltip">
+                    <span class="builder-action-tooltip__title">To contribute to CalR community</span>
+                    <ul class="builder-action-tooltip__list">
+                      <li v-for="item in contributeRequirementChecklist" :key="item.label" class="builder-action-tooltip__item">
+                        <i
+                          class="bi"
+                          :class="item.complete ? 'bi-check-circle-fill builder-action-tooltip__icon--complete' : 'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                        <span>{{ item.label }}</span>
+                      </li>
+                    </ul>
+                  </span>
+                </span>
                 <BButton
                   v-if="latestCreatedExperiment && !isEditingExperiment && isExperimentReadyForAnalysis(latestCreatedExperiment.statusInfo)"
                   variant="success"
@@ -126,63 +187,68 @@
             <div class="row-between">
               <div class="muted-copy">
                 Status:
-                <span class="status-tooltip" tabindex="0">
-                  <BBadge :variant="currentDraftStatus.variant || 'secondary'" class="editor-status-pill">
-                    {{ currentDraftStatus.label }}
-                  </BBadge>
-                  <span class="status-tooltip__panel" role="tooltip">
-                    <table class="status-tooltip__table">
-                      <tbody>
-                        <tr v-for="status in draftStatusLegend" :key="status.key">
-                          <td>
-                            <BBadge :variant="status.variant || 'secondary'" class="editor-status-pill">
-                              {{ status.label }}
-                            </BBadge>
-                          </td>
-                          <td>{{ status.description }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </span>
-                </span>
+                <BBadge :variant="currentDraftStatus.variant || 'secondary'" class="editor-status-pill">
+                  {{ currentDraftStatus.label }}
+                </BBadge>
               </div>
               <div v-if="saveMessage" class="message-text row-end">{{ saveMessage }}</div>
             </div>
           </div>
+
+          
           <div class="session-builder">
-            <div class="builder-core-fields">
-              <label class="control-stack builder-core-fields__name">
-                <div>
-                  <span class="bold">Experiment name </span><span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
-                </div>
-                <input v-model="experimentDraft.name" type="text" placeholder="Experiment name" />
-              </label>
+            <section class="session-step page-column" style="gap: 20px">
+              <div class="builder-core-fields">
+                <label class="control-stack builder-core-fields__name">
+                  <div>
+                    <span class="bold">Experiment name</span>
+                  </div>
+                  <input v-model="experimentDraft.name" type="text" placeholder="" />
+                </label>
+  
+                <label class="control-stack builder-core-fields__description">
+                  <div>
+                    <span class="bold">Description</span>
+                  </div>
+                  <textarea
+                    v-model="experimentDraft.description"
+                    rows="1"
+                    placeholder=""
+                  ></textarea>
+                </label>
 
-              <label class="control-stack builder-core-fields__description">
-                <div>
-                  <span class="bold">Description </span><span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
+                <div class="builder-action-with-check">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary builder-core-fields__toggle"
+                    :aria-expanded="showMetadataEditor ? 'true' : 'false'"
+                    @click="toggleMetadataEditor"
+                  >
+                    {{ showMetadataEditor ? 'Hide Full Metadata' : 'Full Metadata' }}
+                  </button>
+                  <i
+                    v-if="hasCompletePublicMetadata"
+                    class="bi bi-check-circle-fill builder-ready-check"
+                    aria-label="Full metadata complete"
+                  ></i>
                 </div>
-                <textarea
-                  v-model="experimentDraft.description"
-                  rows="1"
-                  placeholder="Short experiment description"
-                ></textarea>
-              </label>
-            </div>
-            <div class="card-tabs session-builder-tabs">
-              <button class="card-tab" :class="{ active: activeBuilderStep === 'upload' }" @click="goToBuilderStep('upload')">
-                1. Upload Data <span class="required-icon required-save" aria-label="Required to save as draft" data-tooltip="Required to save as draft." tabindex="0"></span>
-              </button>
-              <button class="card-tab" :class="{ active: activeBuilderStep === 'configure' }" @click="goToBuilderStep('configure')">
-                2. Configure Session <span class="required-icon required-analysis" aria-label="Required to run analysis" data-tooltip="Required to run analysis." tabindex="0"></span>
-              </button>
-              <button class="card-tab" :class="{ active: activeBuilderStep === 'review' }" @click="goToBuilderStep('review')">
-                3. Add Metadata <span class="required-icon required-public" aria-label="Required to submit to the public repository" data-tooltip="Required to submit to the public repository." tabindex="0"></span>
-              </button>
-            </div>
+              </div>
+              <div v-if="showMetadataEditor" class="page-column">
+                <div class="metadata-columns">
+                  <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
+                    <strong>{{ section.title }}</strong>
+                    <label v-for="field in section.fields" :key="field.key" class="control-stack">
+                      <span class="metadata-field-label">{{ field.label }}</span>
+                      <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
+                    </label>
+                  </section>
+                </div>
+              </div>
+            </section>
+            
 
-            <section v-if="activeBuilderStep === 'upload'" class="session-step page-column">
-              <div style="display:flex; flex-direction: column;">
+            <section class="session-step page-column">
+              <div style="display:flex; flex-direction: column; gap: 20px">
                 <div class="muted-copy">
                   Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
                 </div>
@@ -197,30 +263,40 @@
                       <div class="session-uploads-arrow">➧</div>
                       <div class="session-uploads-intrument" style="background: #eee;" :class="{'detected-calr': store.upload.detectedFileFormat==='calr' || store.upload.convertedJSON}">CalR</div>
                     </div>
-                    <div
-                      v-if="(store.upload.detectedFileFormat || store.upload.formatError) && !hasConvertedData"
-                      :class="store.upload.formatError ? 'message-text upload-detect-error' : 'message-text'"
-                    >
-                      <strong>Detected format:</strong>
-                      {{ store.upload.formatError ? 'unrecognized as CLAMS, TSE, Sable, or CalR data.' : store.upload.detectedFileFormat }}
-                    </div>
                   </div>
+
+
                   <!-- session data upload dropzone -->
                   <div
                     v-if="showEditingCalrDownload"
                     class="session-import-download"
                   >
-                  <BButton variant="outline-secondary" @click="beginCalrReupload">
-                      Re-upload
-                    </BButton>
-                    <BButton variant="outline-secondary" @click="downloadCurrentCalrFile">
-                      Download CalR
-                    </BButton>
+                    <div class="row-between" style="flex:1">
+                      <div style="display:flex; gap:10px">
+                        <BButton variant="outline-secondary" @click="beginCalrReupload">
+                          Re-upload
+                        </BButton>
+                        <BButton variant="outline-secondary" @click="downloadCurrentCalrFile">
+                          Download CalR
+                        </BButton>
+                        
+                      </div>
+                      <div style="display:flex; gap:10px; align-items: center;">
+                        <BButton variant="outline-secondary" @click="toggleCalrPreview">
+                          {{ showCalrPreview ? 'Hide' : 'View' }}
+                        </BButton>
+                        <i
+                          v-if="hasSavedCalrFile"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Calorimetry data saved"
+                        ></i>
+                      </div>
+                    </div>
                   </div>
   
   
                   <div v-else class="session-import-row col-center">
-                    
+                    <strong>Upload calorimetry data</strong>
                     <div
                       class="dropzone"
                       :class="{ 
@@ -234,7 +310,7 @@
                       @dragleave="store.upload.dragover = false"
                       @drop.prevent="handleDrop"
                     >
-                      <div v-if="!store.upload.files.length">
+                      <div v-if="!store.upload.files.length" class="dropzone-note">
                         Drag and drop CSV files here<br/>or click to select.
                       </div>
           
@@ -252,21 +328,37 @@
                       @change="handleFileSelect"
                     />
           
-                    <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
-                      <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
-                        Clear
-                      </button>
-                      <button
-                        v-if="!store.upload.isCalrFormat && !store.upload.formatError"
-                        class="btn btn-sm"
-                        :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
-                        :disabled="store.loaders.convertFile || store.upload.convertedJSON"
-                        @click="convertSelectedFiles"
+                    <div class="row-between">
+                      <div
+                        v-if="store.upload.detectedFileFormat || store.upload.formatError"
+                        :class="store.upload.formatError ? 'message-text upload-detect-error' : 'message-text'"
                       >
-                        <BSpinner v-if="store.loaders.convertFile" small />
-                        <span v-else-if="store.upload.convertedJSON">Converted</span>
-                        <span v-else>Convert</span>
-                      </button>
+                        <strong>Detected format:</strong>
+                        {{ store.upload.formatError ? 'unrecognized as CLAMS, TSE, Sable, or CalR data.' : store.upload.detectedFileFormat }}
+                      </div>
+                      <div v-if="store.upload.files.length" class="row-end" style="gap:5px;">
+                        <button class="btn btn-outline-secondary btn-sm" @click="clearSelectedFiles">
+                          Clear
+                        </button>
+                        <button
+                          v-if="hasConvertedData"
+                          type="button"
+                          class="btn btn-outline-secondary btn-sm"
+                          @click="toggleCalrPreview"
+                        >
+                          {{ showCalrPreview ? 'Hide' : 'View' }}
+                        </button>
+                        <button
+                          v-if="!store.upload.isCalrFormat && !store.upload.formatError && !store.upload.convertedJSON"
+                          class="btn btn-sm"
+                          :class="{'btn-primary': !store.upload.convertedJSON, 'btn-success': store.upload.convertedJSON}"
+                          :disabled="store.loaders.convertFile || store.upload.convertedJSON"
+                          @click="convertSelectedFiles"
+                        >
+                          <BSpinner v-if="store.loaders.convertFile" small />
+                          <span v-else>Convert</span>
+                        </button>
+                      </div>
                     </div>
                     
                     <div v-if="store.upload.textResponse && !store.upload.formatError" class="message-text">
@@ -274,17 +366,80 @@
                     </div>
       
                   </div>
+
+                  <!-- session metadata upload dropzone -->
+                  <div
+                    v-if="showEditingSessionDownload"
+                    class="session-import-download"
+                  >
+                    <div class="row-between" style="flex:1">
+                      <div style="display:flex; gap:10px">
+                        <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
+                          Download Session
+                        </BButton>
+                      </div>
+                      <div style="display:flex; gap:10px; align-items: center">
+                        <BButton variant="outline-secondary" @click="toggleSessionEditor">
+                          {{ showSessionEditor ? 'Hide' : 'Edit' }}
+                        </BButton>
+                        <i
+                          v-if="hasSavedSessionFile"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Session data saved"
+                        ></i>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="(store.upload.convertedJSON || store.upload.detectedFileFormat==='calr') && !showEditingSessionDownload" class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
+                    <div class="session-import-drop">
+                      <strong>Have an existing session CSV?</strong>
+                      <div
+                        class="dropzone"
+                        :class="{
+                          dragover: sessionDragover,
+                          'detected-calr': sessionImportName && !sessionImportFormatError,
+                          'dropzone--error': sessionImportFormatError,
+                          'dropzone--disabled': !isSessionImportEnabled,
+                        }"
+                        @click="openSessionFileDialog"
+                        @dragover.prevent="sessionDragover = true"
+                        @dragleave="sessionDragover = false"
+                        @drop.prevent="handleSessionFileDrop"
+                      >
+                        <div v-if="!sessionImportName" class="dropzone-note">
+                          Drag and drop a session CSV here<br/>or click to select.
+                        </div>
+                        <div v-else class="dropzone-files">
+                          <strong>1 file(s) selected</strong>
+                          <div>{{ sessionImportName }}</div>
+                        </div>  
+                      </div>
+                      <div v-if="!showEditingSessionDownload && !sessionImportName">
+                        Otherwise you can configure your session below.
+                      </div>
+                      <div v-if="sessionImportName || sessionImportMessage" class="row-between">
+                        <div v-if="sessionImportMessage" class="message-text">
+                          {{ sessionImportMessage }}
+                        </div>
+                        <div v-if="sessionImportFormatError" class="message-text upload-detect-error">
+                          Unrecognized as a CalR session CSV.
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
+                          Clear
+                        </button>
+                      </div>
+                      <input
+                        ref="sessionFileInput"
+                        type="file"
+                        accept=".csv,text/csv"
+                        hidden
+                        @change="handleSessionFileSelect"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-  
-            <!--
-            <div v-if="canContinueToConfigure" class="row-end">
-              <BButton variant="primary" @click="goToBuilderStep('configure')">
-                Continue to Configure
-              </BButton>
-            </div>
-            -->
-            <div v-if="hasConvertedData" class="upload-preview-layout">
+            <div v-if="hasConvertedData && showCalrPreview" class="upload-preview-layout">
               <div class="page-column upload-preview-layout__table">
                 <div class="row-between">
                   <strong>CalR Data Preview</strong>
@@ -396,21 +551,16 @@
                 </div>
               </div>
             </div>
-            </section>
 
-            <section v-else-if="activeBuilderStep === 'configure'" class="session-step">
+            <div v-if="hasConvertedData && shouldShowSessionEditor" style="display:flex; flex-direction: column; gap:20px">
               
               <div style="display:flex; flex-direction: column;">
                 <div class="row-between">
                   <div class="muted-copy">
                     Designate groups, diets, subjects, and experiment ranges.
                   </div>
-                  <!--
-                  <div v-if="!canContinueToConfigure" class="alert alert-warning" role="alert"">
-                    Upload or convert a CalR file to configure a session.
-                  </div>
-                  -->
                 </div>
+                <!--
                 <div class="session-uploads">
                   <div>
                     <div class="session-uploads-convert">
@@ -423,95 +573,12 @@
                         </div>
                       </div>
                     </div>
-                    <!--
-                    <div class="session-diagram">
-                      <img :src="sessionDiagramImage" alt="Session configuration reference diagram" />
-                    </div>
-                    -->
                   </div>
-    
-                  <!-- session metadata upload dropzone -->
-                    <div
-                      v-if="showEditingSessionDownload"
-                      class="session-import-download"
-                    >
-                      <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
-                        Download Session
-                      </BButton>
-                  </div>
-                  <div v-else class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
-                    <div class="session-import-drop">
-                      <strong v-if="!showEditingSessionDownload && !sessionImportName">Have an existing session CSV?</strong>
-                      <div v-if="sessionImportFormatError" class="message-text upload-detect-error">
-                        Unrecognized as a CalR session CSV.
-                      </div>
-                      <div
-                        class="dropzone"
-                        :class="{
-                          dragover: sessionDragover,
-                          'detected-calr': sessionImportName && !sessionImportFormatError,
-                          'dropzone--error': sessionImportFormatError,
-                          'dropzone--disabled': !isSessionImportEnabled,
-                        }"
-                        @click="openSessionFileDialog"
-                        @dragover.prevent="sessionDragover = true"
-                        @dragleave="sessionDragover = false"
-                        @drop.prevent="handleSessionFileDrop"
-                      >
-                        <div v-if="!sessionImportName">
-                          Drag and drop a session CSV here<br/>or click to select.
-                        </div>
-                        <div v-else class="dropzone-files">
-                          <strong>1 file(s) selected</strong>
-                          <div>{{ sessionImportName }}</div>
-                        </div>  
-                      </div>
-                      <div v-if="!showEditingSessionDownload && !sessionImportName">
-                        Otherwise you can configure your session below.
-                      </div>
-                      <div v-if="sessionImportName" class="row-end">
-                        <button class="btn btn-outline-secondary btn-sm" @click="clearImportedSession">
-                          Clear
-                        </button>
-                      </div>
-                      <input
-                        ref="sessionFileInput"
-                        type="file"
-                        accept=".csv,text/csv"
-                        hidden
-                        @change="handleSessionFileSelect"
-                      />
-                    </div>
-                    
-                    <!--
-                    <div v-if="sessionImportName || showEditingSessionDownload" class="upload-session-grid">
-                      <div>
-                        <strong>Groups</strong>
-                        <div>{{ sessionEditor.groups.length }}</div>
-                      </div>
-                      <div>
-                        <strong>Light Start</strong>
-                        <div>{{ !isRangesComplete ? 'NA' : sessionEditor.light_cycle_start }}</div>
-                      </div>
-                      <div>
-                        <strong>Dark Start</strong>
-                        <div>{{ !isRangesComplete ? 'NA' : sessionEditor.dark_cycle_start }}</div>
-                      </div>
-                      <div>
-                        <strong>Session Hours</strong>
-                        <div>{{ formatHourRange(sessionEditor.hour_range) }}</div>
-                      </div>
-                    </div>
-                    -->
-                    <!--
-                    <div v-if="sessionImportMessage" class="message-text">
-                      {{ sessionImportMessage }}
-                    </div>
-                    -->
-                  </div>
-              </div>
+                </div>
+              -->
             </div>
 
+              <!-- session form -->
               <div>
                 <fieldset class="builder-fieldset page-column" :disabled="!canContinueToConfigure">
 
@@ -808,60 +875,13 @@
                   </div>
                 </div>
               </div>
-  
-              <!--
-              <div class="session-step__footer">
-                <div v-if="!canContinueToReview" class="message-text row-end">
-                  Session setup is still incomplete for analysis, but you can still continue and save this experiment as a draft.
-                </div>
-                <div class="row-end">
-                  <BButton variant="primary" @click="goToBuilderStep('review')">
-                    Continue to Metadata
-                  </BButton>
-                </div>
-              </div>
-              -->
                 </fieldset>
               </div>
+            </div>
+
+
             </section>
 
-            <section v-else class="session-step">
-              <div>
-                <fieldset class="builder-fieldset page-column">
-              <div class="metadata-section">
-                <div class="row-between">
-                  <div class="muted-copy">
-                  Update experiment metadata in order to submit to the public repository.
-                  </div>
-                </div>
-                <div class="metadata-columns">
-                  <section v-for="section in metadataSections" :key="section.title" class="metadata-section-columns">
-                    <strong>{{ section.title }}</strong>
-                    <label v-for="field in section.fields" :key="field.key" class="control-stack">
-                      <span class="metadata-field-label">
-                        {{ field.label }}
-                        <span
-                          v-if="field.requiredForPublic"
-                          class="required-icon required-public"
-                          aria-label="Required to submit to the public repository"
-                          data-tooltip="Required to submit to the public repository."
-                          tabindex="0"
-                        ></span>
-                      </span>
-                      <MetadataFieldInput v-model="metadataDraft[field.key]" :field="field" />
-                    </label>
-                  </section>
-                </div>
-                <!--
-                <label class="checkbox-row session-settings-grid__checkbox">
-                  <input v-model="experimentDraft.public" type="checkbox" :disabled="isEditingExperiment" />
-                  Make public
-                </label>
-                -->
-              </div>
-                </fieldset>
-              </div>
-            </section>
           </div>
 
         </div>
@@ -1113,6 +1133,40 @@
       </div>
     </div>
   </div>
+
+  <div v-if="contributeDialog.visible" class="confirm-dialog-backdrop" @click.self="closeContributeDialog">
+    <div class="confirm-dialog share-dialog">
+      <div class="confirm-dialog__header row-between">
+        <strong>Contribute Dataset</strong>
+        <button class="btn btn-outline-secondary btn-sm" @click="closeContributeDialog">
+          Close
+        </button>
+      </div>
+      <div class="confirm-dialog__body share-dialog__body">
+        <div class="share-dialog__dataset">
+          <strong>{{ contributeDialog.file?.name || contributeDialog.file?.title || contributeDialog.file?.id }}</strong>
+        </div>
+        <div class="muted-copy">Public datasets are visible in the CalR community repository.</div>
+        <label class="share-dialog__toggle">
+          <span>Contribute to public repository</span>
+          <input
+            :checked="Boolean(contributeDialog.file?.public)"
+            type="checkbox"
+            :disabled="contributeDialog.saving"
+            @change="toggleContributeDialogPublic($event.target.checked)"
+          />
+        </label>
+        <div v-if="contributeDialog.message" class="message-text">
+          {{ contributeDialog.message }}
+        </div>
+      </div>
+      <div class="button-row confirm-dialog__actions">
+        <BButton variant="outline-secondary" :disabled="contributeDialog.saving" @click="closeContributeDialog">
+          Done
+        </BButton>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -1152,6 +1206,7 @@ import {
   normalizeSessionPayload,
 } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
+import { BButton } from 'bootstrap-vue-next'
 
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
@@ -1394,7 +1449,7 @@ export default {
       ],
       sessionEditor: createIncompleteSessionEditor(),
       presetDietOptions: PRESET_DIETS,
-      activeBuilderStep: 'upload',
+      showMetadataEditor: false,
       calrPreviewPage: 1,
       calrPreviewPageSize: 10,
       activeQcKey: '',
@@ -1428,6 +1483,8 @@ export default {
       sessionImportName: '',
       sessionImportFormatError: false,
       sessionImportMessage: '',
+      showCalrPreview: false,
+      showSessionEditor: true,
       templateUploadDialog: {
         visible: false,
         type: '',
@@ -1440,6 +1497,12 @@ export default {
         visible: false,
         file: null,
         url: '',
+        saving: false,
+        message: '',
+      },
+      contributeDialog: {
+        visible: false,
+        file: null,
         saving: false,
         message: '',
       },
@@ -1475,6 +1538,18 @@ export default {
     },
     showEditingSessionDownload() {
       return this.isEditingExperiment && Boolean(this.editingExperimentFile) && Boolean(this.editingSessionFileEntry)
+    },
+    hasSavedCalrFile() {
+      return this.showEditingCalrDownload
+    },
+    hasSavedSessionFile() {
+      return this.showEditingSessionDownload
+    },
+    hasCompletePublicMetadata() {
+      return hasRequiredPublicMetadata(this.buildMetadataPayload())
+    },
+    shouldShowSessionEditor() {
+      return !this.showEditingSessionDownload || this.showSessionEditor
     },
     highlightedUploadSystemFormat() {
       if (this.store.upload.detectedFileFormat) {
@@ -1621,6 +1696,26 @@ export default {
         && Boolean(this.experimentDraft.name.trim())
         && Boolean(this.experimentDraft.description.trim())
     },
+    saveRequirementChecklist() {
+      return [
+        { label: 'Name', complete: Boolean(this.experimentDraft.name.trim()) },
+        { label: 'Description', complete: Boolean(this.experimentDraft.description.trim()) },
+        { label: 'Calorimetry data', complete: this.hasConvertedData },
+      ]
+    },
+    shareRequirementChecklist() {
+      return [
+        ...this.saveRequirementChecklist,
+        { label: 'Session data', complete: isSessionReadyForAnalysis(this.buildSessionPayload()) },
+      ]
+    },
+    contributeRequirementChecklist() {
+      return [
+        { label: 'Full metadata', complete: hasRequiredPublicMetadata(this.buildMetadataPayload()) },
+        { label: 'Calorimetry data', complete: this.hasConvertedData },
+        { label: 'Session data', complete: isSessionReadyForAnalysis(this.buildSessionPayload()) },
+      ]
+    },
     currentDraftStatus() {
       return buildExperimentStatus({
         hasConvertedData: this.hasConvertedData,
@@ -1628,30 +1723,48 @@ export default {
         metadata: this.buildMetadataPayload(),
       })
     },
-    draftStatusLegend() {
-      return [
-        {
-          key: 'draft',
-          label: 'Draft',
-          variant: 'warning',
-          description: 'Required to save as a draft.',
-        },
-        {
-          key: 'ready_analysis',
-          label: 'Ready for Analysis',
-          variant: 'primary',
-          description: 'Required to run analysis.',
-        },
-        {
-          key: 'ready_public',
-          label: 'Ready for Public',
-          variant: 'success',
-          description: 'Required to submit to the public repository.',
-        },
-      ]
-    },
     latestCreatedExperiment() {
       return this.store.account.userFiles.find((file) => file.id === this.latestCreatedExperimentId) || null
+    },
+    builderExperimentRecord() {
+      const builderExperimentId = this.isEditingExperiment
+        ? this.editingExperimentId
+        : this.latestCreatedExperimentId
+
+      if (!builderExperimentId) {
+        return null
+      }
+
+      return this.store.account.userFiles.find((file) => file.id === builderExperimentId) || null
+    },
+    builderExperimentIsPublic() {
+      return Boolean(this.builderExperimentRecord?.public)
+    },
+    builderExperimentIsShared() {
+      return Boolean(this.builderExperimentRecord?.shared)
+    },
+    canShareFromBuilder() {
+      return Boolean(this.builderExperimentRecord)
+        && this.isExperimentReadyForAnalysis(this.currentDraftStatus)
+    },
+    canContributeFromBuilder() {
+      return Boolean(this.builderExperimentRecord)
+        && this.currentDraftStatus.key === 'ready_public'
+        && !this.builderExperimentIsPublic
+    },
+    shareButtonClass() {
+      if (this.builderExperimentIsShared) {
+        return 'btn-success'
+      }
+
+      return this.canShareFromBuilder ? 'btn-secondary' : 'btn-outline-secondary'
+    },
+    contributeButtonClass() {
+      if (this.builderExperimentIsPublic) {
+        return 'btn-success'
+      }
+
+      return this.canContributeFromBuilder ? 'btn-secondary' : 'btn-outline-secondary'
     },
     experimentCount() {
       return this.store.account.userFiles.length
@@ -1852,6 +1965,7 @@ export default {
         return
       }
 
+      this.showCalrPreview = true
       this.qcFailureCursor[qcKey] = 0
       this.activeQcKey = qcKey
       this.goToCalrPreviewRow(qc.invalidRows[0])
@@ -1865,6 +1979,7 @@ export default {
         return
       }
 
+      this.showCalrPreview = true
       this.activeQcKey = qcKey
       this.goToCalrPreviewRow(targetRow)
     },
@@ -1954,11 +2069,17 @@ export default {
 
       this.metadataDraft = nextDraft
     },
-    goToBuilderStep(step) {
-      this.activeBuilderStep = step
-    },
     toggleMetadataDetails(file) {
       file._showDetails = !file._showDetails
+    },
+    toggleMetadataEditor() {
+      this.showMetadataEditor = !this.showMetadataEditor
+    },
+    toggleCalrPreview() {
+      this.showCalrPreview = !this.showCalrPreview
+    },
+    toggleSessionEditor() {
+      this.showSessionEditor = !this.showSessionEditor
     },
     buildMetadataPayload() {
       const numberOrNull = (value) => (value === '' || value === null || value === undefined ? null : Number(value))
@@ -2250,6 +2371,54 @@ export default {
       this.shareDialog.saving = false
       this.shareDialog.message = ''
     },
+    openBuilderShareDialog() {
+      if (!this.canShareFromBuilder || !this.builderExperimentRecord) {
+        return
+      }
+
+      this.openShareDialog(this.builderExperimentRecord)
+    },
+    openBuilderContributeDialog() {
+      if ((!this.canContributeFromBuilder && !this.builderExperimentIsPublic) || !this.builderExperimentRecord) {
+        return
+      }
+
+      this.contributeDialog.visible = true
+      this.contributeDialog.file = this.builderExperimentRecord
+      this.contributeDialog.saving = false
+      this.contributeDialog.message = ''
+    },
+    closeContributeDialog() {
+      this.contributeDialog.visible = false
+      this.contributeDialog.file = null
+      this.contributeDialog.saving = false
+      this.contributeDialog.message = ''
+    },
+    async toggleContributeDialogPublic(makePublic) {
+      if (!this.contributeDialog.file) {
+        return
+      }
+
+      this.contributeDialog.saving = true
+      this.contributeDialog.message = ''
+
+      try {
+        const response = await updateExperimentPublicStatus(
+          this.contributeDialog.file.id,
+          makePublic,
+          this.store.auth.token,
+        )
+        this.contributeDialog.file.public = response.public
+
+        if (this.editingExperimentFile?.id === this.contributeDialog.file.id) {
+          this.editingExperimentFile.public = response.public
+        }
+      } catch (error) {
+        this.contributeDialog.message = error.message || 'Unable to update public status.'
+      } finally {
+        this.contributeDialog.saving = false
+      }
+    },
     async setExperimentShared(file, makeShared) {
       if (!file) {
         return
@@ -2429,10 +2598,10 @@ export default {
         this.initializeFoodCutoffState()
         this.syncGroupDietSelections()
         this.sessionImportFormatError = false
-        this.sessionImportMessage = 'Session CSV imported into the form.'
+        this.sessionImportMessage = 'Session CSV imported'
       } catch (error) {
         this.sessionImportFormatError = false
-        this.sessionImportMessage = error.message || 'Unable to load session CSV.'
+        this.sessionImportMessage = error.message || 'Unable to load session CSV'
       } finally {
         this.sessionDragover = false
         if (this.$refs.sessionFileInput) {
@@ -2497,12 +2666,14 @@ export default {
         kcal: '',
       }
       this.closeTemplateUploadModal()
-      this.activeBuilderStep = 'upload'
+      this.showMetadataEditor = false
       this.foodCutoffManuallyEdited = false
       this.sessionDragover = false
       this.sessionImportName = ''
       this.sessionImportFormatError = false
       this.sessionImportMessage = ''
+      this.showCalrPreview = false
+      this.showSessionEditor = true
       if (clearInput && this.$refs.fileInput) {
         this.$refs.fileInput.value = ''
       }
@@ -2604,7 +2775,7 @@ export default {
     },
     async startCreateExperiment() {
       if (this.store.account.userCreatingNew && !this.isEditingExperiment) {
-        this.activeBuilderStep = 'upload'
+        this.showMetadataEditor = false
         return
       }
 
@@ -2614,7 +2785,7 @@ export default {
 
       this.store.account.userCreatingNew = true
       this.resetCreateFlow()
-      this.activeBuilderStep = 'upload'
+      this.showMetadataEditor = false
     },
     cancelCreateExperiment() {
       this.store.account.userCreatingNew = false
@@ -2787,7 +2958,7 @@ export default {
     },
     async saveExperiment() {
       if (!this.store.upload.convertedCSV || !this.canSaveExperiment) {
-        return
+        return null
       }
 
       this.store.loaders.uploadExperiment = true
@@ -2830,7 +3001,7 @@ export default {
           )
           await this.loadUserFiles()
           this.saveMessage = 'Experiment updated.'
-          return
+          return this.editingExperimentId
         }
 
         const uploadedExperiment = await uploadCalrFile(
@@ -2853,8 +3024,10 @@ export default {
         await this.loadUserFiles()
         this.latestCreatedExperimentId = uploadedExperiment.submission_id
         this.saveMessage = 'Experiment saved.'
+        return uploadedExperiment.submission_id
       } catch (error) {
         this.saveMessage = error.message || 'Experiment save failed.'
+        return null
       } finally {
         this.store.loaders.uploadExperiment = false
       }
@@ -2915,7 +3088,7 @@ export default {
         }
 
         this.store.account.userCreatingNew = true
-        this.activeBuilderStep = 'upload'
+        this.showMetadataEditor = false
         this.editingExperimentFile = file
         this.editingStandardFileEntry = standard
         this.editingSessionFileEntry = shouldUseSavedSession ? session : null
@@ -2926,6 +3099,7 @@ export default {
         this.sessionImportName = ''
         this.sessionImportMessage = ''
         this.saveMessage = ''
+        this.showSessionEditor = !shouldUseSavedSession
         this.experimentDraft = {
           name: file.name || '',
           description: file.description || '',

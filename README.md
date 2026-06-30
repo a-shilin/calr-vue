@@ -66,10 +66,10 @@ The app uses hash routing for GitHub Pages compatibility.
 - In the analysis-page `Your Datasets` table, draft datasets show a `Draft` pill instead of an `Open` action.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
 - Shared private dataset links open through `#/analysis?share={submission_id}`, show a percent-loaded indicator while loading, and render a `Private` pill in the dataset header.
-- The account-side create/edit experiment flow is inline on the account page, with step tabs for upload, session configuration, and metadata.
-- Experiment name and description now sit above the builder step tabs and stay visible across the full create/edit flow.
-- The builder header shows the current readiness state as a pill with a hover/focus tooltip that explains each status level.
-- Required markers in the builder now use colored dots with custom hover/focus tooltips for draft-, analysis-, and public-level requirements.
+- The account-side create/edit experiment flow is inline on the account page as a condensed one-page builder.
+- Experiment name and description sit at the top of the builder and stay visible across the full create/edit flow.
+- The builder header shows the current readiness state as a pill.
+- Save, Share, and Contribute actions use checklist-style tooltips to show remaining requirements.
 - The upload step shows a paginated CalR data preview once a CalR file exists, computes total data duration from the uploaded rows, and places upload QC cards beside the preview table on wider layouts.
 - Upload QC checks for `rer` and `feed` are currently informative only; they do not block save or step navigation.
 - Upload-file detection now distinguishes recognized `CLAMS` / `TSE` / `Sable` / `CalR` files from unrecognized inputs and shows an inline error state plus red dropzone styling for unsupported files.
@@ -77,10 +77,13 @@ The app uses hash routing for GitHub Pages compatibility.
 - Session CSV upload now performs a lightweight recognition check before import. A session CSV must include `group_names` plus at least two `groupN` columns to be treated as recognized.
 - During create, the upload step keeps the green dropzone completion state after CalR upload/conversion. During edit, the saved CalR file is shown with `Re-upload` and download actions instead.
 - When editing an experiment that already has a saved CalR file, the upload dropzone is replaced with `Re-upload` and download actions. Re-upload keeps the same experiment and replaces the saved CalR file instead of creating a new one.
-- When editing an experiment that already has a meaningful saved session file, the session dropzone is replaced with a download action; draft-only placeholder session state is ignored on reload.
-- Metadata fields are config-driven from JSON, and required-for-public fields are marked visually with tooltip-enabled requirement dots instead of inline text labels.
+- When editing an experiment that already has a meaningful saved session file, the session section starts collapsed behind `Edit` / `Download Session`; draft-only placeholder session state is ignored on reload.
+- Metadata fields are config-driven from JSON.
 - On edit, the saved metadata `system` value also highlights the matching upload-system card until a new upload/re-upload flow starts.
 - The session-side food cutoff QC now follows the same pass/fail card pattern as the upload-side QC cards. Before groups and diets are configured, the food-cutoff minimum stays at `0` and the QC card stays hidden.
+- Builder-side `Share` and `Contribute` controls appear only after the experiment has a persisted backend record.
+- Builder-side `Contribute` now opens a modal with the public-repository toggle instead of toggling immediately.
+- Edit mode shows green completion checks next to `Full Metadata`, `Download CalR`, and `Download Session` when those saved resources or requirements are satisfied.
 
 ## Analysis Data Flow
 
@@ -149,6 +152,8 @@ The account-side experiment builder currently supports:
 - session CSV recognition checks that require `group_names` plus at least two `groupN` columns before import
 - edit existing experiments by loading the saved CalR CSV plus saved session data when that session is meaningful
 - editing existing experiments with direct download access to the saved CalR and session files from the builder
+- builder-side share action for persisted experiments via modal
+- builder-side contribute action for persisted experiments via modal
 - account-table readiness status loading that resolves incrementally after the file list is shown
 - draft save behavior:
   - minimum draft save: experiment name, description, and converted CalR file
@@ -168,8 +173,9 @@ The account-side experiment builder currently supports:
 - config-driven metadata entry with:
   - JSON-defined fields
   - select and select-plus-free-text inputs
-  - required-for-public markers used by the `Ready for Public` status
+  - `Ready for Public` gating driven by required metadata completion
 - template-based import helpers for weights and mass change, including blank CSV template download and CSV upload from the builder modal
+- edit-state completion checkmarks for saved CalR, saved session, and full required metadata
 
 ## Current Status
 
@@ -189,7 +195,7 @@ The account-side experiment builder currently supports:
 - session metadata editing and session upload/update flows
 - config-driven experiment metadata form
 - session completion indicator and analysis/public readiness gating
-- builder readiness/status tooltip and required-dot tooltips
+- builder action requirement checklists in save/share/contribute tooltips
 - per-dataset public and shared access toggles in the account list
 - upload-file recognition and unrecognized-file handling
 - subject session CSV import and builder hydration
@@ -211,6 +217,7 @@ The account-side experiment builder currently supports:
 - The analysis view now guards large datasets more carefully; `maxHour` is computed without array spreading to avoid call-stack failures on large sessions.
 - The account builder now also avoids array-spread min/max patterns when deriving upload-side duration summaries from large CalR tables.
 - Draft editing now distinguishes between meaningful saved session data and placeholder/default session state when deciding what to restore into the session editor.
+- Builder `Share` / `Contribute` actions are intentionally saved-record-only even though their checklist tooltips can describe readiness before save.
 - Plot parity work has recently aligned time-series, distribution, and regression behavior more closely with the legacy app.
 - `JS_REBUILD_FILES_REFERENCE` is still the main behavior reference when checking rebuilt frontend logic against the older app.
 - Avoid dataset-specific fixes unless a backend/data contract issue has been confirmed.

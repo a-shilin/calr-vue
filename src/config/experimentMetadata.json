@@ -59,13 +59,6 @@
         "placeholder": "Select"
       },
       {
-        "key": "treatment",
-        "label": "Treatment",
-        "type": "text",
-        "requiredForPublic": true,
-        "placeholder": "e.g. HFD for 10 weeks"
-      },
-      {
         "key": "strain",
         "label": "Strain",
         "type": "text",
@@ -94,6 +87,18 @@
         "requiredForPublic": true,
         "placeholder": "",
         "step": "1"
+      }
+    ]
+  },
+  {
+    "title": "Treatment & Environment",
+    "fields": [
+      {
+        "key": "treatment",
+        "label": "Treatment",
+        "type": "text",
+        "requiredForPublic": true,
+        "placeholder": "e.g. HFD for 10 weeks"
       },
       {
         "key": "litter",
@@ -102,12 +107,7 @@
         "requiredForPublic": true,
         "placeholder": "",
         "step": "1"
-      }
-    ]
-  },
-  {
-    "title": "Environment",
-    "fields": [
+      },
       {
         "key": "temperature",
         "label": "Ambient Temp C",
