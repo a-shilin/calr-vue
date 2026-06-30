@@ -2,7 +2,7 @@
 
 Vue 3 + Vite frontend for browsing, configuring, and analyzing CalR datasets.
 
-This app is a rebuild of the older single-file prototype preserved in [index.prototype.html](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/index.prototype.html).
+This app is a rebuild of the older single-file prototype preserved in [index.prototype.html](index.prototype.html).
 
 ## Stack
 
@@ -41,16 +41,17 @@ The app uses hash routing for GitHub Pages compatibility.
 
 ## Current Structure
 
-- [src/views](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/views): page-level screens
-- [src/components/MetadataFieldInput.vue](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/components/MetadataFieldInput.vue): shared text/select/select-plus-free-text metadata field input
-- [src/config/experimentMetadata.json](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/config/experimentMetadata.json): data-only experiment metadata field definitions
-- [src/router/index.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/router/index.js): app routes
-- [src/services/registryService.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/services/registryService.js): live CalR backend API calls
-- [src/utils/prep-for-analysis.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/prep-for-analysis.js): normalize backend enriched payloads into frontend analysis data
-- [src/utils/process.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/process.js): shared session normalization, exclusions, outlier handling, and aggregation helpers
-- [src/utils/plotting](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting): plot-specific renderers and plotting helpers
-- [src/store/appStore.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/store/appStore.js): shared reactive app state
-- [src/styles/app.css](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/styles/app.css): app styles
+- [src/views](src/views): page-level screens
+- [src/components/AnalysisPlotsPanel.vue](src/components/AnalysisPlotsPanel.vue): shared analysis plots panel used on both the analysis page and the account builder
+- [src/components/MetadataFieldInput.vue](src/components/MetadataFieldInput.vue): shared text/select/select-plus-free-text metadata field input
+- [src/config/experimentMetadata.json](src/config/experimentMetadata.json): data-only experiment metadata field definitions
+- [src/router/index.js](src/router/index.js): app routes
+- [src/services/registryService.js](src/services/registryService.js): live CalR backend API calls
+- [src/utils/prep-for-analysis.js](src/utils/prep-for-analysis.js): normalize backend enriched payloads into frontend analysis data
+- [src/utils/process.js](src/utils/process.js): shared session normalization, exclusions, outlier handling, and aggregation helpers
+- [src/utils/plotting](src/utils/plotting): plot-specific renderers and plotting helpers
+- [src/store/appStore.js](src/store/appStore.js): shared reactive app state
+- [src/styles/app.css](src/styles/app.css): app styles
 
 ## Current UX Notes
 
@@ -59,11 +60,12 @@ The app uses hash routing for GitHub Pages compatibility.
 - The analysis page always shows both `Public Datasets` and `Your Datasets` tabs.
 - Before login, the `Your Datasets` tab shows an account-creation CTA instead of a dataset table.
 - The account page shows the experiment list inline under a `Your Experiments` heading.
+- The account experiment list includes a `State` column with three dots indicating data, session, and metadata completeness — each dot fills green when that section is complete.
 - The account experiment list includes computed readiness states: `Draft`, `Ready for Analysis`, or `Ready for Public`.
 - Account-side dataset rows render as soon as the file list is available, then status badges update progressively as session configs finish loading.
 - The account experiment list includes `Public` and `Share` controls. Share is enabled only for datasets that are ready for analysis.
 - Dataset tables on the analysis page are constrained in a scrollable container with a max height of 400px.
-- In the analysis-page `Your Datasets` table, draft datasets show a `Draft` pill instead of an `Open` action.
+- In the analysis-page `Your Datasets` table, draft datasets show a status pill instead of an `Open` action.
 - Dataset open actions show a spinner plus a percent-loaded indicator while enriched analysis data is downloading.
 - Shared private dataset links open through `#/analysis?share={submission_id}`, show a percent-loaded indicator while loading, and render a `Private` pill in the dataset header.
 - The account-side create/edit experiment flow is inline on the account page as a condensed one-page builder.
@@ -78,16 +80,67 @@ The app uses hash routing for GitHub Pages compatibility.
 - During create, the upload step keeps the green dropzone completion state after CalR upload/conversion. During edit, the saved CalR file is shown with `Re-upload` and download actions instead.
 - When editing an experiment that already has a saved CalR file, the upload dropzone is replaced with `Re-upload` and download actions. Re-upload keeps the same experiment and replaces the saved CalR file instead of creating a new one.
 - When editing an experiment that already has a meaningful saved session file, the session section starts collapsed behind `Edit` / `Download Session`; draft-only placeholder session state is ignored on reload.
+- Edit-state completion checkmarks appear next to saved CalR, saved session (only when session is analysis-complete), and full required metadata.
 - Metadata fields are config-driven from JSON.
 - On edit, the saved metadata `system` value also highlights the matching upload-system card until a new upload/re-upload flow starts.
 - The session-side food cutoff QC now follows the same pass/fail card pattern as the upload-side QC cards. Before groups and diets are configured, the food-cutoff minimum stays at `0` and the QC card stays hidden.
 - Builder-side `Share` and `Contribute` controls appear only after the experiment has a persisted backend record.
 - Builder-side `Contribute` now opens a modal with the public-repository toggle instead of toggling immediately.
-- Edit mode shows green completion checks next to `Full Metadata`, `Download CalR`, and `Download Session` when those saved resources or requirements are satisfied.
+
+## Builder Save and Transition Flow
+
+After a successful save from the create-new-experiment flow:
+
+1. The page switches to edit mode immediately using in-memory data — no waiting for API responses.
+2. The session section transitions to edit mode instantly (download/edit controls, no dropzone).
+3. The session config is fetched from the backend in the background and the builder hydrates once it arrives.
+4. If the saved experiment is analysis-ready, the analysis section appears with a loading indicator immediately, and plots render once data arrives.
+
+After a save from the edit flow (including saving a session for the first time on a draft):
+
+1. If a new session file was created, `editingSessionId` is updated from the upload response so subsequent saves update the existing session rather than creating a new one.
+2. The session section transitions to edit mode immediately.
+3. If the experiment is now analysis-ready, the analysis section appears with a loading indicator and plots render in the background.
+
+## Analysis Plots Panel
+
+`AnalysisPlotsPanel` is a shared component used on both the analysis page and the account builder. It accepts:
+
+- `analysisData` — normalized rows + session metadata
+- `sessionMetadata` — session/group/subject metadata
+- `maxHour` — experiment duration
+- `groupColors` — `{ groupName: hexColor }` map
+- `analysisOptions` — `{ removeOutliers }` reactive options object
+- `context` — `'experiment'` (default) or `'builderAnalysis'`; routes store access to the correct analysis slice
+- `defaultViewMode` — `'stacked'` (default) or `'single'`
+
+The panel renders above the plot nav:
+
+- A **session stats bar** — subjects, duration, light/dark cycle hours, and remove-outliers toggle
+- **Group cards** — one per group, showing color swatch, name, diet, kcal/g, and subject count
+
+Plot rendering uses double `requestAnimationFrame` batching with per-plot loading spinners. Plotly containers are kept in the DOM via `v-show` (not `v-if`) to prevent Plotly from losing its mount target. `Plotly.Plots.resize()` is called after all plots render to correct container-width measurement issues.
+
+The `store` has two parallel analysis slices:
+
+- `store.experiment` — used by the analysis page (`context='experiment'`)
+- `store.builderAnalysis` — used by the account builder (`context='builderAnalysis'`)
+
+Loader flags (`doQC`, `doAncova`, `doPower`, `doBuilderQC`, `doBuilderAncova`, `doBuilderPower`) are routed to the correct slice based on `context`.
+
+## Analysis Page Dataset Info
+
+The dataset info panel on the analysis page shows:
+
+- Experiment name and description as title/subtitle
+- A **Show/Hide Metadata** toggle that reveals the full config-driven metadata fields (same layout as the account builder, read-only with `—` for empty fields)
+- A **Private** pill for shared-link datasets
+
+Session stats, group cards, and plot controls live inside the `AnalysisPlotsPanel` component below the info panel.
 
 ## Analysis Data Flow
 
-The analysis screens now use backend-enriched session data as the primary source of truth.
+The analysis screens use backend-enriched session data as the primary source of truth.
 
 Current frontend analysis flow:
 
@@ -121,13 +174,13 @@ The frontend still keeps a few compatibility behaviors during normalization:
 
 Plot-specific prep and Plotly rendering live in:
 
-- [src/utils/plotting/time-series.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/time-series.js)
-- [src/utils/plotting/box-plot.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/box-plot.js)
-- [src/utils/plotting/regression.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/regression.js)
-- [src/utils/plotting/weight.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/weight.js)
-- [src/utils/plotting/qc.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/qc.js)
-- [src/utils/plotting/power.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/power.js)
-- [src/utils/plotting/summary-regression.js](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/src/utils/plotting/summary-regression.js)
+- [src/utils/plotting/time-series.js](src/utils/plotting/time-series.js)
+- [src/utils/plotting/box-plot.js](src/utils/plotting/box-plot.js)
+- [src/utils/plotting/regression.js](src/utils/plotting/regression.js)
+- [src/utils/plotting/weight.js](src/utils/plotting/weight.js)
+- [src/utils/plotting/qc.js](src/utils/plotting/qc.js)
+- [src/utils/plotting/power.js](src/utils/plotting/power.js)
+- [src/utils/plotting/summary-regression.js](src/utils/plotting/summary-regression.js)
 
 QC, Power, and ANCOVA/ANOVA are backend-run analyses. The frontend sends requests to:
 
@@ -162,6 +215,7 @@ The account-side experiment builder currently supports:
 - session update behavior:
   - replace an existing saved session via `PUT /api/calr/sessions/{session_id}`
   - create a session during edit only when needed for meaningful draft session data or analysis-ready state
+  - after first-time session upload during edit, `editingSessionId` is updated from the upload response
 - subject designation with always-visible tables for groups, weights, mass change, and exclusions
 - session completion tracking:
   - groups/diets are complete when every group has a name, color, and diet
@@ -175,7 +229,7 @@ The account-side experiment builder currently supports:
   - select and select-plus-free-text inputs
   - `Ready for Public` gating driven by required metadata completion
 - template-based import helpers for weights and mass change, including blank CSV template download and CSV upload from the builder modal
-- edit-state completion checkmarks for saved CalR, saved session, and full required metadata
+- edit-state completion checkmarks for saved CalR, saved session (only when session is fully analysis-complete), and full required metadata
 
 ## Current Status
 
@@ -201,6 +255,9 @@ The account-side experiment builder currently supports:
 - subject session CSV import and builder hydration
 - session CSV recognition checks before import
 - subject weights and mass-change template import/export helpers
+- instant post-save transition to edit mode (no API round-trip before UI switches)
+- analysis section auto-loads after save when experiment is analysis-ready
+- analysis plots panel embedded in account builder for in-context analysis
 - time-series plot
 - distribution plot
 - regression plot
@@ -226,7 +283,7 @@ The account-side experiment builder currently supports:
 
 Files used during backend/frontend parity checks live in:
 
-- [sample_enriched](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/sample_enriched)
+- [sample_enriched](sample_enriched)
 
 These are reference artifacts only; they are not part of the runtime application flow.
 
@@ -252,7 +309,9 @@ The app is static-hostable, but runtime behavior still depends on those APIs bei
 
 Some cleanup/performance work already in place:
 
-- batched plot renders
+- batched plot renders with double `requestAnimationFrame` scheduling
+- per-plot loading spinners with pre-marked spinner state so all plot spinners appear simultaneously
+- `Plotly.Plots.resize()` pass after all renders to correct container-width measurement
 - Plotly purge on unmount
 - bounded shared derived-data caches
 - reduced redundant analysis-path transformations
@@ -261,7 +320,7 @@ Large Plotly bundles are still present in production builds, so Vite may warn ab
 
 ## GitHub Pages
 
-This repo includes a GitHub Pages workflow at [.github/workflows/deploy-pages.yml](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/.github/workflows/deploy-pages.yml).
+This repo includes a GitHub Pages workflow at [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
 
 Deployment setup:
 
@@ -278,5 +337,5 @@ The Pages setup uses:
 
 ## Reference Files
 
-- [index.prototype.html](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/index.prototype.html)
-- [JS_REBUILD_FILES_REFERENCE](/Users/shilin/Documents/Projects/MouseCalR/_new/sample_data/calr_vue/JS_REBUILD_FILES_REFERENCE)
+- [index.prototype.html](index.prototype.html)
+- [JS_REBUILD_FILES_REFERENCE](JS_REBUILD_FILES_REFERENCE)

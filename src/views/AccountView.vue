@@ -21,10 +21,10 @@
 
         <div class="login-card">
           <div class="card-tabs">
-            <button class="card-tab" :class="{ active: store.auth.mode === 'login' }" @click="setAuthMode('login')">
+            <button class="card-tab-2" :class="{ active: store.auth.mode === 'login' }" @click="setAuthMode('login')">
               Login
             </button>
-            <button class="card-tab" :class="{ active: store.auth.mode === 'create' }" @click="setAuthMode('create')">
+            <button class="card-tab-2" :class="{ active: store.auth.mode === 'create' }" @click="setAuthMode('create')">
               Create Account
             </button>
           </div>
@@ -167,13 +167,6 @@
                     </ul>
                   </span>
                 </span>
-                <BButton
-                  v-if="latestCreatedExperiment && !isEditingExperiment && isExperimentReadyForAnalysis(latestCreatedExperiment.statusInfo)"
-                  variant="success"
-                  @click="openExperiment(latestCreatedExperiment)"
-                >
-                  Open in Analysis
-                </BButton>
                 <BButton v-if="store.account.userCreatingNew" variant="outline-secondary" @click="closeBuilderTab">
                   Close
                 </BButton>
@@ -249,8 +242,11 @@
 
             <section class="session-step page-column">
               <div style="display:flex; flex-direction: column; gap: 20px">
-                <div class="muted-copy">
-                  Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
+                <div>
+                  <strong>Experiment Data</strong>
+                  <div class="muted-copy">
+                    Convert instrument CSV files into CalR format. Or upload your CalR-standard CSV directly.
+                  </div>
                 </div>
                 <div class="session-uploads">
                   <div class="session-upload-row">
@@ -560,23 +556,7 @@
                     Designate groups, diets, subjects, and experiment ranges.
                   </div>
                 </div>
-                <!--
-                <div class="session-uploads">
-                  <div>
-                    <div class="session-uploads-convert">
-                        <div class="session-uploads-session">
-                        <div>Session</div>
-                        <div class="session-uploads-intruments" style="padding:0">
-                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isRangesComplete }">Ranges & Filters</div>
-                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isGroupsAndDietsComplete }">Groups & Diets</div>
-                          <div class="session-uploads-intrument" :class="{ 'detected-calr': isSubjectsComplete }">Subjects & Weights</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              -->
-            </div>
+              </div>
 
               <!-- session form -->
               <div>
@@ -882,6 +862,30 @@
 
             </section>
 
+            <section v-if="builderAnalysisLoading || shouldShowBuilderPlots" class="session-step page-column">
+              <div v-if="builderAnalysisLoading" class="analysis-loading-bar">
+                <BSpinner small />
+                <span>Loading analysis data...</span>
+              </div>
+              <div v-else>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                  <div>
+                    <strong>Analysis</strong>
+                    <div class="muted-copy">CalR analytical plots based on your calorimetry data. </div>
+                  </div>
+                  <AnalysisPlotsPanel
+                    context="builderAnalysis"
+                    default-view-mode="single"
+                    :analysis-data="builderAnalysisData"
+                    :session-metadata="builderSessionMetadata"
+                    :max-hour="builderMaxHour"
+                    :group-colors="builderGroupColors"
+                    :analysis-options="builderAnalysisOptions"
+                  />
+                </div>
+              </div>
+            </section>
+
           </div>
 
         </div>
@@ -918,6 +922,29 @@
                 {{ slot.item.description || '' }}
               </template>
 
+              <template #cell(state)="slot">
+                <div class="experiment-state-dots">
+                  <span class="state-dot-wrap" data-tooltip="Calorimetry data">
+                    <span
+                      class="experiment-state-dot"
+                      :class="slot.item.files?.find(f => f.file_type === 'standard') ? 'experiment-state-dot--complete' : ''"
+                    ></span>
+                  </span>
+                  <span class="state-dot-wrap" data-tooltip="Session configuration">
+                    <span
+                      class="experiment-state-dot"
+                      :class="slot.item.statusLoading ? 'experiment-state-dot--loading' : isExperimentReadyForAnalysis(slot.item.statusInfo) ? 'experiment-state-dot--complete' : ''"
+                    ></span>
+                  </span>
+                  <span class="state-dot-wrap" data-tooltip="Metadata">
+                    <span
+                      class="experiment-state-dot"
+                      :class="slot.item.statusLoading ? 'experiment-state-dot--loading' : slot.item.statusInfo?.key === 'ready_public' ? 'experiment-state-dot--complete' : ''"
+                    ></span>
+                  </span>
+                </div>
+              </template>
+
               <template #cell(status)="slot">
                 <BBadge :variant="slot.item.statusInfo?.variant || 'secondary'" style="display:flex; align-items: center; width:fit-content">
                   <BSpinner v-if="slot.item.statusLoading" small style="margin-right: 0.35rem;" />
@@ -929,21 +956,21 @@
                 <BBadge
                   :variant="slot.item.public ? 'success' : 'secondary'"
                   class="badge-toggle"
-                  @click="toggleExperimentPublic(slot.item)"
+                  @click="openContributeDialog(slot.item)"
                 >
                   {{ slot.item.public ? 'Yes' : 'No' }}
                 </BBadge>
               </template>
 
               <template #cell(shared)="slot">
-                <BButton
-                  size="sm"
-                  :variant="slot.item.shared ? 'success' : 'outline-secondary'"
-                  :disabled="slot.item.shareSaving || slot.item.statusLoading || !isExperimentReadyForAnalysis(slot.item.statusInfo)"
+                <BBadge
+                  :variant="slot.item.shared ? 'success' : 'secondary'"
+                  class="badge-toggle"
+                  :class="{ 'badge-toggle--disabled': !isExperimentReadyForAnalysis(slot.item.statusInfo) }"
                   @click="openShareDialog(slot.item)"
                 >
-                  {{ slot.item.shareSaving ? 'Saving...' : 'Share' }}
-                </BButton>
+                  {{ slot.item.shareSaving ? '...' : (slot.item.shared ? 'Yes' : 'No') }}
+                </BBadge>
               </template>
       
               <template #cell(uploaded_at)="slot">
@@ -956,59 +983,12 @@
                     <BSpinner v-if="slot.item.loading" small />
                     <span v-if="slot.item.loading" class="muted-copy">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
                   </span>
-                  <BButton
-                    v-if="isExperimentReadyForAnalysis(slot.item.statusInfo)"
-                    size="sm"
-                    variant="outline-primary"
-                    @click="openExperiment(slot.item)"
-                  >
-                    Analysis
-                  </BButton>
-                  <BButton size="sm" variant="outline-secondary" @click="toggleMetadataDetails(slot.item)">
-                    {{ slot.item._showDetails ? 'Hide Info' : 'Info' }}
-                  </BButton>
                   <BButton size="sm" variant="outline-secondary" @click="editExperiment(slot.item)">
-                    Edit
+                    View/Edit
                   </BButton>
                   <BButton size="sm" variant="outline-danger" @click="removeExperiment(slot.item)">
                     Delete
                   </BButton>
-                </div>
-              </template>
-      
-              <template #row-details="slot">
-                <div class="metadata-card">
-                  <div class="metadata-card__header">
-                    <strong>Experiment Metadata</strong>
-                  </div>
-                  <div class="metadata-columns">
-                    <section v-for="section in metadataSections" :key="section.title" class="metadata-section">
-                      <strong>{{ section.title }}</strong>
-                      <div class="metadata-grid metadata-grid--display">
-                        <div v-for="field in section.fields" :key="field.key" class="metadata-display-field">
-                          <span class="metadata-display-field__label">{{ field.label }}</span>
-                          <span>{{ formatMetadataValue(slot.item.metadata?.[field.key] ?? slot.item[field.key]) }}</span>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                  <div class="metadata-card__files">
-                    <strong>Files</strong>
-                    <div class="metadata-file-list">
-                      <div v-for="file in slot.item.files" :key="file.id" class="file-pill">
-                        <BBadge variant="primary">{{ file.file_type }}</BBadge>
-                        <span>{{ file.file_name }} ({{ formatFileSize(file.file_size) }})</span>
-                        <BButton
-                          v-if="file.file_type === 'session' || file.file_type === 'standard'"
-                          size="sm"
-                          variant="link"
-                          @click="downloadExperimentFile(slot.item, file)"
-                        >
-                          Download
-                        </BButton>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </template>
             </BTable>
@@ -1172,6 +1152,7 @@
 <script>
 import { appStore } from '../store/appStore'
 import MetadataFieldInput from '../components/MetadataFieldInput.vue'
+import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
 import experimentMetadataSections from '../config/experimentMetadata.json'
 import {
   convertInstrumentFiles,
@@ -1430,6 +1411,7 @@ export default {
   name: 'AccountView',
   components: {
     MetadataFieldInput,
+    AnalysisPlotsPanel,
   },
   data() {
     return {
@@ -1442,6 +1424,7 @@ export default {
         'name',
         'description',
         'uploaded_at',
+        { key: 'state', label: 'State' },
         'status',
         'public',
         { key: 'shared', label: 'Share' },
@@ -1515,6 +1498,11 @@ export default {
         confirmVariant: 'primary',
         resolve: null,
       },
+      builderGroupColors: {},
+      builderAnalysisLoading: false,
+      builderAnalysisOptions: {
+        removeOutliers: false,
+      },
     }
   },
   computed: {
@@ -1543,7 +1531,7 @@ export default {
       return this.showEditingCalrDownload
     },
     hasSavedSessionFile() {
-      return this.showEditingSessionDownload
+      return this.showEditingSessionDownload && isSessionReadyForAnalysis(this.buildSessionPayload())
     },
     hasCompletePublicMetadata() {
       return hasRequiredPublicMetadata(this.buildMetadataPayload())
@@ -1768,6 +1756,26 @@ export default {
     },
     experimentCount() {
       return this.store.account.userFiles.length
+    },
+    shouldShowBuilderPlots() {
+      return Boolean(this.store.builderAnalysis.current && this.store.builderAnalysis.analysisData)
+    },
+    builderAnalysisData() {
+      return this.store.builderAnalysis.analysisData
+    },
+    builderSessionMetadata() {
+      return this.store.builderAnalysis.analysisData?.session || { groupNames: [], colors: [], dietNames: [], dietCal: [] }
+    },
+    builderMaxHour() {
+      const rows = this.store.builderAnalysis.analysisData?.rows || []
+      let maxHour = null
+      rows.forEach((row) => {
+        const hour = Number(row?.hour)
+        if (Number.isFinite(hour)) {
+          maxHour = maxHour === null ? hour : Math.max(maxHour, hour)
+        }
+      })
+      return maxHour === null ? 24 : Math.ceil(maxHour)
     },
   },
   async mounted() {
@@ -2378,15 +2386,18 @@ export default {
 
       this.openShareDialog(this.builderExperimentRecord)
     },
+    openContributeDialog(file) {
+      this.contributeDialog.visible = true
+      this.contributeDialog.file = file
+      this.contributeDialog.saving = false
+      this.contributeDialog.message = ''
+    },
     openBuilderContributeDialog() {
       if ((!this.canContributeFromBuilder && !this.builderExperimentIsPublic) || !this.builderExperimentRecord) {
         return
       }
 
-      this.contributeDialog.visible = true
-      this.contributeDialog.file = this.builderExperimentRecord
-      this.contributeDialog.saving = false
-      this.contributeDialog.message = ''
+      this.openContributeDialog(this.builderExperimentRecord)
     },
     closeContributeDialog() {
       this.contributeDialog.visible = false
@@ -2690,6 +2701,68 @@ export default {
       this.qcFailureCursor.energyExpenditure = 0
       this.qcFailureCursor.foodIntake = 0
     },
+    async loadBuilderAnalysisData(file) {
+      const target = file || this.builderExperimentRecord
+      if (!target) {
+        return
+      }
+
+      const session = target.files?.find((item) => item.file_type === 'session')
+      if (!session) {
+        return
+      }
+
+      this.builderAnalysisLoading = true
+      try {
+        const [enrichedPayload, sessionConfig] = await Promise.all([
+          fetchEnrichedSession(session.id, this.store.auth.token, target.public),
+          fetchSessionConfig(session.id, this.store.auth.token, target.public),
+        ])
+
+        const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
+          numericalColumns,
+          sessionConfig,
+        })
+
+        this.store.builderAnalysis.current = target
+        this.store.builderAnalysis.analysisData = analysisData
+
+        if (this.store.builderAnalysis.analysisSessionId !== session.id) {
+          this.store.builderAnalysis.analysisSessionId = session.id
+          this.store.builderAnalysis.qcResults = null
+          this.store.builderAnalysis.powerResults = null
+          this.store.builderAnalysis.ancovaResults = null
+          this.store.builderAnalysis.analysisErrors.qc = null
+          this.store.builderAnalysis.analysisErrors.power = null
+          this.store.builderAnalysis.analysisErrors.ancova = null
+        }
+
+        const fallbackPalette = ['#3B73C7', '#ED5F00', '#2E8B57', '#8B5CF6', '#B45309', '#D64550']
+        const nextGroupColors = {}
+        const session_ = analysisData.session
+        session_.groupNames.forEach((groupName, index) => {
+          nextGroupColors[groupName] = session_.colors[index] || fallbackPalette[index % fallbackPalette.length]
+        })
+        this.builderGroupColors = nextGroupColors
+      } catch {
+        // Analysis loading is best-effort; don't surface errors in the builder UI
+      } finally {
+        this.builderAnalysisLoading = false
+      }
+    },
+    clearBuilderAnalysis() {
+      this.builderAnalysisLoading = false
+      this.store.builderAnalysis.current = null
+      this.store.builderAnalysis.analysisData = null
+      this.store.builderAnalysis.analysisSessionId = null
+      this.store.builderAnalysis.qcResults = null
+      this.store.builderAnalysis.powerResults = null
+      this.store.builderAnalysis.ancovaResults = null
+      this.store.builderAnalysis.analysisErrors.qc = null
+      this.store.builderAnalysis.analysisErrors.power = null
+      this.store.builderAnalysis.analysisErrors.ancova = null
+      this.builderGroupColors = {}
+    },
     clearSelectedFiles(clearInput = true) {
       this.resetUploadSelection(clearInput)
       this.editingExperimentFile = null
@@ -2700,6 +2773,7 @@ export default {
       this.editingOriginalConvertedCsv = ''
       this.resetMetadataDraft()
       this.latestCreatedExperimentId = null
+      this.clearBuilderAnalysis()
     },
     resetCreateFlow() {
       this.clearSelectedFiles()
@@ -2991,7 +3065,10 @@ export default {
               this.store.auth.token,
             )
           } else if (shouldPersistSession) {
-            await uploadSessionFile(this.editingExperimentId, apiSessionPayload, this.store.auth.token)
+            const uploadedSession = await uploadSessionFile(this.editingExperimentId, apiSessionPayload, this.store.auth.token)
+            if (uploadedSession?.id) {
+              this.editingSessionId = uploadedSession.id
+            }
           }
 
           await updateExperimentMetadata(
@@ -3001,6 +3078,18 @@ export default {
           )
           await this.loadUserFiles()
           this.saveMessage = 'Experiment updated.'
+          const updatedFile = this.store.account.userFiles.find((f) => f.id === this.editingExperimentId)
+          if (updatedFile) {
+            const updatedSession = updatedFile.files?.find((f) => f.file_type === 'session')
+            if (updatedSession && !this.editingSessionFileEntry) {
+              this.editingSessionFileEntry = updatedSession
+              this.showSessionEditor = false
+            }
+            if (this.isExperimentReadyForAnalysis(this.currentDraftStatus)) {
+              this.builderAnalysisLoading = true
+              this.$nextTick(() => this.loadBuilderAnalysisData(updatedFile))
+            }
+          }
           return this.editingExperimentId
         }
 
@@ -3022,8 +3111,11 @@ export default {
           this.store.auth.token,
         )
         await this.loadUserFiles()
-        this.latestCreatedExperimentId = uploadedExperiment.submission_id
         this.saveMessage = 'Experiment saved.'
+        const newFile = this.store.account.userFiles.find((f) => f.id === uploadedExperiment.submission_id)
+        if (newFile) {
+          this.transitionToEditModeFromSave(newFile)
+        }
         return uploadedExperiment.submission_id
       } catch (error) {
         this.saveMessage = error.message || 'Experiment save failed.'
@@ -3053,7 +3145,7 @@ export default {
         }
       }
     },
-    async editExperiment(file) {
+    async editExperiment(file, { skipConfirm = false } = {}) {
       const standard = file.files.find((item) => item.file_type === 'standard')
       const session = file.files.find((item) => item.file_type === 'session')
 
@@ -3061,7 +3153,7 @@ export default {
         return
       }
 
-      if (this.store.account.userCreatingNew) {
+      if (!skipConfirm && this.store.account.userCreatingNew) {
         const targetLabel = `editing ${file.name || file.title || 'this experiment'}`
         if (!await this.confirmBuilderReplacement(targetLabel)) {
           return
@@ -3107,8 +3199,72 @@ export default {
         }
         this.resetMetadataDraft(file)
         this.hydrateBuilder(dataCsv, mergedSessionConfig)
+
+        if (this.isExperimentReadyForAnalysis(file.statusInfo)) {
+          this.loadBuilderAnalysisData(file)
+        }
       } finally {
         file.loading = false
+      }
+    },
+    transitionToEditModeFromSave(file) {
+      const standard = file.files.find((item) => item.file_type === 'standard')
+      const session = file.files.find((item) => item.file_type === 'session')
+      if (!standard) return
+
+      // Switch page to edit mode immediately — no awaits
+      this.store.account.userCreatingNew = true
+      this.showMetadataEditor = false
+      this.editingExperimentFile = file
+      this.editingStandardFileEntry = standard
+      this.editingSessionFileEntry = session || null
+      this.editingSessionId = session?.id || null
+      this.editingExperimentId = file.id
+      this.latestCreatedExperimentId = null
+      this.sessionImportName = ''
+      this.sessionImportMessage = ''
+      this.saveMessage = ''
+      this.showSessionEditor = !session
+      this.experimentDraft = {
+        name: file.name || '',
+        description: file.description || '',
+        public: Boolean(file.public),
+      }
+      this.resetMetadataDraft(file)
+      if (session) {
+        this.builderAnalysisLoading = true
+      }
+
+      // Load session config from backend + trigger analysis in background
+      this.loadExperimentDataAfterSave(file, standard, session)
+    },
+    async loadExperimentDataAfterSave(file, standard, session) {
+      file.loading = true
+      let analysisTriggered = false
+      try {
+        const dataCsv = this.store.upload.convertedCSV
+        let mergedSessionConfig = null
+
+        if (session) {
+          const [sessionConfig, sessionCsv] = await Promise.all([
+            fetchSessionConfig(session.id, this.store.auth.token, file.public),
+            fetchSessionFile(session.id, this.store.auth.token, file.public),
+          ])
+          mergedSessionConfig = mergeSessionCsvIntoPayload(parseCsv(sessionCsv), sessionConfig)
+        }
+
+        this.editingOriginalConvertedCsv = dataCsv
+        this.hydrateBuilder(dataCsv, mergedSessionConfig)
+
+        if (this.isExperimentReadyForAnalysis(this.currentDraftStatus)) {
+          analysisTriggered = true
+          this.loadBuilderAnalysisData(file)
+        }
+      } finally {
+        file.loading = false
+        if (!analysisTriggered) {
+          this.builderAnalysisLoading = false
+        }
       }
     },
     async downloadExperimentFile(experiment, entry) {
