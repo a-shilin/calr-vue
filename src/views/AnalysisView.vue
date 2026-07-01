@@ -18,43 +18,84 @@
       <div v-if="loadingPublicFiles" class="empty-state">
         <BSpinner small />
       </div>
-      <div v-else-if="datasetTableItems.length" class="table-scroll-shell">
-        <BTable :items="datasetTableItems" :fields="publicFields" small hover striped sticky-header>
+      <div
+        v-else-if="datasetTableItems.length"
+        ref="datasetTableScrollShell"
+        class="table-scroll-shell"
+        :class="{ 'table-scroll-shell--overflowing': datasetTableHasHorizontalOverflow }"
+        @scroll="handleDatasetTableScroll"
+      >
+        <div class="dataset-table-toolbar">
+          <button class="btn btn-sm btn-outline-secondary" @click="toggleDatasetTableFitMode">
+            {{ datasetTableFitMode === 'content' ? 'Fit Columns' : 'Fit Content' }}
+          </button>
+        </div>
+        <BTable
+          :items="datasetTableItems"
+          :fields="datasetTableFields"
+          :table-class="datasetTableClass"
+          small
+          hover
+          striped
+          sticky-header
+        >
           <template #cell(name)="slot">
-            {{ slot.item.name || slot.item.title || slot.item.id }}
+            <span :title="slot.item.name || slot.item.title || slot.item.id || ''">
+              {{ slot.item.name || slot.item.title || slot.item.id }}
+            </span>
           </template>
           <template #cell(description)="slot">
-            {{ slot.item.description || '' }}
+            <span :title="slot.item.description || ''">
+              {{ slot.item.description || '' }}
+            </span>
+          </template>
+          <template
+            v-for="field in metadataTableFields"
+            :key="field.key"
+            #[`cell(${field.key})`]="slot"
+          >
+            <span :title="formatMetadataCell(slot.item, field.key)">
+              {{ formatMetadataCell(slot.item, field.key) }}
+            </span>
           </template>
           <template #cell(uploaded_at)="slot">
-            {{ formatDate(slot.item.uploaded_at) }}
+            <span :title="formatDate(slot.item.uploaded_at)">
+              {{ formatDate(slot.item.uploaded_at) }}
+            </span>
           </template>
           <template #cell(actions)="slot">
-            <BButton v-if="isSelectedDataset(slot.item)" size="sm" variant="success" disabled>Selected</BButton>
-            <BBadge
-              v-else-if="datasetSourceTab === 'private' && slot.item.statusLoading"
-              variant="secondary"
-            >
-              Checking...
-            </BBadge>
-            <BBadge
-              v-else-if="datasetSourceTab === 'private' && !isExperimentReadyForAnalysis(slot.item.statusInfo)"
-              :variant="slot.item.statusInfo?.variant || 'warning'"
-            >
-              {{ slot.item.statusInfo?.label || 'Draft' }}
-            </BBadge>
-            <BButton
-              v-else
-              size="sm"
-              variant="primary"
-              @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
-            >
-              <template v-if="slot.item.loading">
-                <BSpinner small />
-                <span style="margin-left: 0.4rem;">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
-              </template>
-              <span v-else>Open</span>
-            </BButton>
+            <div class="dataset-table__action-wrap">
+              <BButton v-if="isSelectedDataset(slot.item)" size="sm" variant="success" disabled class="dataset-table__action-btn">
+                Selected
+              </BButton>
+              <BBadge
+                v-else-if="datasetSourceTab === 'private' && slot.item.statusLoading"
+                variant="secondary"
+                class="dataset-table__action-badge"
+              >
+                Checking...
+              </BBadge>
+              <BBadge
+                v-else-if="datasetSourceTab === 'private' && !isExperimentReadyForAnalysis(slot.item.statusInfo)"
+                :variant="slot.item.statusInfo?.variant || 'warning'"
+                class="dataset-table__action-badge"
+              >
+                {{ slot.item.statusInfo?.label || 'Draft' }}
+              </BBadge>
+              <BButton
+                v-else
+                size="sm"
+                variant="primary"
+                class="dataset-table__action-btn"
+                @click="datasetSourceTab === 'private' ? openPrivateExperiment(slot.item) : openPublicExperiment(slot.item)"
+              >
+                <template v-if="slot.item.loading">
+                  <BSpinner small />
+                  <span style="margin-left: 0.4rem;">{{ formatLoadingProgress(slot.item.loadingProgress) }}</span>
+                </template>
+                <span v-else>Open</span>
+              </BButton>
+            </div>
           </template>
         </BTable>
       </div>
@@ -152,7 +193,50 @@ import { parseCsv } from '../utils/csv'
 import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
-import experimentMetadataSections from '../config/experimentMetadata.json'
+import experimentMetadataConfig from '../config/experimentMetadata.json'
+
+const experimentMetadataSections = experimentMetadataConfig.sections
+const datasetTableBaseFields = experimentMetadataConfig.datasetTable.baseFields
+const metadataTableFields = experimentMetadataSections
+  .flatMap((section) => section.fields)
+  .filter((field) => field.showInPublicDatasetTable !== false)
+const privateDatasetFieldDefinitions = [
+  { key: 'name', label: 'Name' },
+  { key: 'description', label: 'Description' },
+  { key: 'uploaded_at', label: 'Uploaded' },
+  { key: 'actions', label: 'Actions' },
+]
+
+function buildDatasetTableField(field, extra = {}) {
+  const isActionsField = field.key === 'actions'
+
+  return {
+    key: field.key,
+    label: field.label,
+    thClass: isActionsField ? 'dataset-table__actions-cell' : '',
+    tdClass: isActionsField ? 'dataset-table__actions-cell' : '',
+    ...extra,
+  }
+}
+
+function moveActionsFieldToEnd(fields) {
+  return [
+    ...fields.filter((field) => field.key !== 'actions'),
+    ...fields.filter((field) => field.key === 'actions'),
+  ]
+}
+
+const publicDatasetFields = moveActionsFieldToEnd([
+  ...datasetTableBaseFields
+    .filter((field) => field.showInPublicDatasetTable)
+    .map((field) => buildDatasetTableField(field)),
+  ...metadataTableFields
+    .filter((field) => !datasetTableBaseFields.some((baseField) => baseField.key === field.key))
+    .map((field) => buildDatasetTableField(field)),
+])
+const privateDatasetFields = moveActionsFieldToEnd(
+  privateDatasetFieldDefinitions.map((field) => buildDatasetTableField(field)),
+)
 
 function normalizeMetadataObject(value) {
   if (!value) return {}
@@ -250,8 +334,9 @@ export default {
   data() {
     return {
       store: appStore,
-      publicFields: ['name', 'description', 'uploaded_at', 'actions'],
       datasetSourceTab: 'public',
+      datasetTableFitMode: 'content',
+      datasetTableHasHorizontalOverflow: false,
       loadingPublicFiles: false,
       sharedRouteLoading: false,
       sharedRouteProgress: null,
@@ -266,6 +351,15 @@ export default {
     }
   },
   computed: {
+    metadataTableFields() {
+      return metadataTableFields
+    },
+    datasetTableClass() {
+      return `dataset-table dataset-table--fit-${this.datasetTableFitMode}`
+    },
+    datasetTableFields() {
+      return this.datasetSourceTab === 'private' ? privateDatasetFields : publicDatasetFields
+    },
     analysisData() {
       return this.store.experiment.analysisData || {
         rows: this.store.experiment.detailRows,
@@ -323,7 +417,17 @@ export default {
       deep: true,
       handler() {
         this.syncDatasetSourceTab()
+        this.scheduleDatasetTableMetricsUpdate()
       },
+    },
+    datasetSourceTab() {
+      this.scheduleDatasetTableMetricsUpdate()
+    },
+    datasetTableItems() {
+      this.scheduleDatasetTableMetricsUpdate()
+    },
+    datasetTableFitMode() {
+      this.scheduleDatasetTableMetricsUpdate()
     },
     '$route.query.share': {
       async handler() {
@@ -341,12 +445,17 @@ export default {
         this.store.account.publicFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
       } finally {
         this.loadingPublicFiles = false
+        this.scheduleDatasetTableMetricsUpdate()
       }
     }
 
     if (this.store.auth.token && !this.store.account.userFiles.length) {
       await this.loadPrivateFiles()
     }
+
+    this.scheduleDatasetTableMetricsUpdate()
+
+    window.addEventListener('resize', this.handleWindowResize)
 
     const handledSharedRoute = await this.handleSharedRoute()
 
@@ -355,9 +464,49 @@ export default {
       this.initializeGroupColors(this.sessionMetadata)
     }
   },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleWindowResize)
+  },
+  updated() {
+    this.scheduleDatasetTableMetricsUpdate()
+  },
   methods: {
     formatDate,
     getMetadataValue,
+    handleWindowResize() {
+      this.scheduleDatasetTableMetricsUpdate()
+    },
+    toggleDatasetTableFitMode() {
+      this.datasetTableFitMode = this.datasetTableFitMode === 'content' ? 'columns' : 'content'
+    },
+    setDatasetTableFitMode(mode) {
+      this.datasetTableFitMode = mode
+    },
+    handleDatasetTableScroll() {
+      this.updateDatasetTableOverflowState()
+    },
+    scheduleDatasetTableMetricsUpdate() {
+      this.$nextTick(() => {
+        requestAnimationFrame(() => {
+          this.updateDatasetTableOverflowState()
+        })
+      })
+    },
+    updateDatasetTableOverflowState() {
+      const shell = this.$refs.datasetTableScrollShell
+      const table = shell?.querySelector('table')
+
+      if (!shell || !table) {
+        this.datasetTableHasHorizontalOverflow = false
+        return
+      }
+
+      this.datasetTableHasHorizontalOverflow = table.getBoundingClientRect().width - shell.clientWidth > 1
+    },
+    formatMetadataCell(source, key) {
+      const value = getMetadataValue(source, key)
+      return value === null || value === undefined || value === '' ? '—' : value
+    },
     buildExperimentStatusInfo(hasConvertedData, sessionPayload) {
       return buildExperimentStatus({
         hasConvertedData,

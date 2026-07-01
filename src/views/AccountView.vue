@@ -1153,7 +1153,7 @@
 import { appStore } from '../store/appStore'
 import MetadataFieldInput from '../components/MetadataFieldInput.vue'
 import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
-import experimentMetadataSections from '../config/experimentMetadata.json'
+import experimentMetadataConfig from '../config/experimentMetadata.json'
 import {
   convertInstrumentFiles,
   deleteExperiment,
@@ -1211,7 +1211,7 @@ const PRESET_DIETS = [
 
 const FOOD_CUTOFF_MIN_MG_PER_MIN = 100
 const DEFAULT_FOOD_CUTOFF_KCAL_PER_G = PRESET_DIETS[0].kcal
-const EXPERIMENT_METADATA_SECTIONS = experimentMetadataSections
+const EXPERIMENT_METADATA_SECTIONS = experimentMetadataConfig.sections
 const EXPERIMENT_METADATA_FIELDS = EXPERIMENT_METADATA_SECTIONS.flatMap((section) => section.fields)
 
 function roundToTwo(value) {

@@ -441,6 +441,12 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   gap: 5px;
 }
 
+.dataset-table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
 .table-scroll-shell {
   max-height: 400px;
   overflow: auto;
@@ -452,6 +458,91 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .table-scroll-shell table {
   margin-bottom: 0;
+}
+
+.dataset-table {
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.dataset-table--fit-columns {
+  width: 100%;
+}
+
+.dataset-table--fit-content {
+  width: max-content;
+  min-width: 100%;
+}
+
+.dataset-table th,
+.dataset-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.dataset-table th {
+  font-size: 12px;
+}
+
+.dataset-table__actions-cell {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  width: 130px;
+  background: #fff;
+  overflow: visible !important;
+  box-shadow: -1px 0 0 #d5d9dd;
+}
+
+.dataset-table thead .dataset-table__actions-cell {
+  text-align: center;
+}
+
+.dataset-table thead .dataset-table__actions-cell::before {
+  display: none;
+}
+
+.dataset-table tbody tr:nth-child(even) .dataset-table__actions-cell {
+  background: #f8f9fa;
+}
+
+.dataset-table.table-hover tbody tr:hover .dataset-table__actions-cell {
+  background: #f1f3f5;
+}
+
+.dataset-table__actions-cell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -16px;
+  width: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.table-scroll-shell--overflowing .dataset-table__actions-cell {
+  box-shadow: -1px 0 0 #d5d9dd;
+}
+
+.table-scroll-shell--overflowing .dataset-table__actions-cell::before {
+  opacity: 1;
+  background: linear-gradient(to left, rgba(31, 41, 51, 0.18), rgba(31, 41, 51, 0));
+}
+
+.dataset-table__action-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.dataset-table__action-btn,
+.dataset-table__action-badge {
+  width: 116px;
+  min-width: 116px;
+  justify-content: center;
 }
 
 .preview-table th,
