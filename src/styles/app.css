@@ -449,6 +449,15 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   margin: 0 0 10px;
 }
 
+.dataset-table-search-wrap {
+  flex: 1;
+  max-width: 240px;
+}
+
+.dataset-table-search-input {
+  font-size: 12px;
+}
+
 .dataset-table-filter-wrap {
   position: relative;
 }
@@ -554,6 +563,12 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   width: 116px;
   min-width: 116px;
   justify-content: center;
+}
+
+.dataset-table-search-highlight {
+  background: #fde68a;
+  color: inherit;
+  padding: 0;
 }
 
 .preview-table th,

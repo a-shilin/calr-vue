@@ -26,16 +26,27 @@
         @scroll="handleDatasetTableScroll"
       >
         <div class="dataset-table-toolbar">
-          <div v-if="showDatasetFilterButton" class="dataset-table-filter-wrap">
-            <button
-              ref="datasetFilterButton"
-              class="btn btn-sm"
-              :class="activePublicFilterCount ? 'btn-secondary' : 'btn-outline-secondary'"
-              @click.stop="toggleDatasetFilters"
-            >
-              Filter<span v-if="activePublicFilterCount"> ({{ activePublicFilterCount }})</span>
-            </button>
+          <div style="display:flex; gap:10px">
+            <div v-if="showDatasetFilterButton" class="dataset-table-filter-wrap">
+              <button
+                ref="datasetFilterButton"
+                class="btn btn-sm"
+                :class="activePublicFilterCount ? 'btn-secondary' : 'btn-outline-secondary'"
+                @click.stop="toggleDatasetFilters"
+              >
+                Filter<span v-if="activePublicFilterCount"> ({{ activePublicFilterCount }})</span>
+              </button>
+            </div>
+            <div v-if="showDatasetSearch" class="dataset-table-search-wrap">
+              <input
+                v-model="publicDatasetSearch"
+                type="text"
+                class="form-control form-control-sm dataset-table-search-input"
+                placeholder="Search datasets"
+              />
+            </div>
           </div>
+
           <button class="btn btn-sm btn-outline-secondary" @click="toggleDatasetTableFitMode">
             {{ datasetTableFitMode === 'content' ? 'Fit Columns' : 'Fit Content' }}
           </button>
@@ -51,12 +62,18 @@
         >
           <template #cell(name)="slot">
             <span :title="slot.item.name || slot.item.title || slot.item.id || ''">
-              {{ slot.item.name || slot.item.title || slot.item.id }}
+              <template v-for="(segment, index) in getHighlightedSegments(slot.item.name || slot.item.title || slot.item.id || '')" :key="`name-${index}`">
+                <mark v-if="segment.match" class="dataset-table-search-highlight">{{ segment.text }}</mark>
+                <template v-else>{{ segment.text }}</template>
+              </template>
             </span>
           </template>
           <template #cell(description)="slot">
             <span :title="slot.item.description || ''">
-              {{ slot.item.description || '' }}
+              <template v-for="(segment, index) in getHighlightedSegments(slot.item.description || '')" :key="`description-${index}`">
+                <mark v-if="segment.match" class="dataset-table-search-highlight">{{ segment.text }}</mark>
+                <template v-else>{{ segment.text }}</template>
+              </template>
             </span>
           </template>
           <template
@@ -65,12 +82,18 @@
             #[`cell(${field.key})`]="slot"
           >
             <span :title="formatMetadataCell(slot.item, field.key)">
-              {{ formatMetadataCell(slot.item, field.key) }}
+              <template v-for="(segment, index) in getHighlightedSegments(formatMetadataCell(slot.item, field.key))" :key="`${field.key}-${index}`">
+                <mark v-if="segment.match" class="dataset-table-search-highlight">{{ segment.text }}</mark>
+                <template v-else>{{ segment.text }}</template>
+              </template>
             </span>
           </template>
           <template #cell(uploaded_at)="slot">
             <span :title="formatDate(slot.item.uploaded_at)">
-              {{ formatDate(slot.item.uploaded_at) }}
+              <template v-for="(segment, index) in getHighlightedSegments(formatDate(slot.item.uploaded_at))" :key="`uploaded-${index}`">
+                <mark v-if="segment.match" class="dataset-table-search-highlight">{{ segment.text }}</mark>
+                <template v-else>{{ segment.text }}</template>
+              </template>
             </span>
           </template>
           <template #cell(actions)="slot">
@@ -341,6 +364,16 @@ function buildRangeFilterDefinition(items, field) {
   }
 }
 
+function buildSearchableDatasetStrings(item) {
+  return [
+    item?.name || item?.title || item?.id || '',
+    item?.description || '',
+    ...metadataTableFields.map((field) => getFilterDisplayValue(item, field.key)),
+  ]
+    .map((value) => `${value}`.trim())
+    .filter(Boolean)
+}
+
 const numericalColumns = [
   'vo2', 'vco2', 'ee', 'ee.acc', 'rer', 'feed', 'feed.acc', 'drink', 'drink.acc',
   'xytot', 'xyamb', 'pedmeter', 'allmeter', 'wheel', 'wheel.acc', 'C13', 'enviro.temp',
@@ -425,6 +458,7 @@ export default {
         top: 0,
         left: 0,
       },
+      publicDatasetSearch: '',
       showDatasetFilters: false,
       loadingPublicFiles: false,
       publicDatasetFilters: {},
@@ -443,6 +477,15 @@ export default {
   computed: {
     metadataTableFields() {
       return metadataTableFields
+    },
+    showDatasetSearch() {
+      return this.datasetSourceTab === 'public'
+    },
+    normalizedPublicDatasetSearch() {
+      return `${this.publicDatasetSearch || ''}`.trim().toLowerCase()
+    },
+    isPublicDatasetSearchActive() {
+      return this.normalizedPublicDatasetSearch.length >= 2
     },
     showDatasetFilterButton() {
       return this.datasetSourceTab === 'public' && this.publicDatasetFilterFields.length > 0
@@ -522,7 +565,9 @@ export default {
         return this.store.account.userFiles
       }
 
-      return this.store.account.publicFiles.filter((item) => this.matchesPublicDatasetFilters(item))
+      return this.store.account.publicFiles.filter((item) => (
+        this.matchesPublicDatasetFilters(item) && this.matchesPublicDatasetSearch(item)
+      ))
     },
     publicDatasetCount() {
       return this.store.account.publicFiles.length
@@ -559,6 +604,9 @@ export default {
       handler() {
         this.scheduleDatasetTableMetricsUpdate()
       },
+    },
+    publicDatasetSearch() {
+      this.scheduleDatasetTableMetricsUpdate()
     },
     datasetTableFitMode() {
       this.scheduleDatasetTableMetricsUpdate()
@@ -708,6 +756,48 @@ export default {
     },
     formatMetadataCell(source, key) {
       return getFilterDisplayValue(source, key)
+    },
+    matchesPublicDatasetSearch(item) {
+      if (!this.isPublicDatasetSearchActive) {
+        return true
+      }
+
+      return buildSearchableDatasetStrings(item).some((value) => (
+        value.toLowerCase().includes(this.normalizedPublicDatasetSearch)
+      ))
+    },
+    getHighlightedSegments(value) {
+      const text = `${value ?? ''}`
+
+      if (!this.isPublicDatasetSearchActive || this.datasetSourceTab !== 'public') {
+        return [{ text, match: false }]
+      }
+
+      const query = this.normalizedPublicDatasetSearch
+      const lowerText = text.toLowerCase()
+      const segments = []
+      let cursor = 0
+
+      while (cursor < text.length) {
+        const matchIndex = lowerText.indexOf(query, cursor)
+
+        if (matchIndex === -1) {
+          segments.push({ text: text.slice(cursor), match: false })
+          break
+        }
+
+        if (matchIndex > cursor) {
+          segments.push({ text: text.slice(cursor, matchIndex), match: false })
+        }
+
+        segments.push({
+          text: text.slice(matchIndex, matchIndex + query.length),
+          match: true,
+        })
+        cursor = matchIndex + query.length
+      }
+
+      return segments.length ? segments : [{ text, match: false }]
     },
     matchesPublicDatasetFilters(item) {
       return this.publicDatasetFilterFields.every((field) => {
