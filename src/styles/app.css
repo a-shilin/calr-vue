@@ -443,8 +443,19 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .dataset-table-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 10px;
+}
+
+.dataset-table-filter-wrap {
+  position: relative;
+}
+
+.dataset-table-filter-popover {
+  position: fixed;
+  z-index: 45;
 }
 
 .table-scroll-shell {

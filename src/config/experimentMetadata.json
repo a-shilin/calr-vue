@@ -4,22 +4,26 @@
       {
         "key": "name",
         "label": "Name",
-        "showInPublicDatasetTable": true
+        "showInPublicDatasetTable": true,
+        "filterable": false
       },
       {
         "key": "description",
         "label": "Description",
-        "showInPublicDatasetTable": true
+        "showInPublicDatasetTable": true,
+        "filterable": false
       },
       {
         "key": "uploaded_at",
         "label": "Uploaded",
-        "showInPublicDatasetTable": false
+        "showInPublicDatasetTable": false,
+        "filterable": false
       },
       {
         "key": "actions",
         "label": "Actions",
-        "showInPublicDatasetTable": true
+        "showInPublicDatasetTable": true,
+        "filterable": false
       }
     ]
   },
@@ -33,6 +37,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": ""
         },
         {
@@ -41,6 +47,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": "Lastname, Firstname"
         },
         {
@@ -49,6 +57,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": "Institution or site"
         },
         {
@@ -57,6 +67,8 @@
           "type": "select",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["CLAMS", "TSE", "Sable"],
           "placeholder": "Select"
         },
@@ -65,6 +77,7 @@
           "label": "PMID",
           "type": "text",
           "showInPublicDatasetTable": false,
+          "filterable": false,
           "placeholder": "PubMed ID"
         }
       ]
@@ -78,6 +91,8 @@
           "type": "selectOrText",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["Mouse", "Rat", "Human"],
           "placeholder": "Select"
         },
@@ -87,6 +102,8 @@
           "type": "selectOrText",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["Whole body", "BAT", "WAT"],
           "placeholder": "Select"
         },
@@ -96,6 +113,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": "e.g. GDF3KO"
         },
         {
@@ -104,6 +123,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": "e.g. C57Bl/6"
         },
         {
@@ -112,6 +133,8 @@
           "type": "selectOrText",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["Female", "Male", "Both"],
           "placeholder": "Select"
         },
@@ -121,6 +144,8 @@
           "type": "number",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "numberRange",
           "placeholder": "",
           "step": "1"
         }
@@ -135,6 +160,8 @@
           "type": "text",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "placeholder": "e.g. HFD for 10 weeks"
         },
         {
@@ -143,6 +170,8 @@
           "type": "number",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "numberRange",
           "placeholder": "",
           "step": "1"
         },
@@ -151,6 +180,8 @@
           "label": "Ambient Temp C",
           "type": "number",
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "numberRange",
           "placeholder": "",
           "step": "0.1"
         },
@@ -159,6 +190,8 @@
           "label": "Bedding",
           "type": "selectOrText",
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["Straw", "Corncob", "Paper", "Alpha Dry", "Aspen Woodchip", "Kiln-dried Pine Woodchip", "Spruce Woodchip", "Maple Woodchip", "Beech Woodchip", "None"],
           "placeholder": "Select"
         },
@@ -167,6 +200,8 @@
           "label": "Enrichment",
           "type": "selectOrText",
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["None", "Running Wheel", "Igloo (Plastic)", "Igloo (Paper)"],
           "placeholder": "Select"
         },
@@ -175,6 +210,8 @@
           "label": "EE Calc",
           "type": "selectOrText",
           "showInPublicDatasetTable": true,
+          "filterable": true,
+          "filterKind": "categorical",
           "options": ["Weir", "Lusk", "Kleiber"],
           "placeholder": "Select"
         }

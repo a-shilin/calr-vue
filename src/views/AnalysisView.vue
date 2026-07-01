@@ -26,6 +26,16 @@
         @scroll="handleDatasetTableScroll"
       >
         <div class="dataset-table-toolbar">
+          <div v-if="showDatasetFilterButton" class="dataset-table-filter-wrap">
+            <button
+              ref="datasetFilterButton"
+              class="btn btn-sm"
+              :class="activePublicFilterCount ? 'btn-secondary' : 'btn-outline-secondary'"
+              @click.stop="toggleDatasetFilters"
+            >
+              Filter<span v-if="activePublicFilterCount"> ({{ activePublicFilterCount }})</span>
+            </button>
+          </div>
           <button class="btn btn-sm btn-outline-secondary" @click="toggleDatasetTableFitMode">
             {{ datasetTableFitMode === 'content' ? 'Fit Columns' : 'Fit Content' }}
           </button>
@@ -112,6 +122,23 @@
       </div>
     </section>
 
+    <Teleport to="body">
+      <div
+        v-if="showDatasetFilters"
+        ref="datasetFilterPopover"
+        class="dataset-table-filter-popover"
+        :style="datasetFilterPopoverStyle"
+      >
+        <DatasetTableFilterPopover
+          :fields="publicDatasetFilterFields"
+          :filters="publicDatasetFilters"
+          @clear-field="clearPublicDatasetFilter"
+          @toggle-categorical="togglePublicDatasetCategoricalFilter"
+          @update-range="updatePublicDatasetRangeFilter"
+        />
+      </div>
+    </Teleport>
+
     <section class="panel panel--spaced">
       <div v-if="sharedRouteLoading" class="empty-state panel">
         <div style="display:flex; align-items:center; gap:0.5rem;">
@@ -193,6 +220,7 @@ import { parseCsv } from '../utils/csv'
 import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
+import DatasetTableFilterPopover from '../components/DatasetTableFilterPopover.vue'
 import experimentMetadataConfig from '../config/experimentMetadata.json'
 
 const experimentMetadataSections = experimentMetadataConfig.sections
@@ -200,6 +228,12 @@ const datasetTableBaseFields = experimentMetadataConfig.datasetTable.baseFields
 const metadataTableFields = experimentMetadataSections
   .flatMap((section) => section.fields)
   .filter((field) => field.showInPublicDatasetTable !== false)
+const publicDatasetFilterFieldDefinitions = [
+  ...datasetTableBaseFields.filter((field) => field.filterable),
+  ...experimentMetadataSections
+    .flatMap((section) => section.fields)
+    .filter((field) => field.filterable),
+]
 const privateDatasetFieldDefinitions = [
   { key: 'name', label: 'Name' },
   { key: 'description', label: 'Description' },
@@ -255,6 +289,56 @@ function getMetadataValue(source, key) {
     return meta[key] ?? source?.[key] ?? source?.submission_id ?? source?.id ?? ''
   }
   return meta[key] ?? source?.[key] ?? ''
+}
+
+function getFilterDisplayValue(source, key) {
+  const value = getMetadataValue(source, key)
+  return value === null || value === undefined || value === '' ? '—' : `${value}`
+}
+
+function getFilterNumericValue(source, key) {
+  const numeric = Number(getMetadataValue(source, key))
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function buildCategoricalFilterOptions(items, field) {
+  const counts = new Map()
+
+  items.forEach((item) => {
+    const value = getFilterDisplayValue(item, field.key)
+    counts.set(value, (counts.get(value) || 0) + 1)
+  })
+
+  return Array.from(counts.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([value, count]) => ({
+      value,
+      label: value,
+      count,
+    }))
+}
+
+function buildRangeFilterDefinition(items, field) {
+  const values = items
+    .map((item) => getFilterNumericValue(item, field.key))
+    .filter((value) => value !== null)
+
+  if (!values.length) {
+    return {
+      ...field,
+      range: { min: 0, max: 0 },
+      step: Number(field.step) || 1,
+    }
+  }
+
+  return {
+    ...field,
+    range: {
+      min: Math.min(...values),
+      max: Math.max(...values),
+    },
+    step: Number(field.step) || 1,
+  }
 }
 
 const numericalColumns = [
@@ -330,14 +414,20 @@ function buildExperimentStatus({ hasConvertedData, sessionPayload }) {
 
 export default {
   name: 'AnalysisView',
-  components: { AnalysisPlotsPanel },
+  components: { AnalysisPlotsPanel, DatasetTableFilterPopover },
   data() {
     return {
       store: appStore,
       datasetSourceTab: 'public',
       datasetTableFitMode: 'content',
       datasetTableHasHorizontalOverflow: false,
+      datasetFilterPopoverPosition: {
+        top: 0,
+        left: 0,
+      },
+      showDatasetFilters: false,
       loadingPublicFiles: false,
+      publicDatasetFilters: {},
       sharedRouteLoading: false,
       sharedRouteProgress: null,
       sharedRouteError: '',
@@ -353,6 +443,34 @@ export default {
   computed: {
     metadataTableFields() {
       return metadataTableFields
+    },
+    showDatasetFilterButton() {
+      return this.datasetSourceTab === 'public' && this.publicDatasetFilterFields.length > 0
+    },
+    publicDatasetFilterFields() {
+      return publicDatasetFilterFieldDefinitions.map((field) => (
+        field.filterKind === 'numberRange'
+          ? buildRangeFilterDefinition(this.store.account.publicFiles, field)
+          : {
+            ...field,
+            options: buildCategoricalFilterOptions(this.store.account.publicFiles, field),
+          }
+      ))
+    },
+    activePublicFilterCount() {
+      return Object.values(this.publicDatasetFilters).filter((filter) => {
+        if (Array.isArray(filter?.selectedValues)) {
+          return filter.selectedValues.length > 0
+        }
+
+        return Number.isFinite(filter?.min) || Number.isFinite(filter?.max)
+      }).length
+    },
+    datasetFilterPopoverStyle() {
+      return {
+        top: `${this.datasetFilterPopoverPosition.top}px`,
+        left: `${this.datasetFilterPopoverPosition.left}px`,
+      }
     },
     datasetTableClass() {
       return `dataset-table dataset-table--fit-${this.datasetTableFitMode}`
@@ -400,7 +518,11 @@ export default {
       }
     },
     datasetTableItems() {
-      return this.datasetSourceTab === 'private' ? this.store.account.userFiles : this.store.account.publicFiles
+      if (this.datasetSourceTab === 'private') {
+        return this.store.account.userFiles
+      }
+
+      return this.store.account.publicFiles.filter((item) => this.matchesPublicDatasetFilters(item))
     },
     publicDatasetCount() {
       return this.store.account.publicFiles.length
@@ -422,12 +544,27 @@ export default {
     },
     datasetSourceTab() {
       this.scheduleDatasetTableMetricsUpdate()
+      if (this.showDatasetFilters) {
+        this.scheduleDatasetFilterPopoverPosition()
+      }
     },
     datasetTableItems() {
       this.scheduleDatasetTableMetricsUpdate()
+      if (this.showDatasetFilters) {
+        this.scheduleDatasetFilterPopoverPosition()
+      }
+    },
+    publicDatasetFilters: {
+      deep: true,
+      handler() {
+        this.scheduleDatasetTableMetricsUpdate()
+      },
     },
     datasetTableFitMode() {
       this.scheduleDatasetTableMetricsUpdate()
+      if (this.showDatasetFilters) {
+        this.scheduleDatasetFilterPopoverPosition()
+      }
     },
     '$route.query.share': {
       async handler() {
@@ -455,6 +592,8 @@ export default {
 
     this.scheduleDatasetTableMetricsUpdate()
 
+    document.addEventListener('click', this.handleDocumentClick)
+    window.addEventListener('scroll', this.handleWindowScroll, true)
     window.addEventListener('resize', this.handleWindowResize)
 
     const handledSharedRoute = await this.handleSharedRoute()
@@ -465,6 +604,8 @@ export default {
     }
   },
   beforeUnmount() {
+    document.removeEventListener('click', this.handleDocumentClick)
+    window.removeEventListener('scroll', this.handleWindowScroll, true)
     window.removeEventListener('resize', this.handleWindowResize)
   },
   updated() {
@@ -473,8 +614,69 @@ export default {
   methods: {
     formatDate,
     getMetadataValue,
+    handleDocumentClick(event) {
+      if (!this.showDatasetFilters) {
+        return
+      }
+
+      const popover = this.$refs.datasetFilterPopover
+
+      if (popover?.contains(event.target)) {
+        return
+      }
+
+      this.showDatasetFilters = false
+    },
     handleWindowResize() {
       this.scheduleDatasetTableMetricsUpdate()
+      this.scheduleDatasetFilterPopoverPosition()
+    },
+    handleWindowScroll() {
+      this.scheduleDatasetFilterPopoverPosition()
+    },
+    scheduleDatasetFilterPopoverPosition() {
+      if (!this.showDatasetFilters) {
+        return
+      }
+
+      this.$nextTick(() => {
+        requestAnimationFrame(() => {
+          this.updateDatasetFilterPopoverPosition()
+        })
+      })
+    },
+    updateDatasetFilterPopoverPosition() {
+      const button = this.$refs.datasetFilterButton
+      const popover = this.$refs.datasetFilterPopover
+
+      if (!button || !popover) {
+        return
+      }
+
+      const buttonRect = button.getBoundingClientRect()
+      const popoverRect = popover.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const horizontalMargin = 16
+      const verticalGap = 8
+
+      let left = buttonRect.left
+      if (left + popoverRect.width > viewportWidth - horizontalMargin) {
+        left = viewportWidth - popoverRect.width - horizontalMargin
+      }
+      left = Math.max(horizontalMargin, left)
+
+      let top = buttonRect.bottom + verticalGap
+      const maxTop = viewportHeight - popoverRect.height - horizontalMargin
+      if (top > maxTop) {
+        top = Math.max(horizontalMargin, buttonRect.top - popoverRect.height - verticalGap)
+      }
+
+      this.datasetFilterPopoverPosition = { top, left }
+    },
+    toggleDatasetFilters() {
+      this.showDatasetFilters = !this.showDatasetFilters
+      this.scheduleDatasetFilterPopoverPosition()
     },
     toggleDatasetTableFitMode() {
       this.datasetTableFitMode = this.datasetTableFitMode === 'content' ? 'columns' : 'content'
@@ -484,6 +686,7 @@ export default {
     },
     handleDatasetTableScroll() {
       this.updateDatasetTableOverflowState()
+      this.scheduleDatasetFilterPopoverPosition()
     },
     scheduleDatasetTableMetricsUpdate() {
       this.$nextTick(() => {
@@ -504,8 +707,72 @@ export default {
       this.datasetTableHasHorizontalOverflow = table.getBoundingClientRect().width - shell.clientWidth > 1
     },
     formatMetadataCell(source, key) {
-      const value = getMetadataValue(source, key)
-      return value === null || value === undefined || value === '' ? '—' : value
+      return getFilterDisplayValue(source, key)
+    },
+    matchesPublicDatasetFilters(item) {
+      return this.publicDatasetFilterFields.every((field) => {
+        const activeFilter = this.publicDatasetFilters[field.key]
+
+        if (!activeFilter) {
+          return true
+        }
+
+        if (field.filterKind === 'numberRange') {
+          const value = getFilterNumericValue(item, field.key)
+
+          if (value === null) {
+            return false
+          }
+
+          return value >= activeFilter.min && value <= activeFilter.max
+        }
+
+        if (activeFilter.selectedValues?.length) {
+          return activeFilter.selectedValues.includes(getFilterDisplayValue(item, field.key))
+        }
+
+        return true
+      })
+    },
+    togglePublicDatasetCategoricalFilter({ key, value }) {
+      const current = this.publicDatasetFilters[key]?.selectedValues || []
+      const nextValues = current.includes(value)
+        ? current.filter((entry) => entry !== value)
+        : [...current, value]
+
+      if (!nextValues.length) {
+        this.clearPublicDatasetFilter(key)
+        return
+      }
+
+      this.publicDatasetFilters = {
+        ...this.publicDatasetFilters,
+        [key]: {
+          selectedValues: nextValues,
+        },
+      }
+    },
+    updatePublicDatasetRangeFilter({ key, min, max }) {
+      const field = this.publicDatasetFilterFields.find((entry) => entry.key === key)
+
+      if (!field) {
+        return
+      }
+
+      if (min <= field.range.min && max >= field.range.max) {
+        this.clearPublicDatasetFilter(key)
+        return
+      }
+
+      this.publicDatasetFilters = {
+        ...this.publicDatasetFilters,
+        [key]: { min, max },
+      }
+    },
+    clearPublicDatasetFilter(key) {
+      const nextFilters = { ...this.publicDatasetFilters }
+      delete nextFilters[key]
+      this.publicDatasetFilters = nextFilters
     },
     buildExperimentStatusInfo(hasConvertedData, sessionPayload) {
       return buildExperimentStatus({
