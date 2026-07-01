@@ -19,7 +19,7 @@
         <BSpinner small />
       </div>
       <div
-        v-else-if="datasetTableItems.length"
+        v-else-if="datasetSourceItemCount"
         ref="datasetTableScrollShell"
         class="table-scroll-shell"
         :class="{ 'table-scroll-shell--overflowing': datasetTableHasHorizontalOverflow }"
@@ -31,15 +31,15 @@
               <button
                 ref="datasetFilterButton"
                 class="btn btn-sm"
-                :class="activePublicFilterCount ? 'btn-secondary' : 'btn-outline-secondary'"
+                :class="activeDatasetFilterCount ? 'btn-secondary' : 'btn-outline-secondary'"
                 @click.stop="toggleDatasetFilters"
               >
-                Filter<span v-if="activePublicFilterCount"> ({{ activePublicFilterCount }})</span>
+                Filter<span v-if="activeDatasetFilterCount"> ({{ activeDatasetFilterCount }})</span>
               </button>
             </div>
             <div v-if="showDatasetSearch" class="dataset-table-search-wrap">
               <input
-                v-model="publicDatasetSearch"
+                v-model="currentDatasetSearch"
                 type="text"
                 class="form-control form-control-sm dataset-table-search-input"
                 placeholder="Search datasets"
@@ -48,11 +48,12 @@
           </div>
 
           <button class="btn btn-sm btn-outline-secondary" @click="toggleDatasetTableFitMode">
-            {{ datasetTableFitMode === 'content' ? 'Fit Columns' : 'Fit Content' }}
+            {{ currentDatasetTableFitMode === 'content' ? 'Fit Columns' : 'Fit Content' }}
           </button>
         </div>
         <BTable
-          :items="datasetTableItems"
+          v-if="datasetTableItems.length"
+          :items="paginatedDatasetTableItems"
           :fields="datasetTableFields"
           :table-class="datasetTableClass"
           small
@@ -131,6 +132,26 @@
             </div>
           </template>
         </BTable>
+        <div v-else class="empty-state dataset-table-empty-state">
+          No matching datasets found.
+        </div>
+        <div v-if="currentDatasetPageCount > 1" class="preview-pagination dataset-table-pagination">
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            :disabled="currentDatasetPage <= 1"
+            @click="currentDatasetPage = currentDatasetPage - 1"
+          >
+            Previous
+          </button>
+          <span class="muted-copy">Page {{ currentDatasetPage }} of {{ currentDatasetPageCount }}</span>
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            :disabled="currentDatasetPage >= currentDatasetPageCount"
+            @click="currentDatasetPage = currentDatasetPage + 1"
+          >
+            Next
+          </button>
+        </div>
       </div>
       <div v-else-if="datasetSourceTab === 'private' && !store.auth.token" class="empty-state panel">
         <div class="page-column" style="gap: 8px; text-align: center;">
@@ -153,11 +174,11 @@
         :style="datasetFilterPopoverStyle"
       >
         <DatasetTableFilterPopover
-          :fields="publicDatasetFilterFields"
-          :filters="publicDatasetFilters"
-          @clear-field="clearPublicDatasetFilter"
-          @toggle-categorical="togglePublicDatasetCategoricalFilter"
-          @update-range="updatePublicDatasetRangeFilter"
+          :fields="currentDatasetFilterFields"
+          :filters="currentDatasetFilters"
+          @clear-field="clearCurrentDatasetFilter"
+          @toggle-categorical="toggleCurrentDatasetCategoricalFilter"
+          @update-range="updateCurrentDatasetRangeFilter"
         />
       </div>
     </Teleport>
@@ -291,9 +312,7 @@ const publicDatasetFields = moveActionsFieldToEnd([
     .filter((field) => !datasetTableBaseFields.some((baseField) => baseField.key === field.key))
     .map((field) => buildDatasetTableField(field)),
 ])
-const privateDatasetFields = moveActionsFieldToEnd(
-  privateDatasetFieldDefinitions.map((field) => buildDatasetTableField(field)),
-)
+const privateDatasetFields = publicDatasetFields
 
 function normalizeMetadataObject(value) {
   if (!value) return {}
@@ -452,16 +471,22 @@ export default {
     return {
       store: appStore,
       datasetSourceTab: 'public',
-      datasetTableFitMode: 'content',
       datasetTableHasHorizontalOverflow: false,
       datasetFilterPopoverPosition: {
         top: 0,
         left: 0,
       },
       publicDatasetSearch: '',
+      privateDatasetSearch: '',
+      publicDatasetTableFitMode: 'content',
+      privateDatasetTableFitMode: 'content',
+      publicDatasetPage: 1,
+      privateDatasetPage: 1,
+      datasetTablePageSize: 5,
       showDatasetFilters: false,
       loadingPublicFiles: false,
       publicDatasetFilters: {},
+      privateDatasetFilters: {},
       sharedRouteLoading: false,
       sharedRouteProgress: null,
       sharedRouteError: '',
@@ -478,17 +503,51 @@ export default {
     metadataTableFields() {
       return metadataTableFields
     },
+    currentDatasetSearch: {
+      get() {
+        return this.datasetSourceTab === 'private' ? this.privateDatasetSearch : this.publicDatasetSearch
+      },
+      set(value) {
+        if (this.datasetSourceTab === 'private') {
+          this.privateDatasetSearch = value
+          return
+        }
+
+        this.publicDatasetSearch = value
+      },
+    },
+    currentDatasetTableFitMode() {
+      return this.datasetSourceTab === 'private' ? this.privateDatasetTableFitMode : this.publicDatasetTableFitMode
+    },
+    currentDatasetPage: {
+      get() {
+        return this.datasetSourceTab === 'private' ? this.privateDatasetPage : this.publicDatasetPage
+      },
+      set(value) {
+        const safeValue = Math.max(1, Number(value) || 1)
+
+        if (this.datasetSourceTab === 'private') {
+          this.privateDatasetPage = safeValue
+          return
+        }
+
+        this.publicDatasetPage = safeValue
+      },
+    },
+    currentDatasetFilters() {
+      return this.datasetSourceTab === 'private' ? this.privateDatasetFilters : this.publicDatasetFilters
+    },
     showDatasetSearch() {
-      return this.datasetSourceTab === 'public'
+      return true
     },
-    normalizedPublicDatasetSearch() {
-      return `${this.publicDatasetSearch || ''}`.trim().toLowerCase()
+    normalizedCurrentDatasetSearch() {
+      return `${this.currentDatasetSearch || ''}`.trim().toLowerCase()
     },
-    isPublicDatasetSearchActive() {
-      return this.normalizedPublicDatasetSearch.length >= 2
+    isCurrentDatasetSearchActive() {
+      return this.normalizedCurrentDatasetSearch.length >= 2
     },
     showDatasetFilterButton() {
-      return this.datasetSourceTab === 'public' && this.publicDatasetFilterFields.length > 0
+      return this.currentDatasetFilterFields.length > 0
     },
     publicDatasetFilterFields() {
       return publicDatasetFilterFieldDefinitions.map((field) => (
@@ -500,8 +559,26 @@ export default {
           }
       ))
     },
-    activePublicFilterCount() {
-      return Object.values(this.publicDatasetFilters).filter((filter) => {
+    privateDatasetSourceItems() {
+      return this.store.account.userFiles.filter((item) => (
+        item.statusLoading || this.isExperimentReadyForAnalysis(item.statusInfo)
+      ))
+    },
+    privateDatasetFilterFields() {
+      return publicDatasetFilterFieldDefinitions.map((field) => (
+        field.filterKind === 'numberRange'
+          ? buildRangeFilterDefinition(this.privateDatasetSourceItems, field)
+          : {
+            ...field,
+            options: buildCategoricalFilterOptions(this.privateDatasetSourceItems, field),
+          }
+      ))
+    },
+    currentDatasetFilterFields() {
+      return this.datasetSourceTab === 'private' ? this.privateDatasetFilterFields : this.publicDatasetFilterFields
+    },
+    activeDatasetFilterCount() {
+      return Object.values(this.currentDatasetFilters).filter((filter) => {
         if (Array.isArray(filter?.selectedValues)) {
           return filter.selectedValues.length > 0
         }
@@ -516,7 +593,7 @@ export default {
       }
     },
     datasetTableClass() {
-      return `dataset-table dataset-table--fit-${this.datasetTableFitMode}`
+      return `dataset-table dataset-table--fit-${this.currentDatasetTableFitMode}`
     },
     datasetTableFields() {
       return this.datasetSourceTab === 'private' ? privateDatasetFields : publicDatasetFields
@@ -562,18 +639,34 @@ export default {
     },
     datasetTableItems() {
       if (this.datasetSourceTab === 'private') {
-        return this.store.account.userFiles
+        return this.privateDatasetSourceItems.filter((item) => (
+          this.matchesDatasetFilters(item, this.privateDatasetFilterFields, this.privateDatasetFilters)
+          && this.matchesDatasetSearch(item, this.privateDatasetSearch)
+        ))
       }
 
       return this.store.account.publicFiles.filter((item) => (
-        this.matchesPublicDatasetFilters(item) && this.matchesPublicDatasetSearch(item)
+        this.matchesDatasetFilters(item, this.publicDatasetFilterFields, this.publicDatasetFilters)
+        && this.matchesDatasetSearch(item, this.publicDatasetSearch)
       ))
+    },
+    currentDatasetPageCount() {
+      return Math.max(1, Math.ceil(this.datasetTableItems.length / this.datasetTablePageSize))
+    },
+    paginatedDatasetTableItems() {
+      const start = (this.currentDatasetPage - 1) * this.datasetTablePageSize
+      return this.datasetTableItems.slice(start, start + this.datasetTablePageSize)
     },
     publicDatasetCount() {
       return this.store.account.publicFiles.length
     },
     privateDatasetCount() {
-      return this.store.account.userFiles.length
+      return this.privateDatasetSourceItems.length
+    },
+    datasetSourceItemCount() {
+      return this.datasetSourceTab === 'private'
+        ? this.privateDatasetSourceItems.length
+        : this.store.account.publicFiles.length
     },
     isViewingSharedDataset() {
       return Boolean(this.store.experiment.current?.shared && this.$route.query.share)
@@ -594,6 +687,10 @@ export default {
       }
     },
     datasetTableItems() {
+      if (this.currentDatasetPage > this.currentDatasetPageCount) {
+        this.currentDatasetPage = this.currentDatasetPageCount
+      }
+
       this.scheduleDatasetTableMetricsUpdate()
       if (this.showDatasetFilters) {
         this.scheduleDatasetFilterPopoverPosition()
@@ -602,13 +699,32 @@ export default {
     publicDatasetFilters: {
       deep: true,
       handler() {
+        this.publicDatasetPage = 1
+        this.scheduleDatasetTableMetricsUpdate()
+      },
+    },
+    privateDatasetFilters: {
+      deep: true,
+      handler() {
+        this.privateDatasetPage = 1
         this.scheduleDatasetTableMetricsUpdate()
       },
     },
     publicDatasetSearch() {
+      this.publicDatasetPage = 1
       this.scheduleDatasetTableMetricsUpdate()
     },
-    datasetTableFitMode() {
+    privateDatasetSearch() {
+      this.privateDatasetPage = 1
+      this.scheduleDatasetTableMetricsUpdate()
+    },
+    publicDatasetTableFitMode() {
+      this.scheduleDatasetTableMetricsUpdate()
+      if (this.showDatasetFilters) {
+        this.scheduleDatasetFilterPopoverPosition()
+      }
+    },
+    privateDatasetTableFitMode() {
       this.scheduleDatasetTableMetricsUpdate()
       if (this.showDatasetFilters) {
         this.scheduleDatasetFilterPopoverPosition()
@@ -727,10 +843,20 @@ export default {
       this.scheduleDatasetFilterPopoverPosition()
     },
     toggleDatasetTableFitMode() {
-      this.datasetTableFitMode = this.datasetTableFitMode === 'content' ? 'columns' : 'content'
+      if (this.datasetSourceTab === 'private') {
+        this.privateDatasetTableFitMode = this.privateDatasetTableFitMode === 'content' ? 'columns' : 'content'
+        return
+      }
+
+      this.publicDatasetTableFitMode = this.publicDatasetTableFitMode === 'content' ? 'columns' : 'content'
     },
     setDatasetTableFitMode(mode) {
-      this.datasetTableFitMode = mode
+      if (this.datasetSourceTab === 'private') {
+        this.privateDatasetTableFitMode = mode
+        return
+      }
+
+      this.publicDatasetTableFitMode = mode
     },
     handleDatasetTableScroll() {
       this.updateDatasetTableOverflowState()
@@ -757,23 +883,25 @@ export default {
     formatMetadataCell(source, key) {
       return getFilterDisplayValue(source, key)
     },
-    matchesPublicDatasetSearch(item) {
-      if (!this.isPublicDatasetSearchActive) {
+    matchesDatasetSearch(item, searchQuery) {
+      const normalizedSearch = `${searchQuery || ''}`.trim().toLowerCase()
+
+      if (normalizedSearch.length < 2) {
         return true
       }
 
       return buildSearchableDatasetStrings(item).some((value) => (
-        value.toLowerCase().includes(this.normalizedPublicDatasetSearch)
+        value.toLowerCase().includes(normalizedSearch)
       ))
     },
     getHighlightedSegments(value) {
       const text = `${value ?? ''}`
 
-      if (!this.isPublicDatasetSearchActive || this.datasetSourceTab !== 'public') {
+      if (!this.isCurrentDatasetSearchActive) {
         return [{ text, match: false }]
       }
 
-      const query = this.normalizedPublicDatasetSearch
+      const query = this.normalizedCurrentDatasetSearch
       const lowerText = text.toLowerCase()
       const segments = []
       let cursor = 0
@@ -799,9 +927,9 @@ export default {
 
       return segments.length ? segments : [{ text, match: false }]
     },
-    matchesPublicDatasetFilters(item) {
-      return this.publicDatasetFilterFields.every((field) => {
-        const activeFilter = this.publicDatasetFilters[field.key]
+    matchesDatasetFilters(item, filterFields, filters) {
+      return filterFields.every((field) => {
+        const activeFilter = filters[field.key]
 
         if (!activeFilter) {
           return true
@@ -824,44 +952,65 @@ export default {
         return true
       })
     },
-    togglePublicDatasetCategoricalFilter({ key, value }) {
-      const current = this.publicDatasetFilters[key]?.selectedValues || []
+    toggleCurrentDatasetCategoricalFilter({ key, value }) {
+      const currentFilters = this.datasetSourceTab === 'private' ? this.privateDatasetFilters : this.publicDatasetFilters
+      const current = currentFilters[key]?.selectedValues || []
       const nextValues = current.includes(value)
         ? current.filter((entry) => entry !== value)
         : [...current, value]
 
       if (!nextValues.length) {
-        this.clearPublicDatasetFilter(key)
+        this.clearCurrentDatasetFilter(key)
         return
       }
 
-      this.publicDatasetFilters = {
-        ...this.publicDatasetFilters,
-        [key]: {
-          selectedValues: nextValues,
-        },
+      const nextFilters = {
+        ...currentFilters,
+        [key]: { selectedValues: nextValues },
       }
+
+      if (this.datasetSourceTab === 'private') {
+        this.privateDatasetFilters = nextFilters
+        return
+      }
+
+      this.publicDatasetFilters = nextFilters
     },
-    updatePublicDatasetRangeFilter({ key, min, max }) {
-      const field = this.publicDatasetFilterFields.find((entry) => entry.key === key)
+    updateCurrentDatasetRangeFilter({ key, min, max }) {
+      const filterFields = this.currentDatasetFilterFields
+      const currentFilters = this.datasetSourceTab === 'private' ? this.privateDatasetFilters : this.publicDatasetFilters
+      const field = filterFields.find((entry) => entry.key === key)
 
       if (!field) {
         return
       }
 
       if (min <= field.range.min && max >= field.range.max) {
-        this.clearPublicDatasetFilter(key)
+        this.clearCurrentDatasetFilter(key)
         return
       }
 
-      this.publicDatasetFilters = {
-        ...this.publicDatasetFilters,
+      const nextFilters = {
+        ...currentFilters,
         [key]: { min, max },
       }
+
+      if (this.datasetSourceTab === 'private') {
+        this.privateDatasetFilters = nextFilters
+        return
+      }
+
+      this.publicDatasetFilters = nextFilters
     },
-    clearPublicDatasetFilter(key) {
-      const nextFilters = { ...this.publicDatasetFilters }
+    clearCurrentDatasetFilter(key) {
+      const nextFilters = { ...(this.datasetSourceTab === 'private' ? this.privateDatasetFilters : this.publicDatasetFilters) }
       delete nextFilters[key]
+
+      if (this.datasetSourceTab === 'private') {
+        this.privateDatasetFilters = nextFilters
+        return
+      }
+
       this.publicDatasetFilters = nextFilters
     },
     buildExperimentStatusInfo(hasConvertedData, sessionPayload) {

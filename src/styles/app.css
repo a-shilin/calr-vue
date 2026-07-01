@@ -480,6 +480,14 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   margin-bottom: 0;
 }
 
+.dataset-table-empty-state {
+  min-height: 120px;
+}
+
+.dataset-table-pagination {
+  margin-top: 12px;
+}
+
 .dataset-table {
   table-layout: fixed;
   font-size: 12px;
