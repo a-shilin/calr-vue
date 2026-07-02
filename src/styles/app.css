@@ -158,6 +158,22 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   min-height: 240px;
 }
 
+.community-plot-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.community-side-by-side {
+  display: flex;
+  gap: 12px;
+}
+
+.community-side-plot {
+  flex: 1;
+  min-width: 0;
+}
+
 .community-table-scroll {
   max-height: 150px;
   overflow-y: auto;

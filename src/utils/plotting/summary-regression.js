@@ -208,10 +208,12 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
       xaxis: {
         title: axisTitle(xVar),
         automargin: true,
+        ...(options.axisRanges ? { range: options.axisRanges.xRange } : {}),
       },
       yaxis: {
         title: axisTitle(yVar),
         automargin: true,
+        ...(options.axisRanges ? { range: options.axisRanges.yRange } : {}),
       },
       hovermode: 'closest',
       showlegend: true,

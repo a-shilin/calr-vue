@@ -1,8 +1,10 @@
 <template>
   <div class="page-column">
     <section class="panel panel--spaced">
-      <h5 class="fw-bold">Compare CalR Community Results</h5>
-
+      <div>
+        <h5 class="fw-bold">Compare CalR Community Results</h5>
+        <div>Select datasets from both Group A and Group B to compare their summary results.</div>
+      </div>
       <div class="community-groups">
         <!-- Group A -->
         <div class="community-group">
@@ -144,7 +146,25 @@
         </aside>
 
         <div class="panel plot-panel">
-          <div v-if="hasSelection" ref="summaryPlot" class="plot-surface"></div>
+          <div class="community-plot-header">
+            <div v-if="hasBothGroups" class="plots-view-toggle">
+              <button class="view-toggle-btn" :class="{ active: plotMode === 'overlay' }" @click="setPlotMode('overlay')">Overlay</button>
+              <button class="view-toggle-btn" :class="{ active: plotMode === 'side-by-side' }" @click="setPlotMode('side-by-side')">Side by Side</button>
+            </div>
+          </div>
+          <template v-if="hasSelection">
+            <div v-if="plotMode === 'overlay'" ref="summaryPlot" class="plot-surface"></div>
+            <div v-else class="community-side-by-side">
+              <div class="community-side-plot">
+                <div class="muted-copy" style="text-align:center; margin-bottom:4px;">Group A</div>
+                <div ref="summaryPlotA" class="plot-surface"></div>
+              </div>
+              <div class="community-side-plot">
+                <div class="muted-copy" style="text-align:center; margin-bottom:4px;">Group B</div>
+                <div ref="summaryPlotB" class="plot-surface"></div>
+              </div>
+            </div>
+          </template>
           <div v-else class="d-flex align-items-center justify-content-center h-100 text-muted">
             Select at least one dataset to view the plot.
           </div>
@@ -255,6 +275,7 @@ export default {
       groupBFilters: emptyFilters(),
       groupATableOverflowing: false,
       groupBTableOverflowing: false,
+      plotMode: 'overlay',
     }
   },
   computed: {
@@ -343,6 +364,9 @@ export default {
     hasSelection() {
       return this.selectedExperiments.length > 0 || this.highlightedExperiments.length > 0
     },
+    hasBothGroups() {
+      return this.selectedExperiments.length > 0 && this.highlightedExperiments.length > 0
+    },
     groupAFilterPopoverStyle() {
       return {
         top: `${this.groupAFilterPopoverPosition.top}px`,
@@ -366,6 +390,10 @@ export default {
     groupBSearch() { this.showGroupBFilters = false },
     filteredGroupAItems() { this.scheduleOverflowChecks() },
     filteredGroupBItems() { this.scheduleOverflowChecks() },
+    plotMode() { this.renderPlot() },
+    hasBothGroups(val) {
+      if (!val) this.plotMode = 'overlay'
+    },
   },
   async mounted() {
     document.addEventListener('click', this.handleDocumentClick)
@@ -388,6 +416,8 @@ export default {
     window.removeEventListener('scroll', this.handleWindowScroll, true)
     window.removeEventListener('resize', this.handleWindowResize)
     await purgePlot(this.$refs.summaryPlot)
+    await purgePlot(this.$refs.summaryPlotA)
+    await purgePlot(this.$refs.summaryPlotB)
   },
   methods: {
     handleDocumentClick(event) {
@@ -570,15 +600,55 @@ export default {
     clearGroupBFilter(key) {
       this.groupBFilters[key] = { selectedValues: [] }
     },
+    computeAxisRanges(rows) {
+      const xVals = rows.map((r) => r[this.xVar]).filter((v) => Number.isFinite(v))
+      const yVals = rows.map((r) => r[this.yVar]).filter((v) => Number.isFinite(v))
+      if (!xVals.length || !yVals.length) return null
+      const xMin = Math.min(...xVals)
+      const xMax = Math.max(...xVals)
+      const yMin = Math.min(...yVals)
+      const yMax = Math.max(...yVals)
+      const xPad = (xMax - xMin) * 0.05 || 1
+      const yPad = (yMax - yMin) * 0.05 || 1
+      return {
+        xRange: [xMin - xPad, xMax + xPad],
+        yRange: [yMin - yPad, yMax + yPad],
+      }
+    },
+    setPlotMode(mode) {
+      purgePlot(this.$refs.summaryPlot)
+      purgePlot(this.$refs.summaryPlotA)
+      purgePlot(this.$refs.summaryPlotB)
+      this.plotMode = mode
+    },
     renderPlot() {
+      const rows = this.store.community.summaryRows
+      const base = { xVar: this.xVar, yVar: this.yVar, groupVar: this.groupVar }
+
       this.$nextTick(() => {
-        renderSummaryRegressionPlot(this.$refs.summaryPlot, this.store.community.summaryRows, {
-          xVar: this.xVar,
-          yVar: this.yVar,
-          groupVar: this.groupVar,
-          selectedExperiments: this.selectedExperiments,
-          highlightedExperiments: this.highlightedExperiments,
-        })
+        if (this.plotMode === 'side-by-side') {
+          const allIds = new Set([...this.selectedExperiments, ...this.highlightedExperiments])
+          const allRows = rows.filter((r) => allIds.has(r.experiment_id))
+          const axisRanges = this.computeAxisRanges(allRows)
+          renderSummaryRegressionPlot(this.$refs.summaryPlotA, rows, {
+            ...base,
+            selectedExperiments: this.selectedExperiments,
+            highlightedExperiments: [],
+            axisRanges,
+          })
+          renderSummaryRegressionPlot(this.$refs.summaryPlotB, rows, {
+            ...base,
+            selectedExperiments: this.highlightedExperiments,
+            highlightedExperiments: [],
+            axisRanges,
+          })
+        } else {
+          renderSummaryRegressionPlot(this.$refs.summaryPlot, rows, {
+            ...base,
+            selectedExperiments: this.selectedExperiments,
+            highlightedExperiments: this.highlightedExperiments,
+          })
+        }
       })
     },
   },
