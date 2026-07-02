@@ -135,6 +135,72 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   align-items: flex-start;
 }
 
+.community-toolbar .controls-panel{
+    background: #f9fafc;
+}
+
+.community-groups {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.community-group {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f9fafc;
+  min-height: 240px;
+}
+
+.community-table-scroll {
+  max-height: 150px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.community-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+/*
+.community-table-scroll .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background: transparent;
+}
+  */
+
+.community-table tbody tr {
+  cursor: pointer;
+}
+
+.community-table__checkbox-cell {
+  width: 30px !important;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+  text-align: center;
+}
+
+.community-table-scroll--overflowing .dataset-table__actions-cell {
+  box-shadow: -1px 0 0 #d5d9dd;
+}
+
+.community-table-scroll--overflowing .dataset-table__actions-cell::before {
+  opacity: 1;
+  background: linear-gradient(to left, rgba(31, 41, 51, 0.18), rgba(31, 41, 51, 0));
+}
+
+.community-table-scroll .dataset-table{
+    width: max-content;
+}
+
 .row-between {
   justify-content: space-between;
   align-items: center;
@@ -214,12 +280,14 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 
 .controls-panel--tight {
   width: 240px;
+  flex: 1;
 }
 
 .plot-panel {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  height: -webkit-fill-available;
 }
 
 .plots-panel {

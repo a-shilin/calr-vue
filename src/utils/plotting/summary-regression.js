@@ -34,7 +34,8 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
     return
   }
 
-  const filteredRows = rows.filter((row) => options.selectedExperiments.includes(row.experiment_id))
+  const allSelected = new Set([...options.selectedExperiments, ...options.highlightedExperiments])
+  const filteredRows = rows.filter((row) => allSelected.has(row.experiment_id))
   const { xVar, yVar, groupVar } = options
   const highlighting = options.highlightedExperiments.length > 0
   const groups = {}
@@ -60,30 +61,55 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
     colorMap[groupName] = palette[index % palette.length]
   })
 
+  const normalGroupNames = groupNames.filter((g) => groups[g].normal.length > 0)
+  const highlightedGroupNames = groupNames.filter((g) => groups[g].highlighted.length > 0)
+
   const legendTraces = []
   const normalScatter = []
   const highlightedScatter = []
   const referenceLines = []
   const highlightedLines = []
 
-  groupNames.forEach((groupName) => {
+  normalGroupNames.forEach((groupName, index) => {
     const color = colorMap[groupName]
-    const highlightedRows = groups[groupName].highlighted
-    const normalRows = groups[groupName].normal
-
     legendTraces.push({
       x: [null],
       y: [null],
       mode: 'markers',
       type: 'scatter',
       name: groupName,
-      marker: {
-        color,
-        size: 10,
-      },
+      legendgroup: `all_${groupName}`,
+      legendgrouptitle: highlighting && index === 0 ? { text: 'Group A' } : undefined,
+      marker: highlighting
+        ? { color: '#FFFFFF', size: 10, line: { width: 2, color } }
+        : { color, size: 10 },
       showlegend: true,
       hoverinfo: 'skip',
     })
+  })
+
+  if (highlighting) {
+    highlightedGroupNames.forEach((groupName, index) => {
+      const color = colorMap[groupName]
+      legendTraces.push({
+        x: [null],
+        y: [null],
+        mode: 'markers',
+        type: 'scatter',
+        name: groupName,
+        legendgroup: `compare_${groupName}`,
+        legendgrouptitle: index === 0 ? { text: 'Group B' } : undefined,
+        marker: { color, size: 10 },
+        showlegend: true,
+        hoverinfo: 'skip',
+      })
+    })
+  }
+
+  groupNames.forEach((groupName) => {
+    const color = colorMap[groupName]
+    const highlightedRows = groups[groupName].highlighted
+    const normalRows = groups[groupName].normal
 
     normalRows.forEach((row) => {
       normalScatter.push({
@@ -91,9 +117,10 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
         y: [row[yVar]],
         mode: 'markers',
         type: 'scatter',
+        legendgroup: `all_${groupName}`,
         marker: {
           color: highlighting ? '#FFFFFF' : color,
-          size: highlighting ? 5 : 9,
+          size: highlighting ? 3 : 6,
           opacity: 1,
           line: highlighting ? { width: 1, color } : { width: 0 },
         },
@@ -112,9 +139,10 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
         y: [row[yVar]],
         mode: 'markers',
         type: 'scatter',
+        legendgroup: `compare_${groupName}`,
         marker: {
           color,
-          size: 10,
+          size: 7,
           opacity: 1,
           line: { width: 0 },
         },
@@ -139,6 +167,7 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
         y: [slope * minX + intercept, slope * maxX + intercept],
         mode: 'lines',
         type: 'scatter',
+        legendgroup: `all_${groupName}`,
         line: { color, width: 1 },
         hoverinfo: 'skip',
         showlegend: false,
@@ -157,6 +186,7 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
         y: [slope * minX + intercept, slope * maxX + intercept],
         mode: 'lines',
         type: 'scatter',
+        legendgroup: `compare_${groupName}`,
         line: { color, width: 4 },
         hoverinfo: 'skip',
         showlegend: false,
@@ -185,6 +215,7 @@ export async function renderSummaryRegressionPlot(target, rows, options) {
       },
       hovermode: 'closest',
       showlegend: true,
+      legend: { tracegroupgap: 0 },
     },
     { responsive: true, displaylogo: false },
   )
