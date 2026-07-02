@@ -193,15 +193,35 @@
             <section class="session-step page-column" style="gap: 20px">
               <div class="builder-core-fields">
                 <label class="control-stack builder-core-fields__name">
-                  <div>
-                    <span class="bold">Experiment name</span>
+                  <div class="row-between">
+                    <strong>Experiment name</strong>
+                    <i
+                      v-if="hasExperimentName"
+                      class="bi bi-check-circle-fill builder-ready-check"
+                      aria-label="Experiment name complete"
+                    ></i>
+                    <i
+                      v-else
+                      class="bi"
+                      :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                    ></i>
                   </div>
                   <input v-model="experimentDraft.name" type="text" placeholder="" />
                 </label>
   
                 <label class="control-stack builder-core-fields__description">
-                  <div>
-                    <span class="bold">Description</span>
+                  <div class="row-between">
+                    <strong>Description</strong>
+                    <i
+                      v-if="hasExperimentDescription"
+                      class="bi bi-check-circle-fill builder-ready-check"
+                      aria-label="Experiment description complete"
+                    ></i>
+                    <i
+                      v-else
+                      class="bi"
+                      :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                    ></i>
                   </div>
                   <textarea
                     v-model="experimentDraft.description"
@@ -210,20 +230,28 @@
                   ></textarea>
                 </label>
 
-                <div class="builder-action-with-check">
+                <div class="control-stack">
+                  <div class="row-between">
+                    <strong>Full Metadata</strong>
+                    <i
+                      v-if="hasCompletePublicMetadata"
+                      class="bi bi-check-circle-fill builder-ready-check"
+                      aria-label="Full metadata complete"
+                    ></i>
+                    <i
+                      v-else
+                      class="bi"
+                      :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                    ></i>
+                  </div>
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-secondary builder-core-fields__toggle"
                     :aria-expanded="showMetadataEditor ? 'true' : 'false'"
                     @click="toggleMetadataEditor"
                   >
-                    {{ showMetadataEditor ? 'Hide Full Metadata' : 'Full Metadata' }}
+                    {{ showMetadataEditor ? 'Hide' : 'Show' }}
                   </button>
-                  <i
-                    v-if="hasCompletePublicMetadata"
-                    class="bi bi-check-circle-fill builder-ready-check"
-                    aria-label="Full metadata complete"
-                  ></i>
                 </div>
               </div>
               <div v-if="showMetadataEditor" class="page-column">
@@ -265,9 +293,27 @@
                   <!-- session data upload dropzone -->
                   <div
                     v-if="showEditingCalrDownload"
-                    class="session-import-download"
+                    class="session-import-row col-between"
                   >
-                    <div class="row-between" style="flex:1">
+                    <div>
+                      <div class="row-between">
+                        <strong>Calorimetry Data</strong>
+                        <i
+                          v-if="hasCalorimetryData"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Calorimetry data complete"
+                        ></i>
+                        <i
+                          v-else
+                          class="bi"
+                          :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                      </div>
+                      <div class="muted-copy">
+                        Uploaded format: {{ highlightedUploadSystemFormat || 'CalR' }}
+                      </div>
+                    </div>
+                    <div class="row-between">
                       <div style="display:flex; gap:10px">
                         <BButton variant="outline-secondary" @click="beginCalrReupload">
                           Re-upload
@@ -278,21 +324,28 @@
                         
                       </div>
                       <div style="display:flex; gap:10px; align-items: center;">
-                        <BButton variant="outline-secondary" @click="toggleCalrPreview">
+                        <BButton variant="info" @click="toggleCalrPreview">
                           {{ showCalrPreview ? 'Hide' : 'View' }}
                         </BButton>
-                        <i
-                          v-if="hasSavedCalrFile"
-                          class="bi bi-check-circle-fill builder-ready-check"
-                          aria-label="Calorimetry data saved"
-                        ></i>
                       </div>
                     </div>
                   </div>
   
   
                   <div v-else class="session-import-row col-center">
-                    <strong>Upload calorimetry data</strong>
+                    <div class="row-between">
+                        <strong>Upload calorimetry data</strong>
+                        <i
+                          v-if="hasCalorimetryData"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Calorimetry data complete"
+                        ></i>
+                        <i
+                          v-else
+                          class="bi"
+                          :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                      </div>
                     <div
                       class="dropzone"
                       :class="{ 
@@ -339,7 +392,7 @@
                         <button
                           v-if="hasConvertedData"
                           type="button"
-                          class="btn btn-outline-secondary btn-sm"
+                          class="btn btn-info btn-sm"
                           @click="toggleCalrPreview"
                         >
                           {{ showCalrPreview ? 'Hide' : 'View' }}
@@ -366,29 +419,92 @@
                   <!-- session metadata upload dropzone -->
                   <div
                     v-if="showEditingSessionDownload"
-                    class="session-import-download"
+                    class="session-import-row col-between"
                   >
+                    <div>
+                      <div class="row-between">
+                        <strong>Session Configuration</strong>
+                        <i
+                          v-if="hasSessionConfiguration"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Session configuration complete"
+                        ></i>
+                        <i
+                          v-else
+                          class="bi"
+                          :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                      </div>
+                      <div class="muted-copy">
+                        {{ hasSessionConfiguration ? 'Complete' : 'Not configured yet' }}
+                      </div>
+                    </div>
                     <div class="row-between" style="flex:1">
                       <div style="display:flex; gap:10px">
+                        <BButton variant="outline-secondary" @click="beginSessionReupload">
+                          Re-upload
+                        </BButton>
                         <BButton variant="outline-secondary" @click="downloadEditingSessionFile">
                           Download Session
                         </BButton>
                       </div>
                       <div style="display:flex; gap:10px; align-items: center">
-                        <BButton variant="outline-secondary" @click="toggleSessionEditor">
+                        <BButton variant="info" @click="toggleSessionEditor">
                           {{ showSessionEditor ? 'Hide' : 'Edit' }}
                         </BButton>
-                        <i
-                          v-if="hasSavedSessionFile"
-                          class="bi bi-check-circle-fill builder-ready-check"
-                          aria-label="Session data saved"
-                        ></i>
                       </div>
                     </div>
                   </div>
-                  <div v-if="(store.upload.convertedJSON || store.upload.detectedFileFormat==='calr') && !showEditingSessionDownload" class="session-import-row col-between" :class="{ 'session-import-row--disabled': !isSessionImportEnabled }">
+
+                  <div
+                    v-if="hasConvertedData && !showEditingSessionDownload && !showSessionEditor"
+                    class="session-import-row col-between"
+                  >
+                    <div>
+                      <div class="row-between">
+                        <strong>Session configuration</strong>
+                        <i
+                          v-if="hasSessionConfiguration"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Session configuration complete"
+                        ></i>
+                        <i
+                          v-else
+                          class="bi"
+                          :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                      </div>
+                      <div class="muted-copy">
+                        Configure groups, diets, subjects, hours, or import an existing session CSV.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      @click="openSessionConfiguration"
+                    >
+                      Configure Session
+                    </button>
+                  </div>
+                  <div
+                    v-if="hasConvertedData && !showEditingSessionDownload && showSessionEditor"
+                    class="session-import-row col-between"
+                    :class="{ 'session-import-row--disabled': !isSessionImportEnabled }"
+                  >
                     <div class="session-import-drop">
-                      <strong>Have an existing session CSV?</strong>
+                      <div class="row-between">
+                        <strong>Have an existing session CSV?</strong>
+                        <i
+                          v-if="hasSessionConfiguration"
+                          class="bi bi-check-circle-fill builder-ready-check"
+                          aria-label="Session configuration complete"
+                        ></i>
+                        <i
+                          v-else
+                          class="bi"
+                          :class="'bi-circle builder-action-tooltip__icon--incomplete'"
+                        ></i>
+                      </div>
                       <div
                         class="dropzone"
                         :class="{
@@ -1467,7 +1583,7 @@ export default {
       sessionImportFormatError: false,
       sessionImportMessage: '',
       showCalrPreview: false,
-      showSessionEditor: true,
+      showSessionEditor: false,
       templateUploadDialog: {
         visible: false,
         type: '',
@@ -1500,6 +1616,7 @@ export default {
       },
       builderGroupColors: {},
       builderAnalysisLoading: false,
+      builderAnalysisRequestId: 0,
       builderAnalysisOptions: {
         removeOutliers: false,
       },
@@ -1536,8 +1653,20 @@ export default {
     hasCompletePublicMetadata() {
       return hasRequiredPublicMetadata(this.buildMetadataPayload())
     },
+    hasExperimentName() {
+      return Boolean(this.experimentDraft.name.trim())
+    },
+    hasExperimentDescription() {
+      return Boolean(this.experimentDraft.description.trim())
+    },
+    hasCalorimetryData() {
+      return this.hasConvertedData
+    },
+    hasSessionConfiguration() {
+      return isSessionReadyForAnalysis(this.buildSessionPayload())
+    },
     shouldShowSessionEditor() {
-      return !this.showEditingSessionDownload || this.showSessionEditor
+      return this.showSessionEditor
     },
     highlightedUploadSystemFormat() {
       if (this.store.upload.detectedFileFormat) {
@@ -2086,6 +2215,10 @@ export default {
     toggleCalrPreview() {
       this.showCalrPreview = !this.showCalrPreview
     },
+    openSessionConfiguration() {
+      this.showCalrPreview = false
+      this.showSessionEditor = true
+    },
     toggleSessionEditor() {
       this.showSessionEditor = !this.showSessionEditor
     },
@@ -2610,6 +2743,7 @@ export default {
         this.syncGroupDietSelections()
         this.sessionImportFormatError = false
         this.sessionImportMessage = 'Session CSV imported'
+        this.showSessionEditor = true
       } catch (error) {
         this.sessionImportFormatError = false
         this.sessionImportMessage = error.message || 'Unable to load session CSV'
@@ -2684,7 +2818,7 @@ export default {
       this.sessionImportFormatError = false
       this.sessionImportMessage = ''
       this.showCalrPreview = false
-      this.showSessionEditor = true
+      this.showSessionEditor = this.isEditingExperiment
       if (clearInput && this.$refs.fileInput) {
         this.$refs.fileInput.value = ''
       }
@@ -2701,6 +2835,16 @@ export default {
       this.qcFailureCursor.energyExpenditure = 0
       this.qcFailureCursor.foodIntake = 0
     },
+    beginSessionReupload() {
+      this.editingSessionFileEntry = null
+      this.sessionImportName = ''
+      this.sessionImportFormatError = false
+      this.sessionImportMessage = ''
+      this.showSessionEditor = true
+      if (this.$refs.sessionFileInput) {
+        this.$refs.sessionFileInput.value = ''
+      }
+    },
     async loadBuilderAnalysisData(file) {
       const target = file || this.builderExperimentRecord
       if (!target) {
@@ -2712,12 +2856,26 @@ export default {
         return
       }
 
+      const requestId = this.builderAnalysisRequestId + 1
+      this.builderAnalysisRequestId = requestId
       this.builderAnalysisLoading = true
       try {
         const [enrichedPayload, sessionConfig] = await Promise.all([
           fetchEnrichedSession(session.id, this.store.auth.token, target.public),
           fetchSessionConfig(session.id, this.store.auth.token, target.public),
         ])
+
+        const currentBuilderTargetId = this.isEditingExperiment
+          ? this.editingExperimentId
+          : this.latestCreatedExperimentId
+
+        if (
+          requestId !== this.builderAnalysisRequestId
+          || !this.store.account.userCreatingNew
+          || currentBuilderTargetId !== target.id
+        ) {
+          return
+        }
 
         const analysisData = normalizeEnrichedAnalysisData(enrichedPayload, {
           numericalColumns,
@@ -2747,10 +2905,13 @@ export default {
       } catch {
         // Analysis loading is best-effort; don't surface errors in the builder UI
       } finally {
-        this.builderAnalysisLoading = false
+        if (requestId === this.builderAnalysisRequestId) {
+          this.builderAnalysisLoading = false
+        }
       }
     },
     clearBuilderAnalysis() {
+      this.builderAnalysisRequestId += 1
       this.builderAnalysisLoading = false
       this.store.builderAnalysis.current = null
       this.store.builderAnalysis.analysisData = null
@@ -3064,10 +3225,21 @@ export default {
               apiSessionPayload,
               this.store.auth.token,
             )
+            if (!this.editingSessionFileEntry) {
+              this.editingSessionFileEntry = {
+                id: this.editingSessionId,
+                file_type: 'session',
+              }
+            }
           } else if (shouldPersistSession) {
             const uploadedSession = await uploadSessionFile(this.editingExperimentId, apiSessionPayload, this.store.auth.token)
             if (uploadedSession?.id) {
               this.editingSessionId = uploadedSession.id
+              this.editingSessionFileEntry = {
+                id: uploadedSession.id,
+                file_type: 'session',
+                ...uploadedSession,
+              }
             }
           }
 
@@ -3076,6 +3248,8 @@ export default {
             this.buildMetadataPayload(),
             this.store.auth.token,
           )
+          this.showSessionEditor = false
+          this.showCalrPreview = false
           await this.loadUserFiles()
           this.saveMessage = 'Experiment updated.'
           const updatedFile = this.store.account.userFiles.find((f) => f.id === this.editingExperimentId)
@@ -3110,6 +3284,8 @@ export default {
           this.buildMetadataPayload(),
           this.store.auth.token,
         )
+        this.showSessionEditor = false
+        this.showCalrPreview = false
         await this.loadUserFiles()
         this.saveMessage = 'Experiment saved.'
         const newFile = this.store.account.userFiles.find((f) => f.id === uploadedExperiment.submission_id)
@@ -3161,6 +3337,7 @@ export default {
       }
 
       file.loading = true
+      this.clearBuilderAnalysis()
 
       try {
         const dataCsv = await fetchDataFile(standard.id, this.store.auth.token, file.public)
@@ -3191,7 +3368,7 @@ export default {
         this.sessionImportName = ''
         this.sessionImportMessage = ''
         this.saveMessage = ''
-        this.showSessionEditor = !shouldUseSavedSession
+        this.showSessionEditor = false
         this.experimentDraft = {
           name: file.name || '',
           description: file.description || '',
@@ -3224,12 +3401,13 @@ export default {
       this.sessionImportName = ''
       this.sessionImportMessage = ''
       this.saveMessage = ''
-      this.showSessionEditor = !session
+      this.showSessionEditor = false
       this.experimentDraft = {
         name: file.name || '',
         description: file.description || '',
         public: Boolean(file.public),
       }
+      this.clearBuilderAnalysis()
       this.resetMetadataDraft(file)
       if (session) {
         this.builderAnalysisLoading = true
