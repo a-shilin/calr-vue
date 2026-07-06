@@ -61,398 +61,399 @@
           </button>
         </div>
       </div>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'time'">
-        <aside class="controls-panel">
-          <strong>Time-Series Options</strong>
-          <label class="control-stack">
-            Metabolic Variable
-            <select v-model="timeOptions.yVar">
-              <option v-for="variable in timeSeriesVariables" :key="variable.field" :value="variable.field">
-                {{ variable.label }}
-              </option>
-            </select>
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="timeOptions.smoothing" type="checkbox" />
-            Apply Smoothing
-          </label>
-  
-          <label class="control-stack">
-            Smoothing Window
-            <input v-model.number="timeOptions.smoothWindow" type="range" min="1" max="50" />
-            <span>{{ timeOptions.smoothWindow }}</span>
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="timeOptions.showMean" type="checkbox" />
-            Show Mean Trace
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="timeOptions.showIndividuals" type="checkbox" />
-            Show Individual Traces
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="timeOptions.showDarkLight" type="checkbox" />
-            Shade Dark/Light Periods
-          </label>
-  
-          <label class="control-stack">
-            Plot Range
-            <div class="range-row">
-              <input v-model.number="timeOptions.rangeStart" type="number" :min="0" :max="maxHour" />
-              <span>to</span>
-              <input v-model.number="timeOptions.rangeEnd" type="number" :min="0" :max="maxHour" />
+      <div class="panel--spaced">
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'time'">
+          <aside class="controls-panel">
+            <strong>Time-Series Options</strong>
+            <label class="control-stack">
+              Metabolic Variable
+              <select v-model="timeOptions.yVar">
+                <option v-for="variable in timeSeriesVariables" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="timeOptions.smoothing" type="checkbox" />
+              Apply Smoothing
+            </label>
+    
+            <label class="control-stack">
+              Smoothing Window
+              <input v-model.number="timeOptions.smoothWindow" type="range" min="1" max="50" />
+              <span>{{ timeOptions.smoothWindow }}</span>
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="timeOptions.showMean" type="checkbox" />
+              Show Mean Trace
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="timeOptions.showIndividuals" type="checkbox" />
+              Show Individual Traces
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="timeOptions.showDarkLight" type="checkbox" />
+              Shade Dark/Light Periods
+            </label>
+    
+            <label class="control-stack">
+              Plot Range
+              <div class="range-row">
+                <input v-model.number="timeOptions.rangeStart" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model.number="timeOptions.rangeEnd" type="number" :min="0" :max="maxHour" />
+              </div>
+            </label>
+          </aside>
+    
+          <div class="panel plot-panel">
+            <div class="plot-wrap">
+              <div v-if="plotRendering.time" class="plot-loading"><BSpinner small /></div>
+              <div ref="timePlot" class="plot-surface"></div>
             </div>
-          </label>
-        </aside>
-  
-        <div class="panel plot-panel">
-          <div class="plot-wrap">
-            <div v-if="plotRendering.time" class="plot-loading"><BSpinner small /></div>
-            <div ref="timePlot" class="plot-surface"></div>
           </div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'distribution'">
-        <aside class="controls-panel">
-          <strong>Distribution Options</strong>
-          <label class="control-stack">
-            Metabolic Variable
-            <select v-model="distributionVariable">
-              <option v-for="variable in boxPlotVariables" :key="variable.field" :value="variable.field">
-                {{ variable.label }}
-              </option>
-            </select>
-          </label>
-        </aside>
-  
-        <div class="panel plot-panel">
-          <div class="plot-wrap">
-            <div v-if="plotRendering.distribution" class="plot-loading"><BSpinner small /></div>
-            <div ref="distributionPlot" class="plot-surface"></div>
-          </div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'regression'">
-        <aside class="controls-panel">
-          <strong>Regression Options</strong>
-          <label class="control-stack">
-            Metabolic Variable
-            <select v-model="regressionOptions.yVar">
-              <option v-for="variable in regressionYVariables" :key="variable.field" :value="variable.field">
-                {{ variable.label }}
-              </option>
-            </select>
-          </label>
-  
-          <label class="control-stack">
-            Covariate
-            <select v-model="regressionOptions.xVar">
-              <option v-for="variable in regressionXVariables" :key="variable.field" :value="variable.field">
-                {{ variable.label }}
-              </option>
-            </select>
-          </label>
-  
-          <label class="control-stack">
-            Time of Day
-            <select v-model="regressionOptions.period">
-              <option value="Total">Total</option>
-              <option value="Light">Light</option>
-              <option value="Dark">Dark</option>
-            </select>
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="regressionOptions.showCI" type="checkbox" />
-            Show 95% Confidence Interval
-          </label>
-  
-          <label class="checkbox-row">
-            <input v-model="regressionOptions.showStatsLegend" type="checkbox" />
-            Show Stats Legend
-          </label>
-        </aside>
-  
-        <div class="panel plot-panel">
-          <div class="plot-wrap">
-            <div v-if="plotRendering.regression" class="plot-loading"><BSpinner small /></div>
-            <div ref="regressionPlot" class="plot-surface"></div>
-          </div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'weight'">
-        <aside class="controls-panel">
-          <strong>Weight</strong>
-          <div class="muted-copy">Group mean mass summaries with SEM.</div>
-        </aside>
-        <div class="panel plot-panel">
-          <div class="card-tabs">
-            <button class="card-tab" :class="{ active: weightViewTab === 'total' }" @click="weightViewTab = 'total'">
-              Total Mass
-            </button>
-            <button
-              v-if="weightHasCompositionData"
-              class="card-tab"
-              :class="{ active: weightViewTab === 'composition' }"
-              @click="weightViewTab = 'composition'"
-            >
-              Mass Breakdown
-            </button>
-            <button
-              v-if="weightHasCompositionData"
-              class="card-tab"
-              :class="{ active: weightViewTab === 'compositionPercent' }"
-              @click="weightViewTab = 'compositionPercent'"
-            >
-              Composition %
-            </button>
-          </div>
-          <div class="plot-wrap">
-            <div v-if="plotRendering.weight" class="plot-loading"><BSpinner small /></div>
-            <div ref="weightPlot" class="plot-surface"></div>
-          </div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'qc'">
-        <aside class="controls-panel">
-          <strong>QC</strong>
-          <label class="control-stack">
-            Number of mass measurements
-            <input v-model.number="qcOptions.nMassMeasurements" type="number" min="1" max="15" step="1" />
-          </label>
-  
-          <label class="control-stack">
-            Hours
-            <div class="range-row">
-              <input v-model.number="qcOptions.hourStart" type="number" :min="0" :max="maxHour" />
-              <span>to</span>
-              <input v-model.number="qcOptions.hourEnd" type="number" :min="0" :max="maxHour" />
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'distribution'">
+          <aside class="controls-panel">
+            <strong>Distribution Options</strong>
+            <label class="control-stack">
+              Metabolic Variable
+              <select v-model="distributionVariable">
+                <option v-for="variable in boxPlotVariables" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+          </aside>
+    
+          <div class="panel plot-panel">
+            <div class="plot-wrap">
+              <div v-if="plotRendering.distribution" class="plot-loading"><BSpinner small /></div>
+              <div ref="distributionPlot" class="plot-surface"></div>
             </div>
-          </label>
-  
-          <BButton size="sm" variant="outline-secondary" :disabled="qcLoading || !analysisDirty.qc" @click="runQc">
-            <BSpinner v-if="qcLoading" small />
-            <span v-else>Run QC</span>
-          </BButton>
-          <div v-if="analysisDirty.qc" class="muted-copy">Settings changed. Run QC to refresh this plot.</div>
-          <div v-else class="muted-copy">QC is up to date for the current settings.</div>
-        </aside>
-        <div class="panel plot-panel">
-          <div v-if="xp.analysisErrors.qc" class="muted-copy warn-copy">{{ xp.analysisErrors.qc }}</div>
-          <div v-if="xp.qcResults" class="plot-wrap">
-            <div v-if="plotRendering.qc" class="plot-loading"><BSpinner small /></div>
-            <div ref="qcPlot" class="plot-surface"></div>
           </div>
-          <div v-else class="plot-placeholder">Run QC to populate this plot.</div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'power'">
-        <aside class="controls-panel">
-          <strong>Power</strong>
-          <label class="control-stack">
-            Covariate
-            <select v-model="powerOptions.variable">
-              <option v-for="variable in powerVariableOptions" :key="variable.field" :value="variable.field">
-                {{ variable.label }}
-              </option>
-            </select>
-          </label>
-  
-          <label class="control-stack">
-            Population Sizes
-            <input v-model="powerOptions.sampleSizesText" type="text" />
-          </label>
-  
-          <div class="muted-copy">
-            Enter group sizes separated by commas. Modeled power assumes groups of equal size.
-          </div>
-  
-          <label class="control-stack">
-            Day Phase
-            <select v-model="powerOptions.dayPhase">
-              <option value="total">Full Day</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </label>
-  
-          <label class="control-stack">
-            Alpha Level
-            <input v-model.number="powerOptions.alpha" type="number" min="0" max="1" step="0.05" />
-          </label>
-  
-          <label class="control-stack">
-            Hours
-            <div class="range-row">
-              <input v-model.number="powerOptions.hourStart" type="number" :min="0" :max="maxHour" />
-              <span>to</span>
-              <input v-model.number="powerOptions.hourEnd" type="number" :min="0" :max="maxHour" />
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'regression'">
+          <aside class="controls-panel">
+            <strong>Regression Options</strong>
+            <label class="control-stack">
+              Metabolic Variable
+              <select v-model="regressionOptions.yVar">
+                <option v-for="variable in regressionYVariables" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+    
+            <label class="control-stack">
+              Covariate
+              <select v-model="regressionOptions.xVar">
+                <option v-for="variable in regressionXVariables" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+    
+            <label class="control-stack">
+              Time of Day
+              <select v-model="regressionOptions.period">
+                <option value="Total">Total</option>
+                <option value="Light">Light</option>
+                <option value="Dark">Dark</option>
+              </select>
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="regressionOptions.showCI" type="checkbox" />
+              Show 95% Confidence Interval
+            </label>
+    
+            <label class="checkbox-row">
+              <input v-model="regressionOptions.showStatsLegend" type="checkbox" />
+              Show Stats Legend
+            </label>
+          </aside>
+    
+          <div class="panel plot-panel">
+            <div class="plot-wrap">
+              <div v-if="plotRendering.regression" class="plot-loading"><BSpinner small /></div>
+              <div ref="regressionPlot" class="plot-surface"></div>
             </div>
-          </label>
-  
-          <BButton size="sm" variant="outline-secondary" :disabled="powerLoading || !analysisDirty.power" @click="runPower">
-            <BSpinner v-if="powerLoading" small />
-            <span v-else>Run Power</span>
-          </BButton>
-          <div v-if="analysisDirty.power" class="muted-copy">Settings changed. Run Power to refresh this plot.</div>
-          <div v-else class="muted-copy">Power is up to date for the current settings.</div>
-        </aside>
-        <div class="panel plot-panel">
-          <div v-if="xp.analysisErrors.power" class="muted-copy warn-copy">{{ xp.analysisErrors.power }}</div>
-          <template v-if="xp.powerResults">
+          </div>
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'weight'">
+          <aside class="controls-panel">
+            <strong>Weight</strong>
+            <div class="muted-copy">Group mean mass summaries with SEM.</div>
+          </aside>
+          <div class="panel plot-panel">
             <div class="card-tabs">
-              <button class="card-tab" :class="{ active: powerViewTab === 'plot' }" @click="powerViewTab = 'plot'">Plot</button>
-              <button class="card-tab" :class="{ active: powerViewTab === 'table' }" @click="powerViewTab = 'table'">Table</button>
+              <button class="card-tab" :class="{ active: weightViewTab === 'total' }" @click="weightViewTab = 'total'">
+                Total Mass
+              </button>
+              <button
+                v-if="weightHasCompositionData"
+                class="card-tab"
+                :class="{ active: weightViewTab === 'composition' }"
+                @click="weightViewTab = 'composition'"
+              >
+                Mass Breakdown
+              </button>
+              <button
+                v-if="weightHasCompositionData"
+                class="card-tab"
+                :class="{ active: weightViewTab === 'compositionPercent' }"
+                @click="weightViewTab = 'compositionPercent'"
+              >
+                Composition %
+              </button>
             </div>
-            <div v-if="powerViewTab === 'plot'" class="plot-wrap">
-              <div v-if="plotRendering.power" class="plot-loading"><BSpinner small /></div>
-              <div ref="powerPlot" class="plot-surface"></div>
+            <div class="plot-wrap">
+              <div v-if="plotRendering.weight" class="plot-loading"><BSpinner small /></div>
+              <div ref="weightPlot" class="plot-surface"></div>
             </div>
-            <div v-else class="power-tables">
-              <div v-if="powerGroupTableColumns.length" class="table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th v-for="column in powerGroupTableColumns" :key="column">{{ column }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, index) in powerGroupTableRows" :key="`group-${index}`">
-                      <td v-for="column in powerGroupTableColumns" :key="column">{{ formatTableValue(row[column]) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-if="powerCurveTableColumns.length" class="table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th v-for="column in powerCurveTableColumns" :key="column">{{ column }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, index) in powerCurveTableRows" :key="`curve-${index}`">
-                      <td v-for="column in powerCurveTableColumns" :key="column">{{ formatTableValue(row[column]) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </template>
-          <div v-else class="plot-placeholder">Run Power to populate this plot.</div>
-        </div>
-      </section>
-  
-      <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'ancova'">
-        <aside class="controls-panel">
-          <strong>Ancova</strong>
-          <div class="muted-copy">ANCOVA and ANOVA summaries are generated from the backend response.</div>
-          <BButton size="sm" variant="outline-secondary" :disabled="ancovaLoading || !analysisDirty.ancova" @click="runAncova">
-            <BSpinner v-if="ancovaLoading" small />
-            <span v-else>Run Ancova</span>
-          </BButton>
-          <div v-if="analysisDirty.ancova" class="muted-copy">Settings changed. Run Ancova to refresh this section.</div>
-          <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
-        </aside>
-        <div class="panel plot-panel">
-          <div v-if="xp.analysisErrors.ancova" class="muted-copy warn-copy">{{ xp.analysisErrors.ancova }}</div>
-          <div v-if="xp.ancovaResults" class="ancova-report">
-            <div>
-              <div v-if="ancovaMassVariableLabel" class="ancova-report__meta">
-                Mass effect: {{ ancovaMassVariableLabel }}
-              </div>
-              <div class="ancova-report__meta">
-                Signif. codes: &lt;0.001 `***`, &lt;0.01 `**`, &lt;0.05 `*`
-              </div>
-            </div>
-  
-            <section v-if="ancovaSummaryRows.length" class="ancova-block">
-              <h3 class="ancova-block__title">ANCOVA / GLM</h3>
-              <div class="table-wrap">
-                <table class="data-table ancova-table">
-                  <thead>
-                    <tr>
-                      <th rowspan="2" class="ancova-table__effect-header">Effect</th>
-                      <th v-for="period in ancovaPeriods" :key="`ancova-period-${period}`" :colspan="ancovaEffects.length" class="txt-center">
-                        {{ formatAnalysisPeriodLabel(period) }}
-                      </th>
-                    </tr>
-                    <tr>
-                      <template v-for="period in ancovaPeriods" :key="`ancova-columns-${period}`">
-                        <th v-for="effect in ancovaEffects" :key="`ancova-${period}-${effect}`" class="txt-center">
-                          {{ formatAnalysisEffectLabel(effect) }}
-                        </th>
-                      </template>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in ancovaSummaryRows" :key="`ancova-row-${row.variable}`">
-                      <td class="ancova-table__effect-label">{{ row.label }}</td>
-                      <template v-for="period in ancovaPeriods" :key="`ancova-values-${row.variable}-${period}`">
-                        <td
-                          v-for="effect in ancovaEffects"
-                          :key="`ancova-value-${row.variable}-${period}-${effect}`"
-                          class="txt-center"
-                        >
-                          {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
-                        </td>
-                      </template>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-  
-            <section v-if="anovaSummaryRows.length" class="ancova-block">
-              <h3 class="ancova-block__title">ANOVA</h3>
-              <div class="table-wrap">
-                <table class="data-table ancova-table">
-                  <thead>
-                    <tr>
-                      <th rowspan="2" class="ancova-table__effect-header">Effect</th>
-                      <th v-for="period in anovaPeriods" :key="`anova-period-${period}`" :colspan="anovaEffects.length" class="txt-center">
-                        {{ formatAnalysisPeriodLabel(period) }}
-                      </th>
-                    </tr>
-                    <tr>
-                      <template v-for="period in anovaPeriods" :key="`anova-columns-${period}`">
-                        <th v-for="effect in anovaEffects" :key="`anova-${period}-${effect}`" class="txt-center">
-                          {{ formatAnalysisEffectLabel(effect) }}
-                        </th>
-                      </template>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in anovaSummaryRows" :key="`anova-row-${row.variable}`">
-                      <td class="ancova-table__effect-label">{{ row.label }}</td>
-                      <template v-for="period in anovaPeriods" :key="`anova-values-${row.variable}-${period}`">
-                        <td
-                          v-for="effect in anovaEffects"
-                          :key="`anova-value-${row.variable}-${period}-${effect}`"
-                          class="txt-center"
-                        >
-                          {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
-                        </td>
-                      </template>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
           </div>
-          <div v-else class="plot-placeholder">Run Ancova to populate this section.</div>
-        </div>
-      </section>
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'qc'">
+          <aside class="controls-panel">
+            <strong>QC</strong>
+            <label class="control-stack">
+              Number of mass measurements
+              <input v-model.number="qcOptions.nMassMeasurements" type="number" min="1" max="15" step="1" />
+            </label>
+    
+            <label class="control-stack">
+              Hours
+              <div class="range-row">
+                <input v-model.number="qcOptions.hourStart" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model.number="qcOptions.hourEnd" type="number" :min="0" :max="maxHour" />
+              </div>
+            </label>
+    
+            <BButton size="sm" variant="outline-secondary" :disabled="qcLoading || !analysisDirty.qc" @click="runQc">
+              <BSpinner v-if="qcLoading" small />
+              <span v-else>Run QC</span>
+            </BButton>
+            <div v-if="analysisDirty.qc" class="muted-copy">Settings changed. Run QC to refresh this plot.</div>
+            <div v-else class="muted-copy">QC is up to date for the current settings.</div>
+          </aside>
+          <div class="panel plot-panel">
+            <div v-if="xp.analysisErrors.qc" class="muted-copy warn-copy">{{ xp.analysisErrors.qc }}</div>
+            <div v-if="xp.qcResults" class="plot-wrap">
+              <div v-if="plotRendering.qc" class="plot-loading"><BSpinner small /></div>
+              <div ref="qcPlot" class="plot-surface"></div>
+            </div>
+            <div v-else class="plot-placeholder">Run QC to populate this plot.</div>
+          </div>
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'power'">
+          <aside class="controls-panel">
+            <strong>Power</strong>
+            <label class="control-stack">
+              Covariate
+              <select v-model="powerOptions.variable">
+                <option v-for="variable in powerVariableOptions" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+    
+            <label class="control-stack">
+              Population Sizes
+              <input v-model="powerOptions.sampleSizesText" type="text" />
+            </label>
+    
+            <div class="muted-copy">
+              Enter group sizes separated by commas. Modeled power assumes groups of equal size.
+            </div>
+    
+            <label class="control-stack">
+              Day Phase
+              <select v-model="powerOptions.dayPhase">
+                <option value="total">Full Day</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
+    
+            <label class="control-stack">
+              Alpha Level
+              <input v-model.number="powerOptions.alpha" type="number" min="0" max="1" step="0.05" />
+            </label>
+    
+            <label class="control-stack">
+              Hours
+              <div class="range-row">
+                <input v-model.number="powerOptions.hourStart" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model.number="powerOptions.hourEnd" type="number" :min="0" :max="maxHour" />
+              </div>
+            </label>
+    
+            <BButton size="sm" variant="outline-secondary" :disabled="powerLoading || !analysisDirty.power" @click="runPower">
+              <BSpinner v-if="powerLoading" small />
+              <span v-else>Run Power</span>
+            </BButton>
+            <div v-if="analysisDirty.power" class="muted-copy">Settings changed. Run Power to refresh this plot.</div>
+            <div v-else class="muted-copy">Power is up to date for the current settings.</div>
+          </aside>
+          <div class="panel plot-panel">
+            <div v-if="xp.analysisErrors.power" class="muted-copy warn-copy">{{ xp.analysisErrors.power }}</div>
+            <template v-if="xp.powerResults">
+              <div class="card-tabs">
+                <button class="card-tab" :class="{ active: powerViewTab === 'plot' }" @click="powerViewTab = 'plot'">Plot</button>
+                <button class="card-tab" :class="{ active: powerViewTab === 'table' }" @click="powerViewTab = 'table'">Table</button>
+              </div>
+              <div v-if="powerViewTab === 'plot'" class="plot-wrap">
+                <div v-if="plotRendering.power" class="plot-loading"><BSpinner small /></div>
+                <div ref="powerPlot" class="plot-surface"></div>
+              </div>
+              <div v-else class="power-tables">
+                <div v-if="powerGroupTableColumns.length" class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th v-for="column in powerGroupTableColumns" :key="column">{{ column }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, index) in powerGroupTableRows" :key="`group-${index}`">
+                        <td v-for="column in powerGroupTableColumns" :key="column">{{ formatTableValue(row[column]) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-if="powerCurveTableColumns.length" class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th v-for="column in powerCurveTableColumns" :key="column">{{ column }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, index) in powerCurveTableRows" :key="`curve-${index}`">
+                        <td v-for="column in powerCurveTableColumns" :key="column">{{ formatTableValue(row[column]) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+            <div v-else class="plot-placeholder">Run Power to populate this plot.</div>
+          </div>
+        </section>
+    
+        <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'ancova'">
+          <aside class="controls-panel">
+            <strong>Ancova</strong>
+            <div class="muted-copy">ANCOVA and ANOVA summaries are generated from the backend response.</div>
+            <BButton size="sm" variant="outline-secondary" :disabled="ancovaLoading || !analysisDirty.ancova" @click="runAncova">
+              <BSpinner v-if="ancovaLoading" small />
+              <span v-else>Run Ancova</span>
+            </BButton>
+            <div v-if="analysisDirty.ancova" class="muted-copy">Settings changed. Run Ancova to refresh this section.</div>
+            <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
+          </aside>
+          <div class="panel plot-panel">
+            <div v-if="xp.analysisErrors.ancova" class="muted-copy warn-copy">{{ xp.analysisErrors.ancova }}</div>
+            <div v-if="xp.ancovaResults" class="ancova-report">
+              <div>
+                <div v-if="ancovaMassVariableLabel" class="ancova-report__meta">
+                  Mass effect: {{ ancovaMassVariableLabel }}
+                </div>
+                <div class="ancova-report__meta">
+                  Signif. codes: &lt;0.001 `***`, &lt;0.01 `**`, &lt;0.05 `*`
+                </div>
+              </div>
+    
+              <section v-if="ancovaSummaryRows.length" class="ancova-block">
+                <h3 class="ancova-block__title">ANCOVA / GLM</h3>
+                <div class="table-wrap">
+                  <table class="data-table ancova-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="ancova-table__effect-header">Effect</th>
+                        <th v-for="period in ancovaPeriods" :key="`ancova-period-${period}`" :colspan="ancovaEffects.length" class="txt-center">
+                          {{ formatAnalysisPeriodLabel(period) }}
+                        </th>
+                      </tr>
+                      <tr>
+                        <template v-for="period in ancovaPeriods" :key="`ancova-columns-${period}`">
+                          <th v-for="effect in ancovaEffects" :key="`ancova-${period}-${effect}`" class="txt-center">
+                            {{ formatAnalysisEffectLabel(effect) }}
+                          </th>
+                        </template>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in ancovaSummaryRows" :key="`ancova-row-${row.variable}`">
+                        <td class="ancova-table__effect-label">{{ row.label }}</td>
+                        <template v-for="period in ancovaPeriods" :key="`ancova-values-${row.variable}-${period}`">
+                          <td
+                            v-for="effect in ancovaEffects"
+                            :key="`ancova-value-${row.variable}-${period}-${effect}`"
+                            class="txt-center"
+                          >
+                            {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
+                          </td>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+    
+              <section v-if="anovaSummaryRows.length" class="ancova-block">
+                <h3 class="ancova-block__title">ANOVA</h3>
+                <div class="table-wrap">
+                  <table class="data-table ancova-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="ancova-table__effect-header">Effect</th>
+                        <th v-for="period in anovaPeriods" :key="`anova-period-${period}`" :colspan="anovaEffects.length" class="txt-center">
+                          {{ formatAnalysisPeriodLabel(period) }}
+                        </th>
+                      </tr>
+                      <tr>
+                        <template v-for="period in anovaPeriods" :key="`anova-columns-${period}`">
+                          <th v-for="effect in anovaEffects" :key="`anova-${period}-${effect}`" class="txt-center">
+                            {{ formatAnalysisEffectLabel(effect) }}
+                          </th>
+                        </template>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in anovaSummaryRows" :key="`anova-row-${row.variable}`">
+                        <td class="ancova-table__effect-label">{{ row.label }}</td>
+                        <template v-for="period in anovaPeriods" :key="`anova-values-${row.variable}-${period}`">
+                          <td
+                            v-for="effect in anovaEffects"
+                            :key="`anova-value-${row.variable}-${period}-${effect}`"
+                            class="txt-center"
+                          >
+                            {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
+                          </td>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+            <div v-else class="plot-placeholder">Run Ancova to populate this section.</div>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </template>

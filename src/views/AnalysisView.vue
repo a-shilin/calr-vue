@@ -490,6 +490,7 @@ export default {
       sharedRouteLoading: false,
       sharedRouteProgress: null,
       sharedRouteError: '',
+      sharedRouteRequestId: 0,
       groupColors: {},
       analysisOptions: {
         removeOutliers: true,
@@ -1108,8 +1109,23 @@ export default {
       this.store.account.userFiles = files.map((file) => this.buildUserFileRecord(file))
       this.hydratePrivateFileStatuses(requestId, files)
     },
+    clearCurrentAnalysis() {
+      this.store.experiment.current = null
+      this.store.experiment.detailRows = []
+      this.store.experiment.analysisData = null
+      this.store.experiment.analysisSessionId = null
+      this.store.experiment.qcResults = null
+      this.store.experiment.powerResults = null
+      this.store.experiment.ancovaResults = null
+      this.store.experiment.analysisErrors.qc = null
+      this.store.experiment.analysisErrors.power = null
+      this.store.experiment.analysisErrors.ancova = null
+      this.groupColors = {}
+    },
     async handleSharedRoute() {
       const shareId = `${this.$route.query.share || ''}`.trim()
+      const requestId = this.sharedRouteRequestId + 1
+      this.sharedRouteRequestId = requestId
 
       if (!shareId) {
         this.sharedRouteLoading = false
@@ -1129,9 +1145,14 @@ export default {
       this.sharedRouteLoading = true
       this.sharedRouteProgress = 0
       this.sharedRouteError = ''
+      this.clearCurrentAnalysis()
 
       try {
         const sharedFile = await fetchSharedFile(shareId)
+        if (requestId !== this.sharedRouteRequestId) {
+          return true
+        }
+
         const preparedFile = {
           ...sharedFile,
           id: sharedFile.id || sharedFile.submission_id || shareId,
@@ -1145,20 +1166,31 @@ export default {
         await this.openExperimentForAnalysis(preparedFile, true, {
           preserveShareQuery: true,
           sourceTab: 'public',
+          shouldApplyResults: () => requestId === this.sharedRouteRequestId,
           onLoadingProgress: (progress) => {
-            this.sharedRouteProgress = progress
+            if (requestId === this.sharedRouteRequestId) {
+              this.sharedRouteProgress = progress
+            }
           },
         })
         return true
       } catch (error) {
-        this.sharedRouteError = error.message || 'Unable to load shared dataset.'
+        if (requestId === this.sharedRouteRequestId) {
+          this.sharedRouteError = error.message || 'Unable to load shared dataset.'
+        }
         return false
       } finally {
-        this.sharedRouteLoading = false
-        this.sharedRouteProgress = null
+        if (requestId === this.sharedRouteRequestId) {
+          this.sharedRouteLoading = false
+          this.sharedRouteProgress = null
+        }
       }
     },
-    async openExperimentForAnalysis(file, isPublic, { preserveShareQuery = false, sourceTab = null, onLoadingProgress = null } = {}) {
+    async openExperimentForAnalysis(
+      file,
+      isPublic,
+      { preserveShareQuery = false, sourceTab = null, onLoadingProgress = null, shouldApplyResults = null } = {},
+    ) {
       const session = file.files.find((item) => item.file_type === 'session')
 
       if (!session) {
@@ -1195,6 +1227,10 @@ export default {
           numericalColumns,
           sessionConfig,
         })
+
+        if (typeof shouldApplyResults === 'function' && !shouldApplyResults()) {
+          return
+        }
 
         this.store.experiment.current = file
         this.store.experiment.current._datasetSourceTab = sourceTab || (isPublic ? 'public' : 'private')

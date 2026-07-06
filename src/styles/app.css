@@ -20,6 +20,10 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
     margin-bottom: 0;
 }
 
+p{
+  margin: 0;
+}
+
 .bold{
   font-weight: bold !important;
 }
@@ -97,6 +101,9 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 .page-grid--two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.page-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 
 .panel,
 .info-card,
@@ -118,7 +125,9 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 }
 
 .info-card {
-  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .row-between,
@@ -224,6 +233,12 @@ h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
 .row-end{
   display:flex;
   justify-content: flex-end;
+}
+
+.col{
+  display:flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .col-center{
