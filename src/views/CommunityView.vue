@@ -1,14 +1,15 @@
 <template>
-  <div class="page-column">
+  <div class="page-column" style="gap:20px;">
+    <div class="page-header">
+      <p class="page-kicker">Community Repository</p>
+      <h1 class="page-title">Compare Results</h1>
+      <p class="page-subtitle">Select datasets from both Group A and Group B to compare their summary results.</p>
+    </div>
     <section class="panel panel--spaced">
-      <div>
-        <h5 class="fw-bold">Compare CalR Community Results</h5>
-        <div>Select datasets from both Group A and Group B to compare their summary results.</div>
-      </div>
       <div class="community-groups">
         <!-- Group A -->
         <div class="community-group">
-          <strong>Group A</strong>
+          <span class="section-title">Group A</span>
           <div class="dataset-table-toolbar">
             <div style="display:flex; gap:8px; align-items:center;">
               <button
@@ -65,7 +66,7 @@
 
         <!-- Group B -->
         <div class="community-group">
-          <strong>Group B</strong>
+          <span class="section-title">Group B</span>
           <div class="dataset-table-toolbar">
             <div style="display:flex; gap:8px; align-items:center;">
               <button
@@ -124,7 +125,7 @@
 
       <section class="plot-row plot-row--reverse">
         <aside class="controls-panel">
-          <strong>Variables</strong>
+          <span class="panel-label">Variables</span>
           <label class="control-stack">
             X Variable
             <select v-model="xVar">

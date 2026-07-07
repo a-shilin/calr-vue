@@ -1,9 +1,10 @@
 body {
   margin: 0;
-  background: #f5f5f5;
-  color: #1f2933;
-  font-family: Arial, sans-serif;
+  background: #f6f8fb;
+  color: #132033;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
+  line-height: 1.5;
 }
 
 * {
@@ -39,10 +40,15 @@ p{
 }
 
 .app-header {
-  background: #334;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  color: #132033;
   font-size: 20px;
   display: flex;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 900;
 }
 
 .tab-nav {
@@ -58,33 +64,42 @@ p{
 .tab-nav__primary,
 .tab-nav__account {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 2px;
 }
 
 .tab-nav__account {
   position: relative;
-  gap:10px;
+  gap:15px;
 }
 
 .tab-link {
-  padding: 0 15px 7px 15px;
-  border-bottom: 5px solid transparent;
+  padding: 0 13px;
+  border-bottom: none;
   display: inline-flex;
-  align-items: flex-end;
-  height: 50px;
+  align-items: center;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #4b5563;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .tab-link:hover {
-    border-bottom: 5px solid #ffaca0;
+  border-bottom: none;
+  color: #132033;
+  background: #eef2f7;
 }
 
 .tab-link.active {
-  border-bottom-color: #ef5b45;
+  color: #132033;
+  background: #eef2f7;
 }
 
 .app-content {
   flex: 1;
-  padding: 20px;
+  padding: 28px;
 }
 
 .page-column {
@@ -109,8 +124,8 @@ p{
 .info-card,
 .controls-panel {
   background: #fff;
-  border: 1px solid #d5d9dd;
-  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 
 .panel,
@@ -128,6 +143,15 @@ p{
   display: flex;
   flex-direction: column;
   gap: 10px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.info-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(34, 200, 216, 0.45);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
 }
 
 .row-between,
@@ -337,7 +361,7 @@ p{
 
 .plots-view-toggle {
   display: flex;
-  border: 1px solid #d5d9dd;
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
@@ -1838,6 +1862,265 @@ p{
   color: #374151;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* ── Button overrides ── */
+.btn {
+  border-radius: 6px !important;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+.btn-sm {
+  padding: 3px 10px !important;
+  font-size: 0.8rem !important;
+}
+.btn-outline-primary {
+  color: #ef5b45 !important;
+  border-color: #ef5b45 !important;
+}
+.btn-outline-primary:hover {
+  background: #ef5b45 !important;
+  border-color: #ef5b45 !important;
+  color: #fff !important;
+}
+.btn-primary {
+  background: #ef5b45 !important;
+  border-color: #ef5b45 !important;
+  box-shadow: 0 8px 20px rgba(239, 91, 69, 0.22);
+}
+.btn-primary:hover {
+  background: #d84631 !important;
+  border-color: #d84631 !important;
+}
+
+/* ── App brand ── */
+.app-brand {
+  display: flex;
+  align-items: center;
+  padding: 0 24px 3px 28px;
+  min-height: 64px;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+  color: #132033;
+  white-space: nowrap;
+}
+
+/* ── Home page ── */
+.home-page {
+  margin: -28px;
+  min-height: calc(100vh - 64px);
+  background:
+    radial-gradient(ellipse at 15% 0%, rgba(34, 200, 216, 0.26) 0%, transparent 52%),
+    radial-gradient(ellipse at 88% 80%, rgba(239, 91, 69, 0.20) 0%, transparent 50%),
+    #ffffff;
+}
+
+.home-hero {
+  padding: 88px 40px 80px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.home-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border: 1px solid rgba(34, 200, 216, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #0f7681;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.home-title {
+  margin: 0;
+  color: #132033;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.home-subtitle {
+  max-width: 560px;
+  margin: 0;
+  color: #4b5563;
+  font-size: 1rem;
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+.home-hero-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.home-section-header {
+  text-align: center;
+  padding-top: 16px;
+}
+
+.home-section-kicker {
+  margin: 0 0 8px;
+  color: #ef5b45;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-section-title {
+  margin: 0;
+  color: #132033;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.home-section-subtitle {
+    margin: 5px 0 0;
+    color: #6b7280;
+    font-size: 1.08rem;
+}
+
+.home-feature-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 200, 216, 0.13), rgba(239, 91, 69, 0.11));
+  color: #132033;
+  flex-shrink: 0;
+}
+
+.home-feature-icon svg {
+  width: 28px;
+  height: 28px;
+  stroke: #132033;
+  opacity: 0.75;
+}
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 0;
+}
+.page-kicker {
+  margin: 0;
+  color: #ef5b45;
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.page-title {
+  margin: 0;
+  color: #132033;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+.page-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* ── Section title (within panels / group headers) ── */
+.section-title {
+  display: block;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #132033;
+}
+
+/* ── Panel label (small uppercase control group headers) ── */
+.panel-label {
+  display: block;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.home-card-heading {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #132033;
+}
+
+/* ── Account nav CTA ── */
+.tab-nav__account .tab-link:not(.tab-link--user) {
+  background: #132033;
+  color: #fff !important;
+  padding: 0 16px;
+  border-radius: 8px;
+}
+.tab-nav__account .tab-link:not(.tab-link--user):hover {
+  background: #ef5b45;
+  color: #fff !important;
+}
+.tab-nav__account .tab-link:not(.tab-link--user).active {
+  background: #ef5b45;
+  color: #fff !important;
+}
+
+/* ── Form control tightening ── */
+.form-control,
+.form-select,
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  border-radius: 6px !important;
+  font-size: 13px;
+}
+.form-control,
+.form-select {
+  padding: 5px 10px !important;
+  font-size: 13px !important;
+}
+.input-group-text {
+  border-radius: 6px !important;
+  font-size: 13px;
+}
+.dropdown-menu {
+  border-radius: 8px;
+  font-size: 13px;
+}
+.modal-content {
+  border-radius: 10px;
+}
+.modal-header,
+.modal-footer {
+  border-radius: 0;
 }
 
 .btn-info{

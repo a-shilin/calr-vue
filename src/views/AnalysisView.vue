@@ -1,5 +1,10 @@
 <template>
   <div class="page-column" style="gap:20px;">
+    <div class="page-header">
+      <p class="page-kicker">Indirect Calorimetry</p>
+      <h1 class="page-title">Analysis</h1>
+      <p class="page-subtitle">Select a dataset to see analysis plots.</p>
+    </div>
     <section>
       <div class="row-between">
         <div class="card-tabs">
@@ -183,26 +188,19 @@
       </div>
     </Teleport>
 
-    <section class="panel panel--spaced">
+    <section v-if="sharedRouteLoading || sharedRouteError || store.experiment.current" class="panel panel--spaced">
       <div v-if="sharedRouteLoading" class="empty-state panel">
         <div style="display:flex; align-items:center; gap:0.5rem;">
           <BSpinner small />
           <span>{{ formatLoadingProgress(sharedRouteProgress) }}</span>
         </div>
       </div>
-  
+
       <div v-if="sharedRouteError" class="panel warn-copy">
         {{ sharedRouteError }}
       </div>
-  
-      <div
-        v-if="!sharedRouteLoading && !store.experiment.current && !(datasetSourceTab === 'private' && !store.auth.token)"
-        class="empty-state panel"
-      >
-        Select a dataset to see analysis plots.
-      </div>
-  
-      <template v-else-if="store.experiment.current">
+
+      <template v-if="store.experiment.current">
         <div class="row-between" style="align-items: flex-start; gap: 16px;">
           <div>
             <div style="font-size: 1.05rem; font-weight: 600;">{{ store.experiment.current.name || store.experiment.current.id }}</div>

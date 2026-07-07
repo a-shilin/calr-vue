@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell">
     <header class="app-header">
-      <div style="height: 50px;display: flex;align-items: center;padding: 0 30px;">
+      <div class="app-brand">
         CalRepository
       </div>
       <TabNav />

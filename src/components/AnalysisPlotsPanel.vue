@@ -2,7 +2,7 @@
   <div class="plots-panel">
     <div style="display:flex; gap: 20px">
       <div style="display: flex; flex-direction: column; gap: 10px; max-width: 200px;">
-        <strong>Hours & Stats</strong>
+        <span class="panel-label">Hours & Stats</span>
         <div class="session-stats-bar">
           <span class="session-stat"><strong>Subjects:</strong> {{ totalSubjects }}</span>
           <span class="session-stat"><strong>Duration (hrs):</strong> {{ maxHour }}</span>
@@ -12,7 +12,7 @@
       </div>
   
       <div style="display: flex; flex-direction: column; gap: 10px; flex:1;">
-        <strong>Groups & Diets</strong>
+        <span class="panel-label">Groups & Diets</span>
         <div v-if="sessionMetadata.groupNames && sessionMetadata.groupNames.length" class="group-cards-bar">
           <div
             v-for="(name, index) in sessionMetadata.groupNames"
@@ -37,7 +37,7 @@
     </div>
 
     <div>
-      <strong>Plots</strong>
+      <span class="panel-label">Plots</span>
       <div class="plots-view-bar">
         <div v-if="plotViewMode === 'single'" class="card-tabs plots-single-nav">
           <button

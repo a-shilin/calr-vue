@@ -1,5 +1,9 @@
 <template>
-  <div class="page-column">
+  <div class="page-column" style="gap:20px;">
+    <div class="page-header">
+      <p class="page-kicker">CalRepository</p>
+      <h1 class="page-title">Account</h1>
+    </div>
     <!--
     <section v-if="store.auth.token" class="panel panel--spaced">
       <div class="row-between">
@@ -13,7 +17,6 @@
     <section class="panel panel--spaced">
       <div v-if="!store.auth.token" class="row-between login-layout">
         <div class="login-copy">
-          <strong>Account Access</strong>
           <p>
             Log in to upload, standardize, and analyze your own data. Then contribute to the CalR community repository.
           </p>
@@ -95,7 +98,7 @@
           <div>
             <div class="row-between">
               <div>
-                <h5 class="bold">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h5>
+                <h2 class="section-title">{{ isEditingExperiment ? 'Edit Experiment' : 'Create New Experiment' }}</h2>
               </div>
               <div class="button-row" style="align-items: center;">
                 <span class="status-tooltip builder-action-tooltip" tabindex="0">
@@ -1008,7 +1011,7 @@
 
         <div class="page-column" v-else>
           <div class="row-between">
-            <h5 class="bold">Your Experiments ({{ experimentCount }})</h5>
+            <h2 class="section-title">Your Experiments ({{ experimentCount }})</h2>
             <div class="button-row">
               <BButton v-if="!store.account.userCreatingNew" variant="info" @click="startCreateExperiment">
                 + New
