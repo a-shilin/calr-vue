@@ -615,7 +615,7 @@
                   <div>
                     {{ energyExpenditureQc.passed
                       ? `Passed: all RER values are > 0.6 and < 1.5.`
-                      : `Failed: ${energyExpenditureQc.invalidCount} RER value(s) fell outside 0.6-1.5 or were missing.` }}
+                      : `Failed: ${formatQcFailureCount(energyExpenditureQc.invalidCount, energyExpenditureQc.checkedRowCount)} RER value(s) fell outside 0.6-1.5 or were missing.` }}
                   </div>
                   <div v-if="energyExpenditureQc.invalidCount" class="upload-qc-nav">
                     <button
@@ -644,7 +644,7 @@
                   <div>
                     {{ foodIntakeQc.passed
                       ? `Passed: all feed values are non-negative.`
-                      : `Failed: ${foodIntakeQc.invalidCount} feed value(s) were negative or missing.` }}
+                      : `Failed: ${formatQcFailureCount(foodIntakeQc.invalidCount, foodIntakeQc.checkedRowCount)} feed value(s) were negative or missing.` }}
                   </div>
                   <div v-if="foodIntakeQc.invalidCount" class="upload-qc-nav">
                     <button
@@ -1936,6 +1936,19 @@ export default {
   methods: {
     formatDate,
     formatFileSize,
+    formatQcFailureCount(invalidCount, checkedRowCount) {
+      const safeInvalidCount = Number.isFinite(invalidCount) ? invalidCount : 0
+      const safeCheckedRowCount = Number.isFinite(checkedRowCount) ? checkedRowCount : 0
+      const formattedInvalidCount = safeInvalidCount.toLocaleString()
+      const formattedCheckedRowCount = safeCheckedRowCount.toLocaleString()
+
+      if (!safeCheckedRowCount) {
+        return `${formattedInvalidCount} of ${formattedCheckedRowCount}`
+      }
+
+      const percent = roundToTwo((safeInvalidCount / safeCheckedRowCount) * 100)
+      return `${formattedInvalidCount} of ${formattedCheckedRowCount} (${percent}%)`
+    },
     setAuthMode(mode) {
       if (this.store.auth.mode === mode) {
         return

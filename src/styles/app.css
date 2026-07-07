@@ -1621,6 +1621,8 @@ p{
 
 .session-table-option-btn[data-tooltip] {
   position: relative;
+  z-index: 25;
+  padding: 0 !important;
 }
 
 .session-table-option-btn[data-tooltip]::after,
