@@ -24,3 +24,7 @@ export function preprocessSummary(rows) {
     return parsed
   })
 }
+
+export function stringifyCsv(rows, options = {}) {
+  return Papa.unparse(rows, options)
+}

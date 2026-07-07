@@ -206,7 +206,7 @@
             <div style="font-size: 1.05rem; font-weight: 600;">{{ store.experiment.current.name || store.experiment.current.id }}</div>
             <div v-if="store.experiment.current.description" class="muted-copy" style="margin-top: 2px;">{{ store.experiment.current.description }}</div>
           </div>
-          <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+          <div class="analysis-header-actions">
             <span
               v-if="isViewingSharedDataset"
               class="dataset-privacy-pill inline-tooltip"
@@ -215,6 +215,25 @@
             >
               Private
             </span>
+            <div ref="analysisDownloadMenuShell" class="analysis-download-menu">
+              <button class="btn btn-sm btn-outline-secondary" @click.stop="toggleAnalysisDownloadMenu">
+                Download
+              </button>
+              <div v-if="showAnalysisDownloadMenu" class="analysis-download-menu__popover">
+                <button class="analysis-download-menu__item" :disabled="!analysisStandardFileEntry" @click="downloadAnalysisCalr">
+                  Download CalR
+                </button>
+                <button class="analysis-download-menu__item" :disabled="!analysisSessionFileEntry" @click="downloadAnalysisSession">
+                  Download Session
+                </button>
+                <button class="analysis-download-menu__item" :disabled="!analysisHasEnrichedRows" @click="downloadAnalysisEnriched">
+                  Download Enriched
+                </button>
+                <button class="analysis-download-menu__item" :disabled="!canDownloadAllAnalysisFiles" @click="downloadAnalysisAll">
+                  Download All
+                </button>
+              </div>
+            </div>
             <button class="btn btn-sm btn-outline-secondary" @click="showMetadata = !showMetadata">
               {{ showMetadata ? 'Hide Metadata' : 'Show Metadata' }}
             </button>
@@ -250,6 +269,7 @@
 <script>
 import { appStore } from '../store/appStore'
 import {
+  fetchDataFile,
   fetchEnrichedSession,
   fetchPublicFiles,
   fetchSessionConfig,
@@ -258,7 +278,7 @@ import {
   fetchUserFiles,
 } from '../services/registryService'
 import { formatDate } from '../utils/format'
-import { parseCsv } from '../utils/csv'
+import { parseCsv, stringifyCsv } from '../utils/csv'
 import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
@@ -490,6 +510,7 @@ export default {
       sharedRouteError: '',
       sharedRouteRequestId: 0,
       groupColors: {},
+      showAnalysisDownloadMenu: false,
       analysisOptions: {
         removeOutliers: true,
       },
@@ -636,6 +657,18 @@ export default {
         subjects: new Set(rows.map((row) => row['subject.id'])).size,
       }
     },
+    analysisStandardFileEntry() {
+      return this.store.experiment.current?.files?.find((item) => item.file_type === 'standard') || null
+    },
+    analysisSessionFileEntry() {
+      return this.store.experiment.current?.files?.find((item) => item.file_type === 'session') || null
+    },
+    analysisHasEnrichedRows() {
+      return Boolean(this.analysisData.rows?.length)
+    },
+    canDownloadAllAnalysisFiles() {
+      return Boolean(this.analysisStandardFileEntry && this.analysisSessionFileEntry && this.analysisHasEnrichedRows)
+    },
     datasetTableItems() {
       if (this.datasetSourceTab === 'private') {
         return this.privateDatasetSourceItems.filter((item) => (
@@ -778,17 +811,21 @@ export default {
     formatDate,
     getMetadataValue,
     handleDocumentClick(event) {
-      if (!this.showDatasetFilters) {
-        return
+      if (this.showDatasetFilters) {
+        const popover = this.$refs.datasetFilterPopover
+
+        if (!popover?.contains(event.target)) {
+          this.showDatasetFilters = false
+        }
       }
 
-      const popover = this.$refs.datasetFilterPopover
+      if (this.showAnalysisDownloadMenu) {
+        const menuShell = this.$refs.analysisDownloadMenuShell
 
-      if (popover?.contains(event.target)) {
-        return
+        if (!menuShell?.contains(event.target)) {
+          this.showAnalysisDownloadMenu = false
+        }
       }
-
-      this.showDatasetFilters = false
     },
     handleWindowResize() {
       this.scheduleDatasetTableMetricsUpdate()
@@ -840,6 +877,77 @@ export default {
     toggleDatasetFilters() {
       this.showDatasetFilters = !this.showDatasetFilters
       this.scheduleDatasetFilterPopoverPosition()
+    },
+    toggleAnalysisDownloadMenu() {
+      this.showAnalysisDownloadMenu = !this.showAnalysisDownloadMenu
+    },
+    triggerCsvDownload(filename, text) {
+      const blob = new Blob([text], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    resolveAnalysisDownloadIdentifier() {
+      const experimentId = `${getMetadataValue(this.store.experiment.current, 'experiment_id') || ''}`.trim()
+      if (experimentId) {
+        return experimentId
+      }
+
+      return `${this.store.experiment.current?.id || 'calr_experiment'}`.trim()
+    },
+    sanitizeAnalysisDownloadIdentifier(value) {
+      return `${value || ''}`.trim().replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'calr_experiment'
+    },
+    buildAnalysisDownloadFilename(fileType) {
+      const identifier = this.sanitizeAnalysisDownloadIdentifier(this.resolveAnalysisDownloadIdentifier())
+
+      if (fileType === 'session') {
+        return `${identifier}_calr_session.csv`
+      }
+
+      if (fileType === 'enriched') {
+        return `${identifier}_calr_enriched_data.csv`
+      }
+
+      return `${identifier}_calr_data.csv`
+    },
+    async downloadAnalysisFile(entry) {
+      if (!entry || !this.store.experiment.current) {
+        return
+      }
+
+      const content = entry.file_type === 'session'
+        ? await fetchSessionFile(entry.id, this.store.auth.token, this.store.experiment.current.public)
+        : await fetchDataFile(entry.id, this.store.auth.token, this.store.experiment.current.public)
+
+      this.triggerCsvDownload(this.buildAnalysisDownloadFilename(entry.file_type), content)
+      this.showAnalysisDownloadMenu = false
+    },
+    async downloadAnalysisCalr() {
+      await this.downloadAnalysisFile(this.analysisStandardFileEntry)
+    },
+    async downloadAnalysisSession() {
+      await this.downloadAnalysisFile(this.analysisSessionFileEntry)
+    },
+    downloadAnalysisEnriched() {
+      if (!this.analysisHasEnrichedRows) {
+        return
+      }
+
+      this.triggerCsvDownload(this.buildAnalysisDownloadFilename('enriched'), stringifyCsv(this.analysisData.rows))
+      this.showAnalysisDownloadMenu = false
+    },
+    async downloadAnalysisAll() {
+      if (!this.canDownloadAllAnalysisFiles) {
+        return
+      }
+
+      await this.downloadAnalysisFile(this.analysisStandardFileEntry)
+      await this.downloadAnalysisFile(this.analysisSessionFileEntry)
+      this.downloadAnalysisEnriched()
     },
     toggleDatasetTableFitMode() {
       if (this.datasetSourceTab === 'private') {

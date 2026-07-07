@@ -988,9 +988,20 @@
               </div>
               <div v-else>
                 <div style="display: flex; flex-direction: column; gap: 20px;">
-                  <div>
+                  <div class="row-between">
+                    <div>
                     <strong>Analysis</strong>
-                    <div class="muted-copy">CalR analytical plots based on your calorimetry data. </div>
+                    <div class="muted-copy">
+                      CalR analytical plots based on your calorimetry data.
+                    </div>
+                  </div>
+                    <BButton
+                      variant="outline-secondary"
+                      :disabled="!builderAnalysisData?.rows?.length"
+                      @click="downloadBuilderEnrichedData"
+                    >
+                      Download Enriched Data
+                    </BButton>
                   </div>
                   <AnalysisPlotsPanel
                     context="builderAnalysis"
@@ -1293,6 +1304,7 @@ import {
 } from '../services/registryService'
 import {
   parseCsv,
+  stringifyCsv,
 } from '../utils/csv'
 import { formatDate, formatFileSize } from '../utils/format'
 import {
@@ -1895,6 +1907,9 @@ export default {
     builderAnalysisData() {
       return this.store.builderAnalysis.analysisData
     },
+    builderAnalysisHeaderRecord() {
+      return this.store.builderAnalysis.current || this.builderExperimentRecord || this.editingExperimentFile || null
+    },
     builderSessionMetadata() {
       return this.store.builderAnalysis.analysisData?.session || { groupNames: [], colors: [], dietNames: [], dietCal: [] }
     },
@@ -1948,6 +1963,33 @@ export default {
 
       const percent = roundToTwo((safeInvalidCount / safeCheckedRowCount) * 100)
       return `${formattedInvalidCount} of ${formattedCheckedRowCount} (${percent}%)`
+    },
+    resolveExperimentDownloadIdentifier(source = null) {
+      const metadataSource = source || this.buildMetadataPayload()
+      const experimentId = `${getStatusMetadataValue(metadataSource, 'experiment_id') || ''}`.trim()
+
+      if (experimentId) {
+        return experimentId
+      }
+
+      const fallbackUuid = `${source?.id || this.builderExperimentRecord?.id || this.editingExperimentFile?.id || ''}`.trim()
+      return fallbackUuid || 'calr_experiment'
+    },
+    sanitizeDownloadIdentifier(value) {
+      return `${value || ''}`.trim().replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'calr_experiment'
+    },
+    buildExperimentDownloadFilename(fileType, source = null) {
+      const identifier = this.sanitizeDownloadIdentifier(this.resolveExperimentDownloadIdentifier(source))
+
+      if (fileType === 'enriched') {
+        return `${identifier}_calr_enriched_data.csv`
+      }
+
+      if (fileType === 'session') {
+        return `${identifier}_calr_session.csv`
+      }
+
+      return `${identifier}_calr_data.csv`
     },
     setAuthMode(mode) {
       if (this.store.auth.mode === mode) {
@@ -3475,7 +3517,7 @@ export default {
         ? await fetchSessionFile(entry.id, this.store.auth.token, experiment.public)
         : await fetchDataFile(entry.id, this.store.auth.token, experiment.public)
 
-      this.triggerCsvDownload(entry.file_name || `${experiment.id}_${entry.file_type}.csv`, content)
+      this.triggerCsvDownload(this.buildExperimentDownloadFilename(entry.file_type, experiment), content)
     },
     async downloadEditingStandardFile() {
       if (!this.editingExperimentFile || !this.editingStandardFileEntry) {
@@ -3494,9 +3536,7 @@ export default {
         return
       }
 
-      const baseName = this.experimentDraft.name.trim() || this.defaultExperimentName()
-      const safeBaseName = baseName.replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'calr_experiment'
-      this.triggerCsvDownload(`${safeBaseName}.csv`, this.store.upload.convertedCSV)
+      this.triggerCsvDownload(this.buildExperimentDownloadFilename('standard'), this.store.upload.convertedCSV)
     },
     async downloadEditingSessionFile() {
       if (!this.editingExperimentFile || !this.editingSessionFileEntry) {
@@ -3504,6 +3544,17 @@ export default {
       }
 
       await this.downloadExperimentFile(this.editingExperimentFile, this.editingSessionFileEntry)
+    },
+    downloadBuilderEnrichedData() {
+      const rows = this.builderAnalysisData?.rows || []
+      if (!rows.length) {
+        return
+      }
+
+      this.triggerCsvDownload(
+        this.buildExperimentDownloadFilename('enriched', this.builderAnalysisHeaderRecord),
+        stringifyCsv(rows),
+      )
     },
     async openExperiment(file) {
       const session = file.files.find((item) => item.file_type === 'session')
