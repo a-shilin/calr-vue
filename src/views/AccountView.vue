@@ -2269,7 +2269,12 @@ export default {
         },
       })
 
-      return new URL(resolvedRoute.href, window.location.origin).href
+      const shareHash = resolvedRoute.href.includes('#')
+        ? resolvedRoute.href.slice(resolvedRoute.href.indexOf('#'))
+        : `#${resolvedRoute.fullPath}`
+      const currentBase = window.location.href.split('#')[0]
+
+      return `${currentBase}${shareHash}`
     },
     buildLoadingStatusInfo(hasConvertedData, metadata) {
       if (!hasConvertedData) {
