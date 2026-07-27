@@ -556,8 +556,10 @@ export default {
         { field: 'ee', label: 'Energy Expenditure (kcal/hr)' },
         { field: 'feed', label: 'Food Intake (kcal/hr)' },
       ],
-      regressionXVariables: [
+      regressionXVariableCatalog: [
         { field: 'subject.mass', label: 'Total Mass (g)' },
+        { field: 'subject.lean.mass', label: 'Lean Mass (g)', optional: true },
+        { field: 'subject.fat.mass', label: 'Fat Mass (g)', optional: true },
         { field: 'xytot', label: 'Total Activity (beam breaks)' },
       ],
       timeOptions: {
@@ -684,6 +686,19 @@ export default {
         return new Set(values).size > 1
       })
     },
+    regressionXVariables() {
+      if (!this.analysisRows.length) {
+        return this.regressionXVariableCatalog.filter((variable) => !variable.optional)
+      }
+
+      return this.regressionXVariableCatalog.filter((variable) => {
+        if (!variable.optional) {
+          return true
+        }
+
+        return this.hasCovariateData(variable.field)
+      })
+    },
     powerVariableOptions() {
       if (!this.analysisData.rows.length) {
         return this.explorerVariables
@@ -739,8 +754,7 @@ export default {
         return []
       }
 
-      const effectKey = this.regressionOptions.xVar === 'xytot' ? 'activity' : 'mass'
-      const title = this.regressionOptions.xVar === 'xytot' ? 'Activity' : 'Total Mass'
+      const covariateLabel = this.lookupVariableLabel(this.regressionOptions.xVar)
       const periodCandidates = {
         Total: ['full_day', 'total', 'all'],
         Light: ['light'],
@@ -764,8 +778,8 @@ export default {
       }
 
       return [
-        title,
-        `${effectKey === 'activity' ? 'Activity' : 'Mass'} effect: ${this.formatAnalysisPValue(effects.mass)}`,
+        covariateLabel,
+        `Covariate effect: ${this.formatAnalysisPValue(effects.mass)}`,
         `Group effect: ${this.formatAnalysisPValue(effects.group)}`,
         `Interaction effect: ${this.formatAnalysisPValue(effects.interaction)}`,
       ]
@@ -825,6 +839,11 @@ export default {
     },
     'regressionOptions.xVar'() {
       this.markAnalysisDirty('ancova')
+    },
+    regressionXVariables() {
+      if (!this.regressionXVariables.some((variable) => variable.field === this.regressionOptions.xVar)) {
+        this.regressionOptions.xVar = this.regressionXVariables[0]?.field || 'subject.mass'
+      }
     },
     'regressionOptions.yVar'() {
       this.markAnalysisDirty('ancova')
@@ -945,6 +964,43 @@ export default {
     },
     setAncovaLoading(value) {
       this.store.loaders[this.context === 'builderAnalysis' ? 'doBuilderAncova' : 'doAncova'] = value
+    },
+    hasCovariateData(field) {
+      const sessionKeyByField = {
+        'subject.mass': 'total_mass',
+        'subject.lean.mass': 'lean_mass',
+        'subject.fat.mass': 'fat_mass',
+      }
+      const sessionKey = sessionKeyByField[field]
+
+      if (sessionKey && (this.sessionMetadata.subjects || []).some((subject) => this.toFiniteNumber(subject?.[sessionKey]) !== null)) {
+        return true
+      }
+
+      return this.analysisRows.some((row) => {
+        if (this.toFiniteNumber(row?.[field]) !== null) {
+          return true
+        }
+
+        return sessionKey
+          ? this.toFiniteNumber(row?.subjectSession?.[sessionKey]) !== null
+          : false
+      })
+    },
+    backendMassVariableForRegression() {
+      if (this.regressionOptions.xVar === 'subject.mass') {
+        return 'total_mass'
+      }
+
+      return this.regressionOptions.xVar
+    },
+    toFiniteNumber(value) {
+      if (value === null || value === undefined || value === '') {
+        return null
+      }
+
+      const number = Number(value)
+      return Number.isFinite(number) ? number : null
     },
     lookupVariableLabel(variable) {
       const labelMaps = [
@@ -1222,7 +1278,7 @@ export default {
           {
             session_id: this.xp.current.files.find((file) => file.file_type === 'session')?.id,
             variable: this.regressionOptions.yVar,
-            mass_variable: 'total_mass',
+            mass_variable: this.backendMassVariableForRegression(),
             time_of_day: this.regressionOptions.period.toLowerCase(),
           },
           this.store.auth.token,
