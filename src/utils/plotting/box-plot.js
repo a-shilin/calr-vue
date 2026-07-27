@@ -1,7 +1,7 @@
 // Box-plot rendering.
 // This file takes analysis-ready rows, computes subject-level photoperiod
 // averages, and builds the Plotly box plot configuration.
-import { applyDefaultOutlierRemoval } from '../process'
+import { applyDefaultOutlierRemoval, cropDetailRows } from '../process'
 import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function resolveGroupOrder(rows, preferredOrder = []) {
@@ -40,7 +40,10 @@ function buildBoxPlotDataset(rows, variable, options = {}) {
   }
 
   const removeOutliers = options.removeOutliers ?? true
-  const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
+  const rangedRows = Array.isArray(options.hourRange) && options.hourRange.length === 2
+    ? cropDetailRows(rows, options.hourRange)
+    : rows
+  const outlierHandledRows = removeOutliers ? applyDefaultOutlierRemoval(rangedRows) : rangedRows
   const subjectPeriods = new Map()
 
   outlierHandledRows.forEach((row) => {
@@ -110,17 +113,14 @@ function buildBoxPlotDataset(rows, variable, options = {}) {
 export async function renderBoxPlot(target, analysisData, variable, options = {}) {
   const rows = analysisData?.rows || []
 
-  if (!target || !rows.length) {
+  if (!target) {
     return
   }
 
   const boxRows = buildBoxPlotDataset(rows, variable, {
     removeOutliers: options.removeOutliers,
+    hourRange: options.hourRange,
   })
-
-  if (!boxRows.length) {
-    return
-  }
 
   const groups = resolveGroupOrder(boxRows, options.groupOrder || [])
   const traces = []
@@ -175,6 +175,15 @@ export async function renderBoxPlot(target, analysisData, variable, options = {}
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       showlegend: true,
+      annotations: boxRows.length ? [] : [{
+        text: 'No data in selected time range',
+        xref: 'paper',
+        yref: 'paper',
+        x: 0.5,
+        y: 0.5,
+        showarrow: false,
+        font: { size: 14, color: '#6b7280' },
+      }],
     },
     { responsive: true, displaylogo: false },
   )

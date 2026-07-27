@@ -101,11 +101,20 @@
             </label>
     
             <label class="control-stack">
-              Plot Range
+              Time Range
               <div class="range-row">
-                <input v-model.number="timeOptions.rangeStart" type="number" :min="0" :max="maxHour" />
+                <input v-model="draftTimeRange.start" type="number" :min="0" :max="maxHour" />
                 <span>to</span>
-                <input v-model.number="timeOptions.rangeEnd" type="number" :min="0" :max="maxHour" />
+                <input v-model="draftTimeRange.end" type="number" :min="0" :max="maxHour" />
+                <BButton
+                  class="time-range-apply"
+                  size="sm"
+                  :variant="timeRangeDirty ? 'primary' : 'outline-secondary'"
+                  :disabled="!timeRangeDirty || !timeRangeDraftValid"
+                  @click="applyTimeRange"
+                >
+                  Apply Range
+                </BButton>
               </div>
             </label>
           </aside>
@@ -128,6 +137,24 @@
                   {{ variable.label }}
                 </option>
               </select>
+            </label>
+
+            <label class="control-stack">
+              Time Range
+              <div class="range-row">
+                <input v-model="draftTimeRange.start" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model="draftTimeRange.end" type="number" :min="0" :max="maxHour" />
+                <BButton
+                  class="time-range-apply"
+                  size="sm"
+                  :variant="timeRangeDirty ? 'primary' : 'outline-secondary'"
+                  :disabled="!timeRangeDirty || !timeRangeDraftValid"
+                  @click="applyTimeRange"
+                >
+                  Apply Range
+                </BButton>
+              </div>
             </label>
           </aside>
     
@@ -572,6 +599,10 @@ export default {
         rangeStart: 0,
         rangeEnd: 24,
       },
+      draftTimeRange: {
+        start: '0',
+        end: '24',
+      },
       distributionVariable: 'ee',
       regressionOptions: {
         xVar: 'subject.mass',
@@ -699,6 +730,26 @@ export default {
         return this.hasCovariateData(variable.field)
       })
     },
+    normalizedDraftTimeRange() {
+      if (!this.timeRangeDraftValid) {
+        return null
+      }
+
+      return this.normalizeHourRange(this.draftTimeRange.start, this.draftTimeRange.end)
+    },
+    timeRangeDraftValid() {
+      const start = Number(this.draftTimeRange.start)
+      const end = Number(this.draftTimeRange.end)
+      return Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end <= this.maxHour && start <= end
+    },
+    timeRangeDirty() {
+      const normalized = this.normalizedDraftTimeRange
+      if (!normalized) {
+        return false
+      }
+
+      return normalized[0] !== this.timeOptions.rangeStart || normalized[1] !== this.timeOptions.rangeEnd
+    },
     powerVariableOptions() {
       if (!this.analysisData.rows.length) {
         return this.explorerVariables
@@ -822,9 +873,8 @@ export default {
     timeOptions: {
       deep: true,
       handler() {
-        this.normalizeTimeRange()
         this.ensureValidTimeSeriesVariable()
-        this.schedulePlotRenders(['time'])
+        this.schedulePlotRenders(['time', 'distribution'])
       },
     },
     distributionVariable() {
@@ -893,6 +943,7 @@ export default {
       handler(value) {
         const safeValue = Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 24
         this.timeOptions.rangeEnd = safeValue
+        this.syncDraftTimeRangeFromApplied()
         this.qcOptions.hourEnd = safeValue
         this.powerOptions.hourEnd = safeValue
       },
@@ -964,6 +1015,20 @@ export default {
     },
     setAncovaLoading(value) {
       this.store.loaders[this.context === 'builderAnalysis' ? 'doBuilderAncova' : 'doAncova'] = value
+    },
+    applyTimeRange() {
+      const normalized = this.normalizedDraftTimeRange
+      if (!normalized) {
+        return
+      }
+
+      this.timeOptions.rangeStart = normalized[0]
+      this.timeOptions.rangeEnd = normalized[1]
+      this.syncDraftTimeRangeFromApplied()
+    },
+    syncDraftTimeRangeFromApplied() {
+      this.draftTimeRange.start = `${this.timeOptions.rangeStart}`
+      this.draftTimeRange.end = `${this.timeOptions.rangeEnd}`
     },
     hasCovariateData(field) {
       const sessionKeyByField = {
@@ -1220,6 +1285,10 @@ export default {
         groupColors: this.groupColors,
         yLabel,
         removeOutliers: this.analysisOptions.removeOutliers,
+        hourRange: [
+          this.timeOptions.rangeStart,
+          Math.min(this.timeOptions.rangeEnd, this.maxHour),
+        ],
       })
     },
     async renderRegression() {
@@ -1467,6 +1536,7 @@ export default {
       this.suppressAnalysisDirtyWatch = true
       this.timeOptions.rangeStart = 0
       this.timeOptions.rangeEnd = this.maxHour
+      this.syncDraftTimeRangeFromApplied()
       this.qcOptions.hourStart = 0
       this.qcOptions.hourEnd = this.maxHour
       this.powerOptions.hourStart = 0

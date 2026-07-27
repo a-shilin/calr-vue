@@ -163,6 +163,23 @@ p{
   gap: 16px;
 }
 
+.range-row {
+  align-items: center;
+  gap: 8px;
+}
+
+.range-row input[type='number'] {
+  width: 72px;
+}
+
+.range-row span {
+  line-height: 1;
+}
+
+.range-row .time-range-apply {
+  white-space: nowrap;
+}
+
 .plot-row,
 .community-toolbar {
   align-items: flex-start;
@@ -1896,6 +1913,17 @@ p{
 .btn-primary:hover {
   background: #d84631 !important;
   border-color: #d84631 !important;
+}
+
+.time-range-apply.btn-primary:not(:disabled) {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
+}
+
+.time-range-apply.btn-primary:not(:disabled):hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
 }
 
 /* ── App brand ── */
