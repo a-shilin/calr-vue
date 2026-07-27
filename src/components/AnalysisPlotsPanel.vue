@@ -376,32 +376,32 @@
                 </div>
               </div>
     
-              <section v-if="ancovaSummaryRows.length" class="ancova-block">
-                <h3 class="ancova-block__title">ANCOVA / GLM</h3>
+              <section v-for="section in ancovaReportSections" :key="`ancova-section-${section.key}`" class="ancova-block">
+                <h3 class="ancova-block__title">{{ section.title }}</h3>
                 <div class="table-wrap">
                   <table class="data-table ancova-table">
                     <thead>
                       <tr>
                         <th rowspan="2" class="ancova-table__effect-header">Effect</th>
-                        <th v-for="period in ancovaPeriods" :key="`ancova-period-${period}`" :colspan="ancovaEffects.length" class="txt-center">
+                        <th v-for="period in section.periods" :key="`ancova-period-${section.key}-${period}`" :colspan="section.effects.length" class="txt-center">
                           {{ formatAnalysisPeriodLabel(period) }}
                         </th>
                       </tr>
                       <tr>
-                        <template v-for="period in ancovaPeriods" :key="`ancova-columns-${period}`">
-                          <th v-for="effect in ancovaEffects" :key="`ancova-${period}-${effect}`" class="txt-center">
+                        <template v-for="period in section.periods" :key="`ancova-columns-${section.key}-${period}`">
+                          <th v-for="effect in section.effects" :key="`ancova-${section.key}-${period}-${effect}`" class="txt-center">
                             {{ formatAnalysisEffectLabel(effect) }}
                           </th>
                         </template>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="row in ancovaSummaryRows" :key="`ancova-row-${row.variable}`">
+                      <tr v-for="row in section.rows" :key="`ancova-row-${section.key}-${row.variable}`">
                         <td class="ancova-table__effect-label">{{ row.label }}</td>
-                        <template v-for="period in ancovaPeriods" :key="`ancova-values-${row.variable}-${period}`">
+                        <template v-for="period in section.periods" :key="`ancova-values-${section.key}-${row.variable}-${period}`">
                           <td
-                            v-for="effect in ancovaEffects"
-                            :key="`ancova-value-${row.variable}-${period}-${effect}`"
+                            v-for="effect in section.effects"
+                            :key="`ancova-value-${section.key}-${row.variable}-${period}-${effect}`"
                             class="txt-center"
                           >
                             {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
@@ -413,32 +413,32 @@
                 </div>
               </section>
     
-              <section v-if="anovaSummaryRows.length" class="ancova-block">
-                <h3 class="ancova-block__title">ANOVA</h3>
+              <section v-for="section in anovaReportSections" :key="`anova-section-${section.key}`" class="ancova-block">
+                <h3 class="ancova-block__title">{{ section.title }}</h3>
                 <div class="table-wrap">
                   <table class="data-table ancova-table">
                     <thead>
                       <tr>
                         <th rowspan="2" class="ancova-table__effect-header">Effect</th>
-                        <th v-for="period in anovaPeriods" :key="`anova-period-${period}`" :colspan="anovaEffects.length" class="txt-center">
+                        <th v-for="period in section.periods" :key="`anova-period-${section.key}-${period}`" :colspan="section.effects.length" class="txt-center">
                           {{ formatAnalysisPeriodLabel(period) }}
                         </th>
                       </tr>
                       <tr>
-                        <template v-for="period in anovaPeriods" :key="`anova-columns-${period}`">
-                          <th v-for="effect in anovaEffects" :key="`anova-${period}-${effect}`" class="txt-center">
+                        <template v-for="period in section.periods" :key="`anova-columns-${section.key}-${period}`">
+                          <th v-for="effect in section.effects" :key="`anova-${section.key}-${period}-${effect}`" class="txt-center">
                             {{ formatAnalysisEffectLabel(effect) }}
                           </th>
                         </template>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="row in anovaSummaryRows" :key="`anova-row-${row.variable}`">
+                      <tr v-for="row in section.rows" :key="`anova-row-${section.key}-${row.variable}`">
                         <td class="ancova-table__effect-label">{{ row.label }}</td>
-                        <template v-for="period in anovaPeriods" :key="`anova-values-${row.variable}-${period}`">
+                        <template v-for="period in section.periods" :key="`anova-values-${section.key}-${row.variable}-${period}`">
                           <td
-                            v-for="effect in anovaEffects"
-                            :key="`anova-value-${row.variable}-${period}-${effect}`"
+                            v-for="effect in section.effects"
+                            :key="`anova-value-${section.key}-${row.variable}-${period}-${effect}`"
                             class="txt-center"
                           >
                             {{ formatAnalysisPValue(row.periods[period]?.[effect]) }}
@@ -717,6 +717,22 @@ export default {
     },
     anovaSummaryRows() {
       return this.normalizeAnalysisRows(this.xp.ancovaResults?.anova || [], this.anovaPeriods)
+    },
+    ancovaReportSections() {
+      return this.normalizeComparisonSections(
+        this.xp.ancovaResults?.ancova_pairwise,
+        this.xp.ancovaResults?.ancova || [],
+        'ANCOVA / GLM',
+        'GLM',
+      )
+    },
+    anovaReportSections() {
+      return this.normalizeComparisonSections(
+        this.xp.ancovaResults?.anova_pairwise,
+        this.xp.ancovaResults?.anova || [],
+        'ANOVA',
+        'ANOVA',
+      )
     },
     regressionStatsLegendLines() {
       if (!this.xp.ancovaResults) {
@@ -1000,6 +1016,31 @@ export default {
 
         return leftIndex - rightIndex
       })
+    },
+    normalizeComparisonSections(pairwiseSections, fallbackRows, fallbackTitle, pairwiseTitle) {
+      if (Array.isArray(pairwiseSections) && pairwiseSections.length) {
+        return pairwiseSections.map((section, index) => {
+          const rows = Array.isArray(section.rows) ? section.rows : []
+          const periods = this.collectAnalysisPeriods(rows)
+          return {
+            key: section.comparison || section.label || `comparison-${index}`,
+            title: `${pairwiseTitle} (${section.label || section.comparison || `Comparison ${index + 1}`})`,
+            periods,
+            effects: this.collectAnalysisEffects(rows),
+            rows: this.normalizeAnalysisRows(rows, periods),
+          }
+        }).filter((section) => section.rows.length)
+      }
+
+      const periods = this.collectAnalysisPeriods(fallbackRows)
+      const rows = this.normalizeAnalysisRows(fallbackRows, periods)
+      return rows.length ? [{
+        key: 'summary',
+        title: fallbackTitle,
+        periods,
+        effects: this.collectAnalysisEffects(fallbackRows),
+        rows,
+      }] : []
     },
     normalizeAnalysisRows(rows, periods) {
       return rows.map((row, index) => ({
