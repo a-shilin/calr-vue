@@ -50,7 +50,7 @@ function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function buildRegressionDataset(rows, {
+export function buildRegressionDataset(rows, {
   xVar,
   yVar,
   period = 'Total',

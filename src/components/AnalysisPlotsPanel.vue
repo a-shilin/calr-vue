@@ -64,7 +64,25 @@
       <div class="panel--spaced">
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'time'">
           <aside class="controls-panel">
-            <strong>Time-Series Options</strong>
+            <div class="plot-controls-title">
+              <strong>Time-Series Options</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Time-Series data" @click.stop="togglePlotDownloadMenu('time')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'time'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('time')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('time', option.key)"
+                    @click="downloadPlotData('time', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <label class="control-stack">
               Metabolic Variable
               <select v-model="timeOptions.yVar">
@@ -99,6 +117,11 @@
               <input v-model="timeOptions.showDarkLight" type="checkbox" />
               Shade Dark/Light Periods
             </label>
+
+            <label class="checkbox-row">
+              <input v-model="analysisOptions.removeOutliers" type="checkbox" />
+              Remove Outliers
+            </label>
     
             <label class="control-stack">
               Time Range
@@ -129,7 +152,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'distribution'">
           <aside class="controls-panel">
-            <strong>Distribution Options</strong>
+            <div class="plot-controls-title">
+              <strong>Distribution Options</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Distribution data" @click.stop="togglePlotDownloadMenu('distribution')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'distribution'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('distribution')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('distribution', option.key)"
+                    @click="downloadPlotData('distribution', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <label class="control-stack">
               Metabolic Variable
               <select v-model="distributionVariable">
@@ -137,6 +178,11 @@
                   {{ variable.label }}
                 </option>
               </select>
+            </label>
+
+            <label class="checkbox-row">
+              <input v-model="analysisOptions.removeOutliers" type="checkbox" />
+              Remove Outliers
             </label>
 
             <label class="control-stack">
@@ -168,7 +214,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'regression'">
           <aside class="controls-panel">
-            <strong>Regression Options</strong>
+            <div class="plot-controls-title">
+              <strong>Regression Options</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Regression data" @click.stop="togglePlotDownloadMenu('regression')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'regression'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('regression')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('regression', option.key)"
+                    @click="downloadPlotData('regression', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <label class="control-stack">
               Metabolic Variable
               <select v-model="regressionOptions.yVar">
@@ -205,6 +269,11 @@
               <input v-model="regressionOptions.showStatsLegend" type="checkbox" />
               Show Stats Legend
             </label>
+
+            <label class="checkbox-row">
+              <input v-model="analysisOptions.removeOutliers" type="checkbox" />
+              Remove Outliers
+            </label>
           </aside>
     
           <div class="panel plot-panel">
@@ -217,7 +286,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'weight'">
           <aside class="controls-panel">
-            <strong>Weight</strong>
+            <div class="plot-controls-title">
+              <strong>Weight</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Weight data" @click.stop="togglePlotDownloadMenu('weight')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'weight'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('weight')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('weight', option.key)"
+                    @click="downloadPlotData('weight', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <div class="muted-copy">Group mean mass summaries with SEM.</div>
           </aside>
           <div class="panel plot-panel">
@@ -251,7 +338,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'qc'">
           <aside class="controls-panel">
-            <strong>QC</strong>
+            <div class="plot-controls-title">
+              <strong>QC</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download QC data" @click.stop="togglePlotDownloadMenu('qc')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'qc'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('qc')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('qc', option.key)"
+                    @click="downloadPlotData('qc', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <label class="control-stack">
               Number of mass measurements
               <input v-model.number="qcOptions.nMassMeasurements" type="number" min="1" max="15" step="1" />
@@ -285,7 +390,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'power'">
           <aside class="controls-panel">
-            <strong>Power</strong>
+            <div class="plot-controls-title">
+              <strong>Power</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Power data" @click.stop="togglePlotDownloadMenu('power')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'power'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('power')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('power', option.key)"
+                    @click="downloadPlotData('power', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <label class="control-stack">
               Covariate
               <select v-model="powerOptions.variable">
@@ -382,7 +505,25 @@
     
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'ancova'">
           <aside class="controls-panel">
-            <strong>Ancova</strong>
+            <div class="plot-controls-title">
+              <strong>Ancova</strong>
+              <div class="analysis-download-menu">
+                <button class="plot-download-button" type="button" title="Download Ancova data" @click.stop="togglePlotDownloadMenu('ancova')">
+                  <i class="bi bi-download"></i>
+                </button>
+                <div v-if="activePlotDownloadMenu === 'ancova'" class="analysis-download-menu__popover plot-download-menu">
+                  <button
+                    v-for="option in plotDownloadOptions('ancova')"
+                    :key="option.key"
+                    class="analysis-download-menu__item"
+                    :disabled="!canDownloadPlotData('ancova', option.key)"
+                    @click="downloadPlotData('ancova', option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
             <div class="muted-copy">ANCOVA and ANOVA summaries are generated from the backend response.</div>
             <BButton size="sm" variant="outline-secondary" :disabled="ancovaLoading || !analysisDirty.ancova" @click="runAncova">
               <BSpinner v-if="ancovaLoading" small />
@@ -488,6 +629,14 @@
 <script>
 import { appStore } from '../store/appStore'
 import { runAnalysis } from '../services/registryService'
+import { stringifyCsv } from '../utils/csv'
+import {
+  buildPlotDownloadFilename,
+  buildPlotDownloadRows,
+  canDownloadPlotData,
+  normalizeCsvRows,
+  plotDownloadOptions as getPlotDownloadOptions,
+} from '../utils/plot-downloads'
 import { renderBoxPlot } from '../utils/plotting/box-plot'
 import { getPlotly, purgePlot } from '../utils/plotting/core'
 import { renderPowerPlot } from '../utils/plotting/power'
@@ -640,6 +789,7 @@ export default {
         power: false,
       },
       suppressAnalysisDirtyWatch: false,
+      activePlotDownloadMenu: null,
       powerViewTab: 'plot',
       weightViewTab: 'total',
     }
@@ -907,6 +1057,9 @@ export default {
         this.schedulePlotRenders(['time', 'distribution', 'regression'])
       },
     },
+    'sessionMetadata.remove_outliers'() {
+      this.syncOutlierOptionFromSession()
+    },
     qcOptions: {
       deep: true,
       handler() {
@@ -981,6 +1134,8 @@ export default {
     },
   },
   async mounted() {
+    document.addEventListener('click', this.closePlotDownloadMenu)
+
     if (this.xp.current && this.analysisData?.rows?.length) {
       this.ensureExperimentAnalysisCache()
       this.resetAnalysisControlsForDataset()
@@ -991,6 +1146,7 @@ export default {
     this.schedulePlotRenders(['time', 'distribution', 'regression', 'qc', 'power', 'weight'])
   },
   async beforeUnmount() {
+    document.removeEventListener('click', this.closePlotDownloadMenu)
     await Promise.all([
       purgePlot(this.$refs.timePlot),
       purgePlot(this.$refs.distributionPlot),
@@ -1006,6 +1162,57 @@ export default {
     },
     setActivePlot(key) {
       this.activePlotKey = key
+    },
+    togglePlotDownloadMenu(key) {
+      this.activePlotDownloadMenu = this.activePlotDownloadMenu === key ? null : key
+    },
+    closePlotDownloadMenu() {
+      this.activePlotDownloadMenu = null
+    },
+    plotDownloadOptions(key) {
+      return getPlotDownloadOptions(key)
+    },
+    canDownloadPlotData(key, optionKey = 'plotData') {
+      return canDownloadPlotData(this.plotDownloadContext(), key, optionKey)
+    },
+    downloadPlotData(key, optionKey = 'plotData') {
+      const context = this.plotDownloadContext()
+      const rows = buildPlotDownloadRows(context, key, optionKey)
+      if (!rows.length) {
+        return
+      }
+
+      const sourceName = this.xp.current?.name || this.xp.current?.id || 'analysis'
+      const filename = buildPlotDownloadFilename(key, optionKey, sourceName)
+      this.triggerCsvDownload(filename, stringifyCsv(normalizeCsvRows(rows)))
+      this.activePlotDownloadMenu = null
+    },
+    triggerCsvDownload(filename, text) {
+      const blob = new Blob([text], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    plotDownloadContext() {
+      return {
+        analysisRows: this.analysisRows,
+        analysisOptions: this.analysisOptions,
+        timeOptions: this.timeOptions,
+        qcOptions: this.qcOptions,
+        regressionOptions: this.regressionOptions,
+        maxHour: this.maxHour,
+        sessionMetadata: this.sessionMetadata,
+        xp: this.xp,
+        weightHasCompositionData: this.weightHasCompositionData,
+        weightViewTab: this.weightViewTab,
+        explorerVariables: this.explorerVariables,
+        timeSeriesVariableCatalog: this.timeSeriesVariableCatalog,
+        regressionYVariables: this.regressionYVariables,
+        regressionXVariables: this.regressionXVariables,
+      }
     },
     setQcLoading(value) {
       this.store.loaders[this.context === 'builderAnalysis' ? 'doBuilderQC' : 'doQC'] = value
@@ -1534,6 +1741,7 @@ export default {
     },
     resetAnalysisControlsForDataset() {
       this.suppressAnalysisDirtyWatch = true
+      this.syncOutlierOptionFromSession()
       this.timeOptions.rangeStart = 0
       this.timeOptions.rangeEnd = this.maxHour
       this.syncDraftTimeRangeFromApplied()
@@ -1556,6 +1764,13 @@ export default {
       this.$nextTick(() => {
         this.suppressAnalysisDirtyWatch = false
       })
+    },
+    syncOutlierOptionFromSession() {
+      if (typeof this.sessionMetadata?.remove_outliers !== 'boolean') {
+        return
+      }
+
+      this.analysisOptions.removeOutliers = this.sessionMetadata.remove_outliers
     },
     syncAnalysisDirtyWithStoredResults() {
       this.analysisDirty.qc = !this.xp.qcResults

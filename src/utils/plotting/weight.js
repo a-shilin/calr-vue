@@ -52,7 +52,7 @@ function sampleSem(values) {
   return Math.sqrt(variance) / Math.sqrt(values.length)
 }
 
-function buildWeightDataset(rows, {
+export function buildWeightDataset(rows, {
   mode = 'total',
 } = {}) {
   if (!Array.isArray(rows) || !rows.length) {

@@ -216,7 +216,8 @@
               Private
             </span>
             <div ref="analysisDownloadMenuShell" class="analysis-download-menu">
-              <button class="btn btn-sm btn-outline-secondary" @click.stop="toggleAnalysisDownloadMenu">
+              <button class="btn btn-sm btn-outline-secondary analysis-download-trigger" @click.stop="toggleAnalysisDownloadMenu">
+                <i class="bi bi-download"></i>
                 Download
               </button>
               <div v-if="showAnalysisDownloadMenu" class="analysis-download-menu__popover">

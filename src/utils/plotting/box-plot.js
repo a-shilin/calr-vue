@@ -34,7 +34,7 @@ function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function buildBoxPlotDataset(rows, variable, options = {}) {
+export function buildBoxPlotDataset(rows, variable, options = {}) {
   if (!Array.isArray(rows) || !rows.length) {
     return []
   }

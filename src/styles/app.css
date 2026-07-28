@@ -415,6 +415,35 @@ p{
   min-width: 0;
 }
 
+.plot-controls-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plot-download-button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8e0ec;
+  border-radius: 6px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.plot-download-button:hover {
+  background: #f3f6fb;
+  color: #1a56db;
+}
+
+.plot-download-menu {
+  min-width: 170px;
+}
+
 .plot-surface,
 .plot-placeholder {
   min-height: 420px;
@@ -2182,6 +2211,12 @@ textarea {
 
 .analysis-download-menu {
   position: relative;
+}
+
+.analysis-download-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .analysis-download-menu__popover {
