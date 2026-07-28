@@ -1052,6 +1052,10 @@
                 {{ slot.item.description || '' }}
               </template>
 
+              <template #cell(groupCount)="slot">
+                {{ formatGroupCount(slot.item.groupCount) }}
+              </template>
+
               <template #cell(state)="slot">
                 <div class="experiment-state-dots">
                   <span class="state-dot-wrap" data-tooltip="Calorimetry data">
@@ -1306,6 +1310,11 @@ import {
   parseCsv,
   stringifyCsv,
 } from '../utils/csv'
+import {
+  countConfiguredGroups,
+  formatGroupCount,
+  resolveExperimentGroupCount,
+} from '../utils/experiment-groups'
 import { formatDate, formatFileSize } from '../utils/format'
 import {
   clearProcessCaches,
@@ -1554,6 +1563,7 @@ export default {
       userFilesFields: [
         'name',
         'description',
+        { key: 'groupCount', label: 'Groups' },
         'uploaded_at',
         { key: 'state', label: 'State' },
         'status',
@@ -1950,6 +1960,7 @@ export default {
   },
   methods: {
     formatDate,
+    formatGroupCount,
     formatFileSize,
     formatQcFailureCount(invalidCount, checkedRowCount) {
       const safeInvalidCount = Number.isFinite(invalidCount) ? invalidCount : 0
@@ -2353,6 +2364,7 @@ export default {
         loading: false,
         loadingProgress: null,
         shareSaving: false,
+        groupCount: resolveExperimentGroupCount(file),
         statusLoading: hasSession,
         statusInfo: hasSession
           ? this.buildLoadingStatusInfo(hasConvertedData, file)
@@ -2393,6 +2405,7 @@ export default {
           sessionPayload,
           file,
         )
+        targetFile.groupCount = countConfiguredGroups(sessionPayload)
         targetFile.statusLoading = false
       }))
     },

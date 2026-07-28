@@ -82,6 +82,14 @@
               </template>
             </span>
           </template>
+          <template #cell(groupCount)="slot">
+            <span :title="formatGroupCount(slot.item.groupCount)">
+              <template v-for="(segment, index) in getHighlightedSegments(formatGroupCount(slot.item.groupCount))" :key="`groups-${index}`">
+                <mark v-if="segment.match" class="dataset-table-search-highlight">{{ segment.text }}</mark>
+                <template v-else>{{ segment.text }}</template>
+              </template>
+            </span>
+          </template>
           <template
             v-for="field in metadataTableFields"
             :key="field.key"
@@ -279,9 +287,16 @@ import {
   fetchUserFiles,
 } from '../services/registryService'
 import { formatDate } from '../utils/format'
-import { parseCsv, stringifyCsv } from '../utils/csv'
+import { parseCsv, preprocessSummary, stringifyCsv } from '../utils/csv'
 import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
+import {
+  COMMUNITY_SUMMARY_CSV_URL,
+  buildCommunityGroupCountMap,
+  countConfiguredGroups,
+  formatGroupCount,
+  resolveExperimentGroupCount,
+} from '../utils/experiment-groups'
 import AnalysisPlotsPanel from '../components/AnalysisPlotsPanel.vue'
 import DatasetTableFilterPopover from '../components/DatasetTableFilterPopover.vue'
 import experimentMetadataConfig from '../config/experimentMetadata.json'
@@ -327,6 +342,7 @@ const publicDatasetFields = moveActionsFieldToEnd([
   ...datasetTableBaseFields
     .filter((field) => field.showInPublicDatasetTable)
     .map((field) => buildDatasetTableField(field)),
+  buildDatasetTableField({ key: 'groupCount', label: 'Groups' }),
   ...metadataTableFields
     .filter((field) => !datasetTableBaseFields.some((baseField) => baseField.key === field.key))
     .map((field) => buildDatasetTableField(field)),
@@ -406,6 +422,7 @@ function buildSearchableDatasetStrings(item) {
   return [
     item?.name || item?.title || item?.id || '',
     item?.description || '',
+    formatGroupCount(item?.groupCount),
     ...metadataTableFields.map((field) => getFilterDisplayValue(item, field.key)),
   ]
     .map((value) => `${value}`.trim())
@@ -521,6 +538,9 @@ export default {
     }
   },
   computed: {
+    communityGroupCounts() {
+      return buildCommunityGroupCountMap(this.store.community.summaryRows)
+    },
     metadataTableFields() {
       return metadataTableFields
     },
@@ -776,12 +796,17 @@ export default {
       this.loadingPublicFiles = true
       try {
         const files = await fetchPublicFiles()
-        this.store.account.publicFiles = files.map((file) => ({ ...file, loading: false, loadingProgress: null }))
+        this.store.account.publicFiles = this.applyPublicGroupCounts(
+          files.map((file) => ({ ...file, loading: false, loadingProgress: null })),
+        )
       } finally {
         this.loadingPublicFiles = false
         this.scheduleDatasetTableMetricsUpdate()
       }
     }
+
+    await this.ensureCommunitySummaryRows()
+    this.store.account.publicFiles = this.applyPublicGroupCounts(this.store.account.publicFiles)
 
     if (this.store.auth.token && !this.store.account.userFiles.length) {
       await this.loadPrivateFiles()
@@ -810,7 +835,41 @@ export default {
   },
   methods: {
     formatDate,
+    formatGroupCount,
     getMetadataValue,
+    async ensureCommunitySummaryRows() {
+      if (this.store.community.summaryLoaded) {
+        return
+      }
+
+      const response = await fetch(COMMUNITY_SUMMARY_CSV_URL)
+      const csv = await response.text()
+      this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
+      this.store.community.summaryLoaded = true
+    },
+    applyPublicGroupCounts(files = []) {
+      const communityGroupCounts = this.communityGroupCounts
+
+      return files.map((file) => {
+        const experimentIds = [
+          getMetadataValue(file, 'experiment_id'),
+          file.experiment_id,
+          file.submission_id,
+          file.id,
+          file.name,
+          file.title,
+        ].map((value) => `${value || ''}`.trim()).filter(Boolean)
+        const communityGroupCount = experimentIds
+          .map((experimentId) => communityGroupCounts.get(experimentId))
+          .find((count) => Number.isInteger(count))
+        const groupCount = communityGroupCount ?? resolveExperimentGroupCount(file)
+
+        return {
+          ...file,
+          groupCount,
+        }
+      })
+    },
     handleDocumentClick(event) {
       if (this.showDatasetFilters) {
         const popover = this.$refs.datasetFilterPopover
@@ -1148,6 +1207,7 @@ export default {
         ...file,
         loading: false,
         loadingProgress: null,
+        groupCount: resolveExperimentGroupCount(file),
         statusLoading: hasSession,
         statusInfo: hasSession
           ? this.buildLoadingStatusInfo(hasConvertedData)
@@ -1187,6 +1247,7 @@ export default {
           Boolean(file.files?.find((item) => item.file_type === 'standard')),
           sessionPayload,
         )
+        targetFile.groupCount = countConfiguredGroups(sessionPayload)
         targetFile.statusLoading = false
       }))
     },

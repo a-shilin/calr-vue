@@ -210,11 +210,10 @@
 <script>
 import { appStore } from '../store/appStore'
 import { parseCsv, preprocessSummary } from '../utils/csv'
+import { COMMUNITY_SUMMARY_CSV_URL, buildCommunityGroupCountMap } from '../utils/experiment-groups'
 import { purgePlot } from '../utils/plotting/core'
 import { renderSummaryRegressionPlot } from '../utils/plotting/summary-regression'
 import DatasetTableFilterPopover from '../components/DatasetTableFilterPopover.vue'
-
-const summaryCsvUrl = `${import.meta.env.BASE_URL}02032026_combined_datasets_calrepo.csv`
 
 const FILTER_KEYS = ['sex', 'system', 'strain', 'location']
 const FILTER_LABELS = { sex: 'Sex', system: 'System', strain: 'Strain', location: 'Location' }
@@ -283,6 +282,7 @@ export default {
     communityTableFields() {
       return [
         { key: 'experiment_id', label: 'Experiment' },
+        { key: 'groupCount', label: 'Groups' },
         { key: 'investigator', label: 'Investigator' },
         { key: 'system', label: 'System' },
         { key: 'location', label: 'Location' },
@@ -306,10 +306,13 @@ export default {
     },
     experimentTableRows() {
       const seen = new Map()
+      const groupCounts = buildCommunityGroupCountMap(this.store.community.summaryRows)
+
       this.store.community.summaryRows.forEach((row) => {
         if (!seen.has(row.experiment_id)) {
           seen.set(row.experiment_id, {
             experiment_id: row.experiment_id,
+            groupCount: groupCounts.get(`${row.experiment_id}`) ?? 0,
             investigator: row.investigator || '',
             system: row.system || '',
             location: row.location || '',
@@ -402,7 +405,7 @@ export default {
     window.addEventListener('resize', this.handleWindowResize)
 
     if (!this.store.community.summaryLoaded) {
-      const response = await fetch(summaryCsvUrl)
+      const response = await fetch(COMMUNITY_SUMMARY_CSV_URL)
       const csv = await response.text()
       this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
       this.store.community.summaryLoaded = true
