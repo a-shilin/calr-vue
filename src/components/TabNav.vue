@@ -13,7 +13,7 @@
     </div>
 
     <div class="tab-nav__account">
-      <div v-if="store.auth.token" style="display:flex; flex-direction: column; align-items: flex-end; justify-content: center;">
+      <div v-if="store.auth.token" style="display:flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-bottom: -4px;">
         <a role="button" @click="handleLogout" style="font-size:11px; line-height: 11px;">Logout</a>
         <strong>{{ store.auth.userInfo?.user?.username }}</strong>
       </div>

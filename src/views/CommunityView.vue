@@ -210,16 +210,37 @@
 <script>
 import { appStore } from '../store/appStore'
 import { parseCsv, preprocessSummary } from '../utils/csv'
-import { COMMUNITY_SUMMARY_CSV_URL, buildCommunityGroupCountMap } from '../utils/experiment-groups'
 import { purgePlot } from '../utils/plotting/core'
 import { renderSummaryRegressionPlot } from '../utils/plotting/summary-regression'
 import DatasetTableFilterPopover from '../components/DatasetTableFilterPopover.vue'
 
+const summaryCsvUrl = `${import.meta.env.BASE_URL}02032026_combined_datasets_calrepo.csv`
 const FILTER_KEYS = ['sex', 'system', 'strain', 'location']
 const FILTER_LABELS = { sex: 'Sex', system: 'System', strain: 'Strain', location: 'Location' }
 
 function emptyFilters() {
   return Object.fromEntries(FILTER_KEYS.map((k) => [k, { selectedValues: [] }]))
+}
+
+function buildCommunityGroupCountMap(summaryRows = []) {
+  const counts = new Map()
+
+  summaryRows.forEach((row) => {
+    const experimentId = `${row?.experiment_id || ''}`.trim()
+    const group = `${row?.group || row?.Group || ''}`.trim()
+
+    if (!experimentId || !group) {
+      return
+    }
+
+    if (!counts.has(experimentId)) {
+      counts.set(experimentId, new Set())
+    }
+
+    counts.get(experimentId).add(group)
+  })
+
+  return new Map([...counts.entries()].map(([experimentId, groups]) => [experimentId, groups.size]))
 }
 
 export default {
@@ -404,12 +425,7 @@ export default {
     window.addEventListener('scroll', this.handleWindowScroll, true)
     window.addEventListener('resize', this.handleWindowResize)
 
-    if (!this.store.community.summaryLoaded) {
-      const response = await fetch(COMMUNITY_SUMMARY_CSV_URL)
-      const csv = await response.text()
-      this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
-      this.store.community.summaryLoaded = true
-    }
+    await this.loadCommunitySummaryRows()
 
     this.selectedExperiments = this.experimentTableRows.slice(0, 1).map((r) => r.experiment_id)
     this.scheduleOverflowChecks()
@@ -424,6 +440,16 @@ export default {
     await purgePlot(this.$refs.summaryPlotB)
   },
   methods: {
+    async loadCommunitySummaryRows() {
+      if (this.store.community.summaryLoaded) {
+        return
+      }
+
+      const response = await fetch(summaryCsvUrl)
+      const csv = await response.text()
+      this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
+      this.store.community.summaryLoaded = true
+    },
     handleDocumentClick(event) {
       if (this.showGroupAFilters) {
         const groupAPopover = this.$refs.groupAFilterPopover

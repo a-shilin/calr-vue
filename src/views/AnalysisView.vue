@@ -287,12 +287,10 @@ import {
   fetchUserFiles,
 } from '../services/registryService'
 import { formatDate } from '../utils/format'
-import { parseCsv, preprocessSummary, stringifyCsv } from '../utils/csv'
+import { parseCsv, stringifyCsv } from '../utils/csv'
 import { clearProcessCaches, mergeSessionCsvIntoPayload, normalizeSessionPayload } from '../utils/process'
 import { normalizeEnrichedAnalysisData } from '../utils/prep-for-analysis'
 import {
-  COMMUNITY_SUMMARY_CSV_URL,
-  buildCommunityGroupCountMap,
   countConfiguredGroups,
   formatGroupCount,
   resolveExperimentGroupCount,
@@ -538,9 +536,6 @@ export default {
     }
   },
   computed: {
-    communityGroupCounts() {
-      return buildCommunityGroupCountMap(this.store.community.summaryRows)
-    },
     metadataTableFields() {
       return metadataTableFields
     },
@@ -799,14 +794,16 @@ export default {
         this.store.account.publicFiles = this.applyPublicGroupCounts(
           files.map((file) => ({ ...file, loading: false, loadingProgress: null })),
         )
+        this.hydratePublicFileGroupCounts(files)
       } finally {
         this.loadingPublicFiles = false
         this.scheduleDatasetTableMetricsUpdate()
       }
     }
 
-    await this.ensureCommunitySummaryRows()
-    this.store.account.publicFiles = this.applyPublicGroupCounts(this.store.account.publicFiles)
+    if (this.store.account.publicFiles.length && this.store.account.publicFiles.some((file) => file.groupCount === null || file.groupCount === undefined)) {
+      this.hydratePublicFileGroupCounts(this.store.account.publicFiles)
+    }
 
     if (this.store.auth.token && !this.store.account.userFiles.length) {
       await this.loadPrivateFiles()
@@ -837,38 +834,30 @@ export default {
     formatDate,
     formatGroupCount,
     getMetadataValue,
-    async ensureCommunitySummaryRows() {
-      if (this.store.community.summaryLoaded) {
-        return
-      }
-
-      const response = await fetch(COMMUNITY_SUMMARY_CSV_URL)
-      const csv = await response.text()
-      this.store.community.summaryRows = preprocessSummary(parseCsv(csv))
-      this.store.community.summaryLoaded = true
-    },
     applyPublicGroupCounts(files = []) {
-      const communityGroupCounts = this.communityGroupCounts
-
       return files.map((file) => {
-        const experimentIds = [
-          getMetadataValue(file, 'experiment_id'),
-          file.experiment_id,
-          file.submission_id,
-          file.id,
-          file.name,
-          file.title,
-        ].map((value) => `${value || ''}`.trim()).filter(Boolean)
-        const communityGroupCount = experimentIds
-          .map((experimentId) => communityGroupCounts.get(experimentId))
-          .find((count) => Number.isInteger(count))
-        const groupCount = communityGroupCount ?? resolveExperimentGroupCount(file)
-
         return {
           ...file,
-          groupCount,
+          groupCount: resolveExperimentGroupCount(file),
         }
       })
+    },
+    async hydratePublicFileGroupCounts(files = []) {
+      await Promise.allSettled(files.map(async (file) => {
+        const session = file.files?.find((item) => item.file_type === 'session')
+
+        if (!session) {
+          return
+        }
+
+        const sessionConfig = await fetchSessionConfig(session.id, this.store.auth.token, true)
+        const targetFile = this.store.account.publicFiles.find((item) => item.id === file.id)
+
+        if (targetFile) {
+          targetFile.groupCount = countConfiguredGroups(sessionConfig)
+        }
+      }))
+      this.scheduleDatasetTableMetricsUpdate()
     },
     handleDocumentClick(event) {
       if (this.showDatasetFilters) {
