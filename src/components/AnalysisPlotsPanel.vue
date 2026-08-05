@@ -274,6 +274,24 @@
               <input v-model="analysisOptions.removeOutliers" type="checkbox" />
               Remove Outliers
             </label>
+
+            <label class="control-stack">
+              Time Range
+              <div class="range-row">
+                <input v-model="draftTimeRange.start" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model="draftTimeRange.end" type="number" :min="0" :max="maxHour" />
+                <BButton
+                  class="time-range-apply"
+                  size="sm"
+                  :variant="timeRangeDirty ? 'primary' : 'outline-secondary'"
+                  :disabled="!timeRangeDirty || !timeRangeDraftValid"
+                  @click="applyTimeRange"
+                >
+                  Apply Range
+                </BButton>
+              </div>
+            </label>
           </aside>
     
           <div class="panel plot-panel">
@@ -506,9 +524,9 @@
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'ancova'">
           <aside class="controls-panel">
             <div class="plot-controls-title">
-              <strong>Ancova</strong>
+              <strong>Analysis</strong>
               <div class="analysis-download-menu">
-                <button class="plot-download-button" type="button" title="Download Ancova data" @click.stop="togglePlotDownloadMenu('ancova')">
+                <button class="plot-download-button" type="button" title="Download Analysis data" @click.stop="togglePlotDownloadMenu('ancova')">
                   <i class="bi bi-download"></i>
                 </button>
                 <div v-if="activePlotDownloadMenu === 'ancova'" class="analysis-download-menu__popover plot-download-menu">
@@ -525,12 +543,39 @@
               </div>
             </div>
             <div class="muted-copy">ANCOVA and ANOVA summaries are generated from the backend response.</div>
+            <label class="control-stack">
+              Covariate
+              <select v-model="analysisTableOptions.massVariable">
+                <option v-for="variable in analysisCovariateOptions" :key="variable.field" :value="variable.field">
+                  {{ variable.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="control-stack">
+              Time Range
+              <div class="range-row">
+                <input v-model="draftTimeRange.start" type="number" :min="0" :max="maxHour" />
+                <span>to</span>
+                <input v-model="draftTimeRange.end" type="number" :min="0" :max="maxHour" />
+                <BButton
+                  class="time-range-apply"
+                  size="sm"
+                  :variant="timeRangeDirty ? 'primary' : 'outline-secondary'"
+                  :disabled="!timeRangeDirty || !timeRangeDraftValid"
+                  @click="applyTimeRange"
+                >
+                  Apply Range
+                </BButton>
+              </div>
+            </label>
+
             <BButton size="sm" variant="outline-secondary" :disabled="ancovaLoading || !analysisDirty.ancova" @click="runAncova">
               <BSpinner v-if="ancovaLoading" small />
-              <span v-else>Run Ancova</span>
+              <span v-else>Run Analysis</span>
             </BButton>
-            <div v-if="analysisDirty.ancova" class="muted-copy">Settings changed. Run Ancova to refresh this section.</div>
-            <div v-else class="muted-copy">Ancova is up to date for the current settings.</div>
+            <div v-if="analysisDirty.ancova" class="muted-copy">Settings changed. Run Analysis to refresh this section.</div>
+            <div v-else class="muted-copy">Analysis is up to date for the current settings.</div>
           </aside>
           <div class="panel plot-panel">
             <div v-if="xp.analysisErrors.ancova" class="muted-copy warn-copy">{{ xp.analysisErrors.ancova }}</div>
@@ -618,7 +663,7 @@
                 </div>
               </section>
             </div>
-            <div v-else class="plot-placeholder">Run Ancova to populate this section.</div>
+            <div v-else class="plot-placeholder">Run Analysis to populate this section.</div>
           </div>
         </section>
       </div>
@@ -668,7 +713,7 @@ export default {
         { key: 'weight', label: 'Weight' },
         { key: 'qc', label: 'QC' },
         { key: 'power', label: 'Power' },
-        { key: 'ancova', label: 'ANCOVA' },
+        { key: 'ancova', label: 'Analysis' },
       ],
       explorerVariables: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
@@ -759,6 +804,9 @@ export default {
         period: 'Total',
         showCI: true,
         showStatsLegend: true,
+      },
+      analysisTableOptions: {
+        massVariable: 'total_mass',
       },
       qcOptions: {
         nMassMeasurements: 5,
@@ -879,6 +927,15 @@ export default {
 
         return this.hasCovariateData(variable.field)
       })
+    },
+    analysisCovariateOptions() {
+      const options = [{ field: 'total_mass', label: 'Total Mass (g)' }]
+
+      if (this.hasCovariateData('subject.lean.mass')) {
+        options.push({ field: 'subject.lean.mass', label: 'Lean Mass (g)' })
+      }
+
+      return options
     },
     normalizedDraftTimeRange() {
       if (!this.timeRangeDraftValid) {
@@ -1024,8 +1081,14 @@ export default {
       deep: true,
       handler() {
         this.ensureValidTimeSeriesVariable()
-        this.schedulePlotRenders(['time', 'distribution'])
+        this.schedulePlotRenders(['time', 'distribution', 'regression'])
       },
+    },
+    'timeOptions.rangeStart'() {
+      this.markAnalysisDirty('ancova')
+    },
+    'timeOptions.rangeEnd'() {
+      this.markAnalysisDirty('ancova')
     },
     distributionVariable() {
       this.ensureValidDistributionVariable()
@@ -1037,28 +1100,44 @@ export default {
         this.schedulePlotRenders(['regression'])
       },
     },
-    'regressionOptions.xVar'() {
-      this.markAnalysisDirty('ancova')
-    },
     regressionXVariables() {
       if (!this.regressionXVariables.some((variable) => variable.field === this.regressionOptions.xVar)) {
         this.regressionOptions.xVar = this.regressionXVariables[0]?.field || 'subject.mass'
       }
     },
-    'regressionOptions.yVar'() {
-      this.markAnalysisDirty('ancova')
+    analysisTableOptions: {
+      deep: true,
+      handler() {
+        this.ensureValidAnalysisCovariate()
+        this.markAnalysisDirty('ancova')
+      },
     },
-    'regressionOptions.period'() {
-      this.markAnalysisDirty('ancova')
+    analysisCovariateOptions() {
+      this.ensureValidAnalysisCovariate()
     },
     analysisOptions: {
       deep: true,
       handler() {
         this.schedulePlotRenders(['time', 'distribution', 'regression'])
+        this.markAnalysisDirty('ancova')
       },
     },
     'sessionMetadata.remove_outliers'() {
       this.syncOutlierOptionFromSession()
+    },
+    'sessionMetadata.hour_range': {
+      deep: true,
+      handler() {
+        if (this.suppressAnalysisDirtyWatch || !this.xp.current) {
+          return
+        }
+
+        this.applySessionHourRangeToAnalysisControls()
+        this.markAnalysisDirty('qc')
+        this.markAnalysisDirty('power')
+        this.markAnalysisDirty('ancova')
+        this.schedulePlotRenders(['time', 'distribution', 'regression'])
+      },
     },
     qcOptions: {
       deep: true,
@@ -1237,6 +1316,28 @@ export default {
       this.draftTimeRange.start = `${this.timeOptions.rangeStart}`
       this.draftTimeRange.end = `${this.timeOptions.rangeEnd}`
     },
+    sessionHourRange() {
+      const range = this.sessionMetadata?.hour_range
+      if (Array.isArray(range) && range.length >= 2) {
+        const start = Number(range[0])
+        const end = Number(range[1])
+        if (Number.isFinite(start) && Number.isFinite(end) && start < end) {
+          return this.normalizeHourRange(start, end)
+        }
+      }
+
+      return this.normalizeHourRange(0, this.maxHour)
+    },
+    applySessionHourRangeToAnalysisControls() {
+      const [start, end] = this.sessionHourRange()
+      this.timeOptions.rangeStart = start
+      this.timeOptions.rangeEnd = end
+      this.syncDraftTimeRangeFromApplied()
+      this.qcOptions.hourStart = start
+      this.qcOptions.hourEnd = end
+      this.powerOptions.hourStart = start
+      this.powerOptions.hourEnd = end
+    },
     hasCovariateData(field) {
       const sessionKeyByField = {
         'subject.mass': 'total_mass',
@@ -1266,6 +1367,9 @@ export default {
 
       return this.regressionOptions.xVar
     },
+    backendMassVariableForAnalysis() {
+      return this.analysisTableOptions.massVariable || 'total_mass'
+    },
     toFiniteNumber(value) {
       if (value === null || value === undefined || value === '') {
         return null
@@ -1275,10 +1379,19 @@ export default {
       return Number.isFinite(number) ? number : null
     },
     lookupVariableLabel(variable) {
+      const aliases = {
+        total_mass: 'Total Mass (g)',
+      }
+
+      if (aliases[variable]) {
+        return aliases[variable]
+      }
+
       const labelMaps = [
         ...this.explorerVariables,
         ...this.regressionYVariables,
         ...this.regressionXVariables,
+        ...this.analysisCovariateOptions,
       ]
 
       return labelMaps.find((entry) => entry.field === variable)?.label || variable
@@ -1506,7 +1619,10 @@ export default {
         groupOrder: this.sessionMetadata.groupNames,
         groupColors: this.groupColors,
         removeOutliers: this.analysisOptions.removeOutliers,
-        hourRange: this.sessionMetadata.hour_range,
+        hourRange: [
+          this.timeOptions.rangeStart,
+          Math.min(this.timeOptions.rangeEnd, this.maxHour),
+        ],
         statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
         xLabel,
         yLabel,
@@ -1549,13 +1665,17 @@ export default {
       this.setAncovaLoading(true)
       try {
         this.xp.analysisErrors.ancova = null
+        const hourRange = this.normalizeHourRange(this.timeOptions.rangeStart, this.timeOptions.rangeEnd)
         this.xp.ancovaResults = await runAnalysis(
           'ancova',
           {
             session_id: this.xp.current.files.find((file) => file.file_type === 'session')?.id,
             variable: this.regressionOptions.yVar,
-            mass_variable: this.backendMassVariableForRegression(),
+            mass_variable: this.backendMassVariableForAnalysis(),
             time_of_day: this.regressionOptions.period.toLowerCase(),
+            hour_range: hourRange,
+            min_hour: hourRange[0],
+            max_hour: hourRange[1],
           },
           this.store.auth.token,
           this.xp.current.public,
@@ -1563,7 +1683,7 @@ export default {
         this.analysisDirty.ancova = false
       } catch (error) {
         this.xp.ancovaResults = null
-        this.xp.analysisErrors.ancova = this.normalizeAnalysisError(error, 'Ancova')
+        this.xp.analysisErrors.ancova = this.normalizeAnalysisError(error, 'Analysis')
       } finally {
         this.setAncovaLoading(false)
       }
@@ -1677,6 +1797,11 @@ export default {
         this.distributionVariable = this.boxPlotVariables[0].field
       }
     },
+    ensureValidAnalysisCovariate() {
+      if (!this.analysisCovariateOptions.some((variable) => variable.field === this.analysisTableOptions.massVariable)) {
+        this.analysisTableOptions.massVariable = this.analysisCovariateOptions[0]?.field || 'total_mass'
+      }
+    },
     normalizeTimeRange() {
       const normalized = this.normalizeHourRange(this.timeOptions.rangeStart, this.timeOptions.rangeEnd)
       this.timeOptions.rangeStart = normalized[0]
@@ -1742,17 +1867,12 @@ export default {
     resetAnalysisControlsForDataset() {
       this.suppressAnalysisDirtyWatch = true
       this.syncOutlierOptionFromSession()
-      this.timeOptions.rangeStart = 0
-      this.timeOptions.rangeEnd = this.maxHour
-      this.syncDraftTimeRangeFromApplied()
-      this.qcOptions.hourStart = 0
-      this.qcOptions.hourEnd = this.maxHour
-      this.powerOptions.hourStart = 0
-      this.powerOptions.hourEnd = this.maxHour
+      this.applySessionHourRangeToAnalysisControls()
 
       if (!this.powerVariableOptions.find((option) => option.field === this.powerOptions.variable)) {
         this.powerOptions.variable = this.powerVariableOptions[0]?.field || 'ee'
       }
+      this.ensureValidAnalysisCovariate()
 
       this.analysisDirty.qc = true
       this.analysisDirty.power = true
