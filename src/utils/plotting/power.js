@@ -47,7 +47,6 @@ export async function renderPowerPlot(target, powerResults, options = {}) {
       yaxis: {
         title: axisTitle(options.yLabel || 'Power'),
         automargin: true,
-        range: [0, 1.03],
       },
       showlegend: true,
       legend: {

@@ -311,7 +311,7 @@ export default {
         { key: 'strain', label: 'Strain' },
         { key: 'genetic_background', label: 'Background' },
         { key: 'species', label: 'Species' },
-        { key: 'age', label: 'Age' },
+        { key: 'age', label: 'Age (weeks)' },
         { key: 'diet_name', label: 'Diet' },
         { key: 'diet_kcal_g', label: 'kcal/g' },
         { key: 'treatment', label: 'Treatment' },

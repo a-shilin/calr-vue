@@ -140,7 +140,7 @@
         },
         {
           "key": "age",
-          "label": "Age",
+          "label": "Age (weeks)",
           "type": "number",
           "requiredForPublic": true,
           "showInPublicDatasetTable": true,

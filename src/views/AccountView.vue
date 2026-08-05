@@ -1171,14 +1171,22 @@
       <div class="confirm-dialog__body">
         <div
           class="dropzone dropzone--compact"
-          :class="{ dragover: templateUploadDialog.dragover }"
+          :class="{
+            dragover: templateUploadDialog.dragover,
+            'detected-calr': templateUploadDialog.imported && !templateUploadDialog.error,
+            'dropzone--error': templateUploadDialog.error,
+          }"
           @click="openTemplateUploadFileDialog"
           @dragover.prevent="templateUploadDialog.dragover = true"
           @dragleave="templateUploadDialog.dragover = false"
           @drop.prevent="handleTemplateUploadDrop"
         >
-          <div>
+          <div v-if="!templateUploadDialog.imported">
             Drop a CSV template here, or click to select one.
+          </div>
+          <div v-else class="dropzone-files">
+            <strong>1 file(s) selected</strong>
+            <div>{{ templateUploadDialog.fileName }}</div>
           </div>
         </div>
         <input
@@ -1188,10 +1196,13 @@
           hidden
           @change="handleTemplateUploadFileSelect"
         />
-        <div v-if="templateUploadDialog.fileName" class="muted-copy">
+        <div v-if="templateUploadDialog.fileName && !templateUploadDialog.imported" class="muted-copy">
           Selected file: {{ templateUploadDialog.fileName }}
         </div>
-        <div v-if="templateUploadDialog.message" class="message-text">
+        <div
+          v-if="templateUploadDialog.message"
+          :class="templateUploadDialog.error ? 'message-text upload-detect-error' : 'message-text'"
+        >
           {{ templateUploadDialog.message }}
         </div>
       </div>
@@ -1616,6 +1627,8 @@ export default {
         dragover: false,
         fileName: '',
         message: '',
+        imported: false,
+        error: false,
       },
       shareDialog: {
         visible: false,
@@ -2557,6 +2570,8 @@ export default {
       this.templateUploadDialog.dragover = false
       this.templateUploadDialog.fileName = ''
       this.templateUploadDialog.message = ''
+      this.templateUploadDialog.imported = false
+      this.templateUploadDialog.error = false
     },
     closeTemplateUploadModal() {
       this.templateUploadDialog.visible = false
@@ -2565,6 +2580,8 @@ export default {
       this.templateUploadDialog.dragover = false
       this.templateUploadDialog.fileName = ''
       this.templateUploadDialog.message = ''
+      this.templateUploadDialog.imported = false
+      this.templateUploadDialog.error = false
 
       if (this.$refs.templateUploadInput) {
         this.$refs.templateUploadInput.value = ''
@@ -2757,8 +2774,13 @@ export default {
         const matchedRows = this.applyTemplateRows(this.templateUploadDialog.type, rows)
         this.templateUploadDialog.fileName = file.name
         this.templateUploadDialog.message = `Imported template values for ${matchedRows} subject${matchedRows === 1 ? '' : 's'}.`
+        this.templateUploadDialog.imported = true
+        this.templateUploadDialog.error = false
       } catch (error) {
+        this.templateUploadDialog.fileName = file.name
         this.templateUploadDialog.message = error.message || 'Unable to import template CSV.'
+        this.templateUploadDialog.imported = false
+        this.templateUploadDialog.error = true
       } finally {
         this.templateUploadDialog.dragover = false
         if (this.$refs.templateUploadInput) {

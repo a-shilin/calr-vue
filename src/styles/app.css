@@ -828,6 +828,26 @@ p{
   padding: 12px;
 }
 
+.power-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.power-table {
+  table-layout: fixed;
+}
+
+.power-table th,
+.power-table td {
+  min-width: 96px;
+  padding-inline: 8px;
+  overflow-wrap: anywhere;
+}
+
+.power-table--summary {
+  width: 100%;
+}
+
 .badge-toggle {
   cursor: pointer;
 }

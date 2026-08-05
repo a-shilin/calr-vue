@@ -428,7 +428,7 @@
               </div>
             </div>
             <label class="control-stack">
-              Covariate
+              Variable
               <select v-model="powerOptions.variable">
                 <option v-for="variable in powerVariableOptions" :key="variable.field" :value="variable.field">
                   {{ variable.label }}
@@ -467,7 +467,7 @@
                 <input v-model.number="powerOptions.hourEnd" type="number" :min="0" :max="maxHour" />
               </div>
             </label>
-    
+
             <BButton size="sm" variant="outline-secondary" :disabled="powerLoading || !analysisDirty.power" @click="runPower">
               <BSpinner v-if="powerLoading" small />
               <span v-else>Run Power</span>
@@ -487,8 +487,8 @@
                 <div ref="powerPlot" class="plot-surface"></div>
               </div>
               <div v-else class="power-tables">
-                <div v-if="powerGroupTableColumns.length" class="table-wrap">
-                  <table class="data-table">
+                <div v-if="powerGroupTableColumns.length" class="table-wrap power-table-wrap power-table-wrap--summary">
+                  <table class="data-table power-table power-table--summary">
                     <thead>
                       <tr>
                         <th v-for="column in powerGroupTableColumns" :key="column">{{ column }}</th>
@@ -501,8 +501,8 @@
                     </tbody>
                   </table>
                 </div>
-                <div v-if="powerCurveTableColumns.length" class="table-wrap">
-                  <table class="data-table">
+                <div v-if="powerCurveTableColumns.length" class="table-wrap power-table-wrap">
+                  <table class="data-table power-table">
                     <thead>
                       <tr>
                         <th v-for="column in powerCurveTableColumns" :key="column">{{ column }}</th>
@@ -739,6 +739,12 @@ export default {
         { field: 'subject.mass', label: 'Body Mass (g)' },
         { field: 'enviro.temp', label: 'Environmental Temperature (C)' },
       ],
+      powerDependencyCatalog: [
+        { field: 'ee', label: 'Energy.Expenditure' },
+        { field: 'feed', label: 'Total.Food' },
+        { field: 'xytot', label: 'Locomotor.Activity' },
+        { field: 'rer', label: 'Respiratory.Exchange.Ratio' },
+      ],
       timeSeriesVariableCatalog: [
         { field: 'vo2', label: 'Oxygen Consumption (ml/hr)' },
         { field: 'vco2', label: 'Carbon Dioxide Production (ml/hr)' },
@@ -824,7 +830,7 @@ export default {
       },
       powerOptions: {
         variable: 'ee',
-        sampleSizesText: '4, 6, 8, 12, 16, 20, 24',
+        sampleSizesText: '4, 8, 12, 16, 20, 24',
         dayPhase: 'total',
         alpha: 0.05,
         hourStart: 0,
@@ -971,11 +977,11 @@ export default {
     },
     powerVariableOptions() {
       if (!this.analysisData.rows.length) {
-        return this.explorerVariables
+        return this.powerDependencyCatalog
       }
 
       const availableColumns = new Set(Object.keys(this.analysisData.rows[0] || {}))
-      return this.explorerVariables.filter((variable) => availableColumns.has(variable.field))
+      return this.powerDependencyCatalog.filter((variable) => availableColumns.has(variable.field))
     },
     ancovaMassVariableLabel() {
       const massVariable = this.xp.ancovaResults?.mass_variable
@@ -1401,6 +1407,7 @@ export default {
 
       const labelMaps = [
         ...this.explorerVariables,
+        ...this.powerDependencyCatalog,
         ...this.regressionYVariables,
         ...this.regressionXVariables,
         ...this.analysisCovariateOptions,
@@ -1715,7 +1722,7 @@ export default {
           {
             session_id: this.xp.current.files.find((file) => file.file_type === 'session')?.id,
             variable: this.powerOptions.variable,
-            mass_variable: 'subject.mass',
+            mass_variable: 'total_mass',
             time_of_day: this.powerOptions.dayPhase,
             sample_sizes: this.parseSampleSizes(this.powerOptions.sampleSizesText),
             alpha: this.powerOptions.alpha || 0.05,
@@ -1790,7 +1797,7 @@ export default {
         .map((value) => Number.parseInt(value.trim(), 10))
         .filter((value) => !Number.isNaN(value) && value > 0)
 
-      return parsed.length ? parsed : [4, 6, 8, 12, 16, 20, 24]
+      return parsed.length ? parsed : [4, 8, 12, 16, 20, 24]
     },
     ensureValidTimeSeriesVariable() {
       if (!this.timeSeriesVariables.length) {
@@ -1813,6 +1820,16 @@ export default {
     ensureValidAnalysisCovariate() {
       if (!this.analysisCovariateOptions.some((variable) => variable.field === this.analysisTableOptions.massVariable)) {
         this.analysisTableOptions.massVariable = this.analysisCovariateOptions[0]?.field || 'total_mass'
+      }
+    },
+    ensureValidPowerVariable() {
+      if (!this.powerVariableOptions.length) {
+        return
+      }
+
+      if (!this.powerVariableOptions.some((option) => option.field === this.powerOptions.variable)) {
+        const defaultPowerVariable = this.powerVariableOptions.find((option) => option.field === 'ee')
+        this.powerOptions.variable = defaultPowerVariable?.field || this.powerVariableOptions[0].field
       }
     },
     normalizeTimeRange() {
@@ -1882,9 +1899,7 @@ export default {
       this.syncOutlierOptionFromSession()
       this.applySessionHourRangeToAnalysisControls()
 
-      if (!this.powerVariableOptions.find((option) => option.field === this.powerOptions.variable)) {
-        this.powerOptions.variable = this.powerVariableOptions[0]?.field || 'ee'
-      }
+      this.ensureValidPowerVariable()
       this.ensureValidAnalysisCovariate()
 
       this.analysisDirty.qc = true
