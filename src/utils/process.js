@@ -317,65 +317,44 @@ export function fillAccumulatorColumns(rows) {
       return String(left['Date.Time'] || left['Time.Date'] || '').localeCompare(String(right['Date.Time'] || right['Time.Date'] || ''))
     })
 
+    let feedAccRunning = 0
     let eeAccRunning = 0
-    let ebAccRunning = 0
-    const firstExplicitEeAcc = subjectRows.reduce((baseline, row) => {
-      if (baseline !== null) {
-        return baseline
-      }
-      return toNullableNumber(row['ee.acc'])
-    }, null)
-    const firstExplicitFeedAcc = subjectRows.reduce((baseline, row) => {
-      if (baseline !== null) {
-        return baseline
-      }
-      return toNullableNumber(row['feed.acc'])
-    }, null)
-    const firstExplicitEbAcc = subjectRows.reduce((baseline, row) => {
-      if (baseline !== null) {
-        return baseline
-      }
-      return toNullableNumber(row['eb.acc'])
-    }, null)
-    const hasExplicitEbAcc = firstExplicitEbAcc !== null
+    let drinkAccRunning = 0
+    let wheelAccRunning = 0
+    let firstFeedAcc = null
+    let firstEeAcc = null
+    let firstDrinkAcc = null
+    let firstWheelAcc = null
 
     subjectRows.forEach((row) => {
       const eeValue = toNullableNumber(row.ee)
       const feedValue = toNullableNumber(row.feed)
-      const explicitEeAcc = toNullableNumber(row['ee.acc'])
-      const explicitFeedAcc = toNullableNumber(row['feed.acc'])
-      const explicitEb = toNullableNumber(row.eb)
-      const explicitEbAcc = toNullableNumber(row['eb.acc'])
-      const eeAccIncrement = eeValue === null ? null : eeValue / minuteBin
-      const feedAccZeroed = explicitFeedAcc === null
-        ? null
-        : explicitFeedAcc - (firstExplicitFeedAcc ?? 0)
-      const nextEeAcc = explicitEeAcc === null
-        ? (eeAccIncrement === null ? null : eeAccRunning + eeAccIncrement)
-        : hasExplicitEbAcc
-          ? explicitEeAcc - (firstExplicitEeAcc ?? 0)
-          : (explicitEeAcc - (firstExplicitEeAcc ?? 0)) / minuteBin
+      const drinkValue = toNullableNumber(row.drink)
+      const wheelValue = toNullableNumber(row.wheel)
 
-      if (nextEeAcc !== null) {
-        eeAccRunning = nextEeAcc
-      }
+      feedAccRunning += feedValue ?? 0
+      eeAccRunning += eeValue ?? 0
+      drinkAccRunning += drinkValue ?? 0
+      wheelAccRunning += wheelValue ?? 0
 
-      const nextEb = explicitEb ?? (feedValue === null || eeValue === null ? null : (feedValue * minuteBin) - eeValue)
-      const ebAccIncrement = feedValue === null || eeAccIncrement === null ? null : feedValue - eeAccIncrement
-      const nextEbAcc = explicitEbAcc !== null
-        ? explicitEbAcc - (firstExplicitEbAcc ?? 0)
-        : feedAccZeroed === null || nextEeAcc === null
-          ? (ebAccIncrement === null ? null : ebAccRunning + ebAccIncrement)
-          : feedAccZeroed - nextEeAcc
+      firstFeedAcc ??= feedAccRunning
+      firstEeAcc ??= eeAccRunning
+      firstDrinkAcc ??= drinkAccRunning
+      firstWheelAcc ??= wheelAccRunning
 
-      if (nextEbAcc !== null) {
-        ebAccRunning = nextEbAcc
-      }
+      const nextFeedAcc = feedAccRunning - firstFeedAcc
+      const nextEeAcc = (eeAccRunning - firstEeAcc) / minuteBin
+      const nextDrinkAcc = drinkAccRunning - firstDrinkAcc
+      const nextWheelAcc = wheelAccRunning - firstWheelAcc
+      const nextEb = feedValue === null || eeValue === null ? null : (feedValue * minuteBin) - eeValue
+      const nextEbAcc = nextFeedAcc - nextEeAcc
 
       completedRows.push({
         ...row,
-        'feed.acc': feedAccZeroed ?? row['feed.acc'],
+        'feed.acc': nextFeedAcc,
         'ee.acc': nextEeAcc,
+        'drink.acc': nextDrinkAcc,
+        'wheel.acc': nextWheelAcc,
         eb: nextEb,
         'eb.acc': nextEbAcc,
       })
@@ -413,7 +392,7 @@ export function applyDefaultOutlierRemoval(detailRows) {
         const columnMean = stats[column].mean
         const columnSd = stats[column].sd
 
-        if (value === null || columnMean === null || !columnSd) {
+        if (value === null || columnMean === null || columnSd === null) {
           return
         }
 

@@ -270,36 +270,180 @@ function buildTimeIndividualHourDownloadRows(ctx) {
 }
 
 function buildOutliersReportRows(ctx) {
-  const cleanedRows = applyDefaultOutlierRemoval(ctx.analysisRows)
-  const reportColumns = ['vo2', 'vco2', 'ee', 'rer', 'feed', 'drink', 'xytot', 'xyamb', 'wheel', 'pedmeter', 'allmeter', 'body.temp']
-  const rows = []
+  const methods = [
+    ['individual phase_subject', buildOutlierSummaryCounts(ctx.analysisRows, 'individual phase', 'subject')],
+    ['individual phase_group', buildOutlierSummaryCounts(ctx.analysisRows, 'individual phase', 'group')],
+    ['all light/all dark_subject', buildOutlierSummaryCounts(ctx.analysisRows, 'all light/all dark', 'subject')],
+    ['all light/all dark_group', buildOutlierSummaryCounts(ctx.analysisRows, 'all light/all dark', 'group')],
+    ['forecast_subject', emptyOutlierSummaryCounts()],
+    ['forecast_group', emptyOutlierSummaryCounts()],
+    ['default', buildOutlierSummaryCounts(ctx.analysisRows, 'default', 'group')],
+    ['Total data points', buildOutlierTotalCounts(ctx.analysisRows)],
+  ]
 
-  ctx.analysisRows.forEach((row, index) => {
-    const cleanedRow = cleanedRows[index] || {}
-    reportColumns.forEach((column) => {
+  return methods.map(([dataFrame, counts], index) => ({
+    '': index + 1,
+    data_frame: dataFrame,
+    ...counts,
+  }))
+}
+
+const OUTLIER_REPORT_COLUMNS = ['vo2', 'vco2', 'ee', 'rer', 'feed', 'drink', 'xytot', 'xyamb', 'wheel', 'pedmeter', 'allmeter', 'body.temp']
+const OUTLIER_REMOVAL_COLUMNS = ['vo2', 'vco2', 'ee', 'rer', 'body.temp']
+const PRIMARY_METABOLIC_COLUMNS = ['vo2', 'vco2', 'ee', 'rer']
+
+function emptyOutlierSummaryCounts() {
+  return OUTLIER_REPORT_COLUMNS.reduce((counts, column) => {
+    counts[column] = 0
+    return counts
+  }, {})
+}
+
+function buildOutlierTotalCounts(rows) {
+  return OUTLIER_REPORT_COLUMNS.reduce((counts, column) => {
+    counts[column] = rows.reduce((total, row) => total + (toFiniteNumber(row[column]) === null ? 0 : 1), 0)
+    return counts
+  }, {})
+}
+
+function buildOutlierSummaryCounts(rows, method, grouping) {
+  const cleanedRows = cleanRowsForOutlierOption(rows, method, grouping)
+
+  return OUTLIER_REPORT_COLUMNS.reduce((counts, column) => {
+    counts[column] = rows.reduce((total, row, index) => {
       const originalValue = toFiniteNumber(row[column])
       if (originalValue === null) {
-        return
+        return total
       }
 
-      if (cleanedRow[column] === null || cleanedRow[column] === undefined) {
-        rows.push({
-          'subject.id': row['subject.id'],
-          group: row.groupName,
-          day: row.day,
-          light: row.light,
-          hour: row.hour,
-          minute: row.minute,
-          'exp.hour': row['exp.hour'],
-          'exp.minute': row['exp.minute'],
-          variable: column,
-          value: originalValue,
-        })
+      const cleanedValue = toFiniteNumber(cleanedRows[index]?.[column])
+      return total + (cleanedValue === null ? 1 : 0)
+    }, 0)
+    return counts
+  }, {})
+}
+
+function cleanRowsForOutlierOption(rows, method, grouping) {
+  const cleanedRows = rows.map((row) => ({ ...row }))
+  const partitions = outlierPartitions(rows, method, grouping)
+
+  partitions.forEach((indexes) => {
+    const stats = OUTLIER_REMOVAL_COLUMNS.reduce((accumulator, column) => {
+      const values = indexes
+        .map((index) => toFiniteNumber(rows[index][column]))
+        .filter((value) => value !== null)
+
+      accumulator[column] = {
+        mean: values.length ? Math.abs(meanValues(values)) : null,
+        sd: sampleStandardDeviation(values),
       }
+      return accumulator
+    }, {})
+
+    indexes.forEach((index) => {
+      OUTLIER_REMOVAL_COLUMNS.forEach((column) => {
+        const value = toFiniteNumber(cleanedRows[index][column])
+        const columnMean = stats[column].mean
+        const columnSd = stats[column].sd
+
+        if (value === null || columnMean === null || columnSd === null) {
+          return
+        }
+
+        if (value > columnMean + (3 * columnSd) || value < columnMean - (3 * columnSd)) {
+          cleanedRows[index][column] = null
+        }
+      })
     })
   })
 
-  return rows
+  cleanedRows.forEach((row) => {
+    const hasPrimaryNa = PRIMARY_METABOLIC_COLUMNS.some((column) => toFiniteNumber(row[column]) === null)
+    if (!hasPrimaryNa) {
+      return
+    }
+
+    PRIMARY_METABOLIC_COLUMNS.forEach((column) => {
+      row[column] = null
+    })
+  })
+
+  return cleanedRows
+}
+
+function outlierPartitions(rows, method, grouping) {
+  if (method === 'default') {
+    return [rows.map((_, index) => index)]
+  }
+
+  if (method === 'individual phase') {
+    const phaseRows = rowsWithOutlierPhases(rows)
+    const keyFor = grouping === 'subject'
+      ? (entry) => `${entry.row['subject.id']}::${entry.phase}`
+      : (entry) => `${entry.phase}`
+    return partitionIndexes(phaseRows, keyFor)
+  }
+
+  if (method === 'all light/all dark') {
+    const keyFor = grouping === 'subject'
+      ? (entry) => `${entry.row.light}::${entry.row['subject.id']}`
+      : (entry) => `${entry.row.light}`
+    return partitionIndexes(rows.map((row, index) => ({ row, index })), keyFor)
+  }
+
+  return [rows.map((_, index) => index)]
+}
+
+function rowsWithOutlierPhases(rows) {
+  const bySubject = new Map()
+
+  rows.forEach((row, index) => {
+    const subjectId = row['subject.id']
+    if (!bySubject.has(subjectId)) {
+      bySubject.set(subjectId, [])
+    }
+    bySubject.get(subjectId).push({ row, index })
+  })
+
+  const phasedRows = []
+
+  bySubject.forEach((subjectRows) => {
+    subjectRows.sort((left, right) => {
+      const minuteDiff = (toFiniteNumber(left.row['exp.minute']) ?? 0) - (toFiniteNumber(right.row['exp.minute']) ?? 0)
+      if (minuteDiff) {
+        return minuteDiff
+      }
+      return String(left.row['Date.Time'] || left.row['Time.Date'] || '').localeCompare(String(right.row['Date.Time'] || right.row['Time.Date'] || ''))
+    })
+
+    let phase = 0
+    let previousLight = Symbol('none')
+
+    subjectRows.forEach((entry) => {
+      const light = entry.row.light
+      if (light !== previousLight) {
+        phase += 1
+        previousLight = light
+      }
+      phasedRows.push({ ...entry, phase })
+    })
+  })
+
+  return phasedRows
+}
+
+function partitionIndexes(entries, keyFor) {
+  const partitions = new Map()
+
+  entries.forEach((entry) => {
+    const key = keyFor(entry)
+    if (!partitions.has(key)) {
+      partitions.set(key, [])
+    }
+    partitions.get(key).push(entry.index)
+  })
+
+  return [...partitions.values()]
 }
 
 function buildDistributionPlotDownloadRows(ctx) {
@@ -1011,6 +1155,16 @@ function sampleSem(values) {
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length
   const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
   return Math.sqrt(variance) / Math.sqrt(values.length)
+}
+
+function sampleStandardDeviation(values) {
+  if (values.length <= 1) {
+    return 0
+  }
+
+  const mean = meanValues(values)
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
+  return Math.sqrt(variance)
 }
 
 function meanValues(values) {
