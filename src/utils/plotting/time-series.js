@@ -26,11 +26,67 @@ function smoothValues(values, windowSize) {
   })
 }
 
+function mode(values) {
+  if (!values.length) {
+    return null
+  }
+
+  const counts = new Map()
+  let bestValue = values[0]
+  let bestCount = 0
+
+  values.forEach((value) => {
+    const count = (counts.get(value) || 0) + 1
+    counts.set(value, count)
+
+    if (count > bestCount) {
+      bestCount = count
+      bestValue = value
+    }
+  })
+
+  return bestValue
+}
+
+function computeMinuteBin(rows) {
+  const minutes = rows
+    .map((row) => Number(row['exp.minute']))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)
+
+  if (minutes.length < 2) {
+    return 1
+  }
+
+  const diffs = []
+
+  for (let index = 1; index < minutes.length; index += 1) {
+    const diffMinutes = minutes[index] - minutes[index - 1]
+    if (diffMinutes > 0) {
+      diffs.push(diffMinutes)
+    }
+  }
+
+  const modeDiffMinutes = mode(diffs)
+
+  return modeDiffMinutes ? 60 / modeDiffMinutes : 1
+}
+
 function hexToRGBA(hex, alpha) {
   const r = Number.parseInt(hex.slice(1, 3), 16)
   const g = Number.parseInt(hex.slice(3, 5), 16)
   const b = Number.parseInt(hex.slice(5, 7), 16)
   return `rgba(${r},${g},${b},${alpha})`
+}
+
+function resolveTimeSeriesValue(row, variable, minuteBin) {
+  const value = row[variable]
+
+  if (variable === 'feed' && value !== null && value !== undefined && !Number.isNaN(value)) {
+    return value * minuteBin
+  }
+
+  return value
 }
 
 function resolveGroupOrder(rows, preferredOrder = []) {
@@ -97,6 +153,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
   const yLabel = explorerVariables.find((item) => item.field === options.yVar)?.label || options.yVar
   const filteredRows = options.removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
   const timeRangeRows = filteredRows.filter((row) => row['exp.minute'] >= options.rangeStart * 60 && row['exp.minute'] <= options.rangeEnd * 60)
+  const minuteBin = computeMinuteBin(timeRangeRows)
   const groups = resolveGroupOrder(timeRangeRows, options.groupOrder || session?.groupNames || [])
   const traces = []
 
@@ -118,7 +175,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
 
       traces.push({
         x: subjectSeries.map((row) => row['exp.minute'] / 60),
-        y: subjectSeries.map((row) => row[options.yVar]),
+        y: subjectSeries.map((row) => resolveTimeSeriesValue(row, options.yVar, minuteBin)),
         mode: 'lines',
         line: {
           color,
@@ -147,7 +204,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
 
       groupSeries.forEach((row) => {
         const minute = Math.round(row['exp.minute'])
-        const value = row[options.yVar]
+        const value = resolveTimeSeriesValue(row, options.yVar, minuteBin)
 
         if (minute === null || minute === undefined || value === null || value === undefined || Number.isNaN(value)) {
           return

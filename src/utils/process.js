@@ -337,6 +337,7 @@ export function fillAccumulatorColumns(rows) {
       }
       return toNullableNumber(row['eb.acc'])
     }, null)
+    const hasExplicitEbAcc = firstExplicitEbAcc !== null
 
     subjectRows.forEach((row) => {
       const eeValue = toNullableNumber(row.ee)
@@ -351,7 +352,9 @@ export function fillAccumulatorColumns(rows) {
         : explicitFeedAcc - (firstExplicitFeedAcc ?? 0)
       const nextEeAcc = explicitEeAcc === null
         ? (eeAccIncrement === null ? null : eeAccRunning + eeAccIncrement)
-        : (explicitEeAcc - (firstExplicitEeAcc ?? 0)) / minuteBin
+        : hasExplicitEbAcc
+          ? explicitEeAcc - (firstExplicitEeAcc ?? 0)
+          : (explicitEeAcc - (firstExplicitEeAcc ?? 0)) / minuteBin
 
       if (nextEeAcc !== null) {
         eeAccRunning = nextEeAcc
