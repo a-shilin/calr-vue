@@ -552,6 +552,14 @@
               </select>
             </label>
 
+            <label v-if="showAnalysisGroupOrderControl" class="control-stack">
+              Group Model
+              <select v-model="analysisTableOptions.groupModel">
+                <option value="ordered">Ordered trend</option>
+                <option value="unordered">Pairwise vs reference</option>
+              </select>
+            </label>
+
             <label class="control-stack">
               Time Range
               <div class="range-row">
@@ -807,6 +815,7 @@ export default {
       },
       analysisTableOptions: {
         massVariable: 'total_mass',
+        groupModel: 'ordered',
       },
       qcOptions: {
         nMassMeasurements: 5,
@@ -866,6 +875,9 @@ export default {
       return (this.sessionMetadata.groupNames || []).map((_, index) =>
         subjects.filter((s) => Number(s.groupIndex) === index).length,
       )
+    },
+    showAnalysisGroupOrderControl() {
+      return (this.sessionMetadata.groupNames || []).length > 2
     },
     weightHasCompositionData() {
       const sessionHasComposition = (this.sessionMetadata.subjects || []).some((subject) =>
@@ -1672,6 +1684,7 @@ export default {
             session_id: this.xp.current.files.find((file) => file.file_type === 'session')?.id,
             variable: this.regressionOptions.yVar,
             mass_variable: this.backendMassVariableForAnalysis(),
+            ordered_groups: !this.showAnalysisGroupOrderControl || this.analysisTableOptions.groupModel === 'ordered',
             time_of_day: this.regressionOptions.period.toLowerCase(),
             hour_range: hourRange,
             min_hour: hourRange[0],
