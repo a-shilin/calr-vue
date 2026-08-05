@@ -526,6 +526,8 @@ function filterRowsForBoxDownload(ctx, rows) {
 function buildDistributionHourlyRows(rows) {
   const variables = distributionDownloadVariables()
   const buckets = new Map()
+  const minuteBin = computeMinuteBin(rows)
+  const subjectBaselines = computeSubjectBaselines(rows, ['pedmeter', 'allmeter'])
 
   rows.forEach((row) => {
     const subjectId = row['subject.id']
@@ -556,7 +558,7 @@ function buildDistributionHourlyRows(rows) {
     pushTimestampValue(bucket.dateTimeValues, row['Date.Time'] ?? row['Time.Date'])
 
     variables.forEach((variable) => {
-      const value = distributionVariableValue(row, variable)
+      const value = distributionVariableValue(row, variable, minuteBin, subjectBaselines)
       if (value !== null) {
         bucket.values[variable].push(value)
       }
@@ -609,7 +611,17 @@ function summarizeDistributionPeriodBucket(bucket) {
   return row
 }
 
-function distributionVariableValue(row, variable) {
+function distributionVariableValue(row, variable, minuteBin = 1, subjectBaselines = new Map()) {
+  if (variable === 'feed' || variable === 'drink') {
+    const value = toFiniteNumber(row[variable])
+    return value === null ? null : value * minuteBin
+  }
+
+  if (variable === 'pedmeter' || variable === 'allmeter') {
+    const value = toFiniteNumber(row[variable])
+    return value === null ? null : value - (subjectBaselines.get(row['subject.id'])?.[variable] ?? 0)
+  }
+
   if (variable === 'eb') {
     const explicit = toFiniteNumber(row.eb)
     if (explicit !== null) {
@@ -1169,6 +1181,90 @@ function sampleStandardDeviation(values) {
 
 function meanValues(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function modeValue(values) {
+  if (!values.length) {
+    return null
+  }
+
+  const counts = new Map()
+  let bestValue = values[0]
+  let bestCount = 0
+
+  values.forEach((value) => {
+    const count = (counts.get(value) || 0) + 1
+    counts.set(value, count)
+
+    if (count > bestCount) {
+      bestCount = count
+      bestValue = value
+    }
+  })
+
+  return bestValue
+}
+
+function computeMinuteBin(rows) {
+  const minutes = rows
+    .map((row) => toFiniteNumber(row['exp.minute']))
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right)
+
+  if (minutes.length < 2) {
+    return 1
+  }
+
+  const diffs = []
+
+  for (let index = 1; index < minutes.length; index += 1) {
+    const diffMinutes = minutes[index] - minutes[index - 1]
+    if (diffMinutes > 0) {
+      diffs.push(diffMinutes)
+    }
+  }
+
+  const modeDiffMinutes = modeValue(diffs)
+  return modeDiffMinutes ? 60 / modeDiffMinutes : 1
+}
+
+function computeSubjectBaselines(rows, variables) {
+  const baselines = new Map()
+
+  rows
+    .slice()
+    .sort((left, right) => {
+      const minuteDiff = (toFiniteNumber(left['exp.minute']) ?? 0) - (toFiniteNumber(right['exp.minute']) ?? 0)
+      if (minuteDiff) {
+        return minuteDiff
+      }
+
+      return String(left['Date.Time'] || left['Time.Date'] || '').localeCompare(String(right['Date.Time'] || right['Time.Date'] || ''))
+    })
+    .forEach((row) => {
+      const subjectId = row['subject.id']
+      if (!subjectId) {
+        return
+      }
+
+      if (!baselines.has(subjectId)) {
+        baselines.set(subjectId, {})
+      }
+
+      const subjectBaselines = baselines.get(subjectId)
+      variables.forEach((variable) => {
+        if (subjectBaselines[variable] !== undefined) {
+          return
+        }
+
+        const value = toFiniteNumber(row[variable])
+        if (value !== null) {
+          subjectBaselines[variable] = value
+        }
+      })
+    })
+
+  return baselines
 }
 
 function meanColumn(rows, key) {
