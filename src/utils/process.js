@@ -319,6 +319,24 @@ export function fillAccumulatorColumns(rows) {
 
     let eeAccRunning = 0
     let ebAccRunning = 0
+    const firstExplicitEeAcc = subjectRows.reduce((baseline, row) => {
+      if (baseline !== null) {
+        return baseline
+      }
+      return toNullableNumber(row['ee.acc'])
+    }, null)
+    const firstExplicitFeedAcc = subjectRows.reduce((baseline, row) => {
+      if (baseline !== null) {
+        return baseline
+      }
+      return toNullableNumber(row['feed.acc'])
+    }, null)
+    const firstExplicitEbAcc = subjectRows.reduce((baseline, row) => {
+      if (baseline !== null) {
+        return baseline
+      }
+      return toNullableNumber(row['eb.acc'])
+    }, null)
 
     subjectRows.forEach((row) => {
       const eeValue = toNullableNumber(row.ee)
@@ -326,18 +344,26 @@ export function fillAccumulatorColumns(rows) {
       const explicitEeAcc = toNullableNumber(row['ee.acc'])
       const explicitFeedAcc = toNullableNumber(row['feed.acc'])
       const explicitEb = toNullableNumber(row.eb)
+      const explicitEbAcc = toNullableNumber(row['eb.acc'])
       const eeAccIncrement = eeValue === null ? null : eeValue / minuteBin
-      const nextEeAcc = explicitEeAcc ?? (eeAccIncrement === null ? null : eeAccRunning + eeAccIncrement)
+      const feedAccZeroed = explicitFeedAcc === null
+        ? null
+        : explicitFeedAcc - (firstExplicitFeedAcc ?? 0)
+      const nextEeAcc = explicitEeAcc === null
+        ? (eeAccIncrement === null ? null : eeAccRunning + eeAccIncrement)
+        : (explicitEeAcc - (firstExplicitEeAcc ?? 0)) / minuteBin
 
       if (nextEeAcc !== null) {
         eeAccRunning = nextEeAcc
       }
 
-      const nextEb = explicitEb ?? (feedValue === null || eeValue === null ? null : feedValue - eeValue)
+      const nextEb = explicitEb ?? (feedValue === null || eeValue === null ? null : (feedValue * minuteBin) - eeValue)
       const ebAccIncrement = feedValue === null || eeAccIncrement === null ? null : feedValue - eeAccIncrement
-      const nextEbAcc = explicitFeedAcc === null || nextEeAcc === null
-        ? (ebAccIncrement === null ? null : ebAccRunning + ebAccIncrement)
-        : explicitFeedAcc - nextEeAcc
+      const nextEbAcc = explicitEbAcc !== null
+        ? explicitEbAcc - (firstExplicitEbAcc ?? 0)
+        : feedAccZeroed === null || nextEeAcc === null
+          ? (ebAccIncrement === null ? null : ebAccRunning + ebAccIncrement)
+          : feedAccZeroed - nextEeAcc
 
       if (nextEbAcc !== null) {
         ebAccRunning = nextEbAcc
@@ -345,6 +371,7 @@ export function fillAccumulatorColumns(rows) {
 
       completedRows.push({
         ...row,
+        'feed.acc': feedAccZeroed ?? row['feed.acc'],
         'ee.acc': nextEeAcc,
         eb: nextEb,
         'eb.acc': nextEbAcc,
@@ -654,21 +681,15 @@ export function aggregateDetailRows(detailRows, {
         aggregated[variable] = aggregateBucketVariable(variable, bucket.values[variable] || [], per)
       })
 
-      if (per === 'min') {
-        if (aggregated.feed !== null) {
-          aggregated.feed *= minuteBin
-        }
-
-        if (aggregated['ee.acc'] !== null) {
-          aggregated['ee.acc'] /= minuteBin
-        }
+      if (per === 'min' && aggregated.feed !== null) {
+        aggregated.feed *= minuteBin
       }
 
       if (aggregated.feed !== null && aggregated.ee !== null) {
         aggregated.eb = aggregated.feed - aggregated.ee
       }
 
-      if (aggregated['feed.acc'] !== null && aggregated['ee.acc'] !== null) {
+      if (aggregated['eb.acc'] === null && aggregated['feed.acc'] !== null && aggregated['ee.acc'] !== null) {
         aggregated['eb.acc'] = aggregated['feed.acc'] - aggregated['ee.acc']
       }
 

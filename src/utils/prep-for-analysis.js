@@ -45,6 +45,87 @@ function computeCycleDay(expMinute, lightCycleStart) {
   return Math.floor((expMinute / 60 - lightCycleStart) / 24)
 }
 
+function mode(values) {
+  if (!values.length) {
+    return null
+  }
+
+  const counts = new Map()
+  let bestValue = values[0]
+  let bestCount = 0
+
+  values.forEach((value) => {
+    const count = (counts.get(value) || 0) + 1
+    counts.set(value, count)
+
+    if (count > bestCount) {
+      bestCount = count
+      bestValue = value
+    }
+  })
+
+  return bestValue
+}
+
+function computeMinuteBin(rows) {
+  const minutes = rows
+    .map((row) => toNullableNumber(row['exp.minute']))
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right)
+
+  if (minutes.length < 2) {
+    return 1
+  }
+
+  const diffs = []
+
+  for (let index = 1; index < minutes.length; index += 1) {
+    const diffMinutes = minutes[index] - minutes[index - 1]
+    if (diffMinutes > 0) {
+      diffs.push(diffMinutes)
+    }
+  }
+
+  const modeDiffMinutes = mode(diffs)
+
+  return modeDiffMinutes ? 60 / modeDiffMinutes : 1
+}
+
+function rowSortValue(row) {
+  const expMinute = toNullableNumber(row?.['exp.minute'])
+  if (expMinute !== null) {
+    return expMinute
+  }
+
+  const parsedTime = Date.parse(row?.['Date.Time'] || row?.['Time.Date'] || '')
+  return Number.isNaN(parsedTime) ? Number.POSITIVE_INFINITY : parsedTime
+}
+
+function computeAccumulatorBaselines(rows) {
+  const baselines = new Map()
+
+  rows
+    .slice()
+    .sort((left, right) => rowSortValue(left) - rowSortValue(right))
+    .forEach((row) => {
+      const subjectId = isBlank(row?.['subject.id'])
+        ? (isBlank(row?.subject_id) ? null : `${row.subject_id}`.trim())
+        : `${row['subject.id']}`.trim()
+
+      if (!subjectId || baselines.has(subjectId)) {
+        return
+      }
+
+      baselines.set(subjectId, {
+        feedAcc: toNullableNumber(row?.['feed.acc']) ?? 0,
+        eeAcc: toNullableNumber(row?.['ee.acc']) ?? 0,
+        ebAcc: toNullableNumber(row?.['eb.acc']) ?? 0,
+      })
+    })
+
+  return baselines
+}
+
 function normalizeEnrichedRows(payload) {
   if (typeof payload === 'string') {
     return parseCsv(payload)
@@ -112,6 +193,9 @@ function normalizeEnrichedDetailRows(payload, fallbackSession, numericalColumns)
     delete nextRow['exp.minute']
     return nextRow
   }))
+  const minuteBin = computeMinuteBin(rowsWithExpMinute)
+  const hasExplicitEbAcc = rowsWithExpMinute.some((row) => !isBlank(row?.['eb.acc']))
+  const accumulatorBaselines = computeAccumulatorBaselines(rowsWithExpMinute)
 
   const subjectSessions = new Map(
     (fallbackSession.subjects || []).map((subject) => [`${subject.subject}`, subject]),
@@ -140,10 +224,24 @@ function normalizeEnrichedDetailRows(payload, fallbackSession, numericalColumns)
     const day = toNullableNumber(parsedRow.day)
       ?? toNullableNumber(parsedRow['exp.day'])
       ?? computeCycleDay(expMinute, fallbackSession.light_cycle_start)
+    const dietCal = toNullableNumber(parsedRow.dietCal) ?? fallbackSession.dietCal[groupIndex] ?? null
+    const shouldApplyDietCalories = !hasExplicitEbAcc && dietCal !== null
     const feed = toNullableNumber(parsedRow.feed)
     const ee = toNullableNumber(parsedRow.ee)
     const feedAcc = toNullableNumber(parsedRow['feed.acc'])
     const eeAcc = toNullableNumber(parsedRow['ee.acc'])
+    const explicitEbAcc = toNullableNumber(parsedRow['eb.acc'])
+    const baseline = accumulatorBaselines.get(subjectId) || { feedAcc: 0, eeAcc: 0, ebAcc: 0 }
+    const feedAccZeroed = feedAcc === null ? null : feedAcc - baseline.feedAcc
+    const eeAccZeroed = eeAcc === null ? null : eeAcc - baseline.eeAcc
+    const ebAccZeroed = explicitEbAcc === null ? null : explicitEbAcc - baseline.ebAcc
+    const feedKcal = shouldApplyDietCalories && feed !== null ? feed * dietCal : feed
+    const feedAccKcal = shouldApplyDietCalories && feedAccZeroed !== null ? feedAccZeroed * dietCal : feedAccZeroed
+    const eeAccKcal = eeAccZeroed === null ? null : eeAccZeroed / minuteBin
+    const eb = feedKcal === null || ee === null ? null : (feedKcal * minuteBin) - ee
+    const ebAcc = hasExplicitEbAcc
+      ? ebAccZeroed
+      : (feedAccKcal === null || eeAccKcal === null ? null : feedAccKcal - eeAccKcal)
 
     return {
       ...parsedRow,
@@ -161,13 +259,16 @@ function normalizeEnrichedDetailRows(payload, fallbackSession, numericalColumns)
       groupName: parsedRow.groupName || parsedRow.group || fallbackSession.groupNames[groupIndex] || 'Unknown',
       color: parsedRow.color || fallbackSession.colors[groupIndex] || '#888',
       diet: parsedRow.diet || fallbackSession.dietNames[groupIndex] || null,
-      dietCal: toNullableNumber(parsedRow.dietCal) ?? fallbackSession.dietCal[groupIndex] ?? null,
+      dietCal,
       subjectSession,
       'subject.mass': toNullableNumber(parsedRow['subject.mass']) ?? subjectSession.total_mass ?? null,
       'subject.lean.mass': toNullableNumber(parsedRow['subject.lean.mass']) ?? subjectSession.lean_mass ?? null,
       'subject.fat.mass': toNullableNumber(parsedRow['subject.fat.mass']) ?? subjectSession.fat_mass ?? null,
-      eb: toNullableNumber(parsedRow.eb) ?? (feed === null || ee === null ? null : feed - ee),
-      'eb.acc': toNullableNumber(parsedRow['eb.acc']) ?? (feedAcc === null || eeAcc === null ? null : feedAcc - eeAcc),
+      feed: feedKcal,
+      'feed.acc': feedAccKcal,
+      'ee.acc': eeAccKcal,
+      eb,
+      'eb.acc': ebAcc,
     }
   })
 }
