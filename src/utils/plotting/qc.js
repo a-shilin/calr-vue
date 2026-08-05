@@ -57,14 +57,19 @@ export async function renderQcPlot(target, qcResults, options = {}) {
   })
 
   const allX = qcResults.subjects.map((subject) => subject.mass_delta)
+  const allY = qcResults.subjects.map((subject) => subject.total_eb)
   const xMin = Math.min(...allX)
   const xMax = Math.max(...allX)
+  const yMin = Math.min(...allY)
+  const yMax = Math.max(...allY)
 
   const regressionTraces = groups
     .filter((group) => qcResults.group_regressions?.[group])
     .map((group) => {
       const regression = qcResults.group_regressions[group]
-      const xValues = [xMin, xMax]
+      const subset = qcResults.subjects.filter((subject) => subject.group === group)
+      const groupX = subset.map((subject) => subject.mass_delta)
+      const xValues = [Math.min(...groupX), Math.max(...groupX)]
       const yValues = xValues.map((value) => regression.slope * value + regression.intercept)
 
       return {
@@ -72,12 +77,16 @@ export async function renderQcPlot(target, qcResults, options = {}) {
         y: yValues,
         mode: 'lines',
         type: 'scatter',
-        name: `${group} fit`,
+        name: `${group} : R2=${regression.r_squared}`,
         line: {
           color: colors[group],
           width: 2,
         },
-        showlegend: false,
+        hovertemplate:
+          `<b>${group} fit</b><br>` +
+          `Slope: ${regression.slope}<br>` +
+          `Intercept: ${regression.intercept}<br>` +
+          `R²: ${regression.r_squared}<extra></extra>`,
       }
     })
 
@@ -96,13 +105,40 @@ export async function renderQcPlot(target, qcResults, options = {}) {
         },
       }
     : null
+  const overallAnnotation = overall
+    ? [{
+        xref: 'paper',
+        yref: 'paper',
+        x: 1.02,
+        y: 0.2,
+        xanchor: 'left',
+        yanchor: 'top',
+        align: 'left',
+        showarrow: false,
+        text: [
+          `Slope:${overall.slope}`,
+          `Intercept:${overall.intercept}`,
+          `R.Squared:${overall.r_squared}`,
+        ].join('<br>'),
+        bordercolor: '#c7c7c7',
+        borderwidth: 2,
+        borderpad: 4,
+        bgcolor: '#ff934d',
+        opacity: 0.9,
+        font: {
+          family: 'Courier New, monospace',
+          size: 12,
+          color: '#ffffff',
+        },
+      }]
+    : []
 
   await renderPlot(
     target,
     overallTrace ? [...scatterTraces, ...regressionTraces, overallTrace] : [...scatterTraces, ...regressionTraces],
     {
       title: options.title || undefined,
-      margin: { l: 90, r: 20, t: 50, b: 70 },
+      margin: { l: 90, r: 180, t: 50, b: 70 },
       xaxis: {
         title: axisTitle(options.xLabel || 'Change in Mass (g)'),
         automargin: true,
@@ -117,14 +153,15 @@ export async function renderQcPlot(target, qcResults, options = {}) {
           type: 'line',
           x0: 0,
           x1: 0,
-          y0: Math.min(...qcResults.subjects.map((subject) => subject.total_eb)),
-          y1: Math.max(...qcResults.subjects.map((subject) => subject.total_eb)),
+          y0: yMin,
+          y1: yMax,
           line: {
             color: 'black',
             width: 1,
           },
         },
       ],
+      annotations: overallAnnotation,
     },
     { responsive: true, displaylogo: false },
   )
