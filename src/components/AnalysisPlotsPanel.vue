@@ -298,6 +298,11 @@
             <div class="plot-wrap">
               <div v-if="plotRendering.regression" class="plot-loading"><BSpinner small /></div>
               <div ref="regressionPlot" class="plot-surface"></div>
+              <div v-if="regressionOptions.showStatsLegend && regressionStatsLegendLines.length" class="regression-stats-legend">
+                <div v-for="(line, index) in regressionStatsLegendLines" :key="`regression-stat-${index}`">
+                  {{ line }}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -821,7 +826,7 @@ export default {
       },
       analysisTableOptions: {
         massVariable: 'total_mass',
-        groupModel: 'ordered',
+        groupModel: 'unordered',
       },
       qcOptions: {
         nMassMeasurements: 5,
@@ -852,6 +857,7 @@ export default {
         power: false,
       },
       suppressAnalysisDirtyWatch: false,
+      sharedAnalysisRefreshTimer: null,
       activePlotDownloadMenu: null,
       powerViewTab: 'plot',
       weightViewTab: 'total',
@@ -1030,13 +1036,53 @@ export default {
         return []
       }
 
-      const covariateLabel = this.lookupVariableLabel(this.regressionOptions.xVar)
+      const covariateLabel = this.regressionStatsCovariateLabel(this.regressionOptions.xVar)
       const periodCandidates = {
         Total: ['full_day', 'total', 'all'],
         Light: ['light'],
         Dark: ['dark'],
       }[this.regressionOptions.period] || ['full_day', 'total']
       const yLabel = this.lookupVariableLabel(this.regressionOptions.yVar)
+      const pairwiseSections = Array.isArray(this.xp.ancovaResults.ancova_pairwise)
+        ? this.xp.ancovaResults.ancova_pairwise
+        : []
+      const pairwiseEntries = pairwiseSections.map((section, index) => {
+        const row = (Array.isArray(section.rows) ? section.rows : []).find((candidate) =>
+          candidate.variable === this.regressionOptions.yVar || candidate.label === yLabel,
+        )
+        const effects = row
+          ? periodCandidates
+            .map((periodKey) => row[periodKey])
+            .find((value) => value && Object.keys(value).length) || {}
+          : {}
+
+        return {
+          key: section.comparison || section.label || `comparison-${index}`,
+          label: section.label || section.comparison || `Comparison ${index + 1}`,
+          group: section.group,
+          reference: section.reference,
+          effects,
+        }
+      }).filter((entry) => Object.keys(entry.effects).length)
+
+      if (pairwiseEntries.length) {
+        const showComparisonLabels = pairwiseEntries.length > 1
+        const lines = [
+          covariateLabel,
+          `${this.regressionStatsMassEffectLabel(this.regressionOptions.xVar)}: ${this.formatAnalysisPValue(pairwiseEntries[0].effects.mass)}`,
+        ]
+
+        pairwiseEntries.forEach((entry) => {
+          lines.push(`${this.regressionStatsComparisonEffectLabel('Group effect', entry, showComparisonLabels)}: ${this.formatAnalysisPValue(entry.effects.group)}`)
+        })
+
+        pairwiseEntries.forEach((entry) => {
+          lines.push(`${this.regressionStatsComparisonEffectLabel('Interaction effect', entry, showComparisonLabels)}: ${this.formatAnalysisPValue(entry.effects.interaction)}`)
+        })
+
+        return lines
+      }
+
       const statsRow = this.ancovaSummaryRows.find((row) =>
         row.variable === this.regressionOptions.yVar || row.label === yLabel,
       )
@@ -1055,7 +1101,7 @@ export default {
 
       return [
         covariateLabel,
-        `Covariate effect: ${this.formatAnalysisPValue(effects.mass)}`,
+        `${this.regressionStatsMassEffectLabel(this.regressionOptions.xVar)}: ${this.formatAnalysisPValue(effects.mass)}`,
         `Group effect: ${this.formatAnalysisPValue(effects.group)}`,
         `Interaction effect: ${this.formatAnalysisPValue(effects.interaction)}`,
       ]
@@ -1104,9 +1150,11 @@ export default {
     },
     'timeOptions.rangeStart'() {
       this.markAnalysisDirty('ancova')
+      this.scheduleSharedAnalysisRefresh()
     },
     'timeOptions.rangeEnd'() {
       this.markAnalysisDirty('ancova')
+      this.scheduleSharedAnalysisRefresh()
     },
     distributionVariable() {
       this.ensureValidDistributionVariable()
@@ -1117,6 +1165,10 @@ export default {
       handler() {
         this.schedulePlotRenders(['regression'])
       },
+    },
+    'regressionOptions.xVar'() {
+      this.syncAnalysisCovariateFromRegression()
+      this.scheduleSharedAnalysisRefresh()
     },
     regressionXVariables() {
       if (!this.regressionXVariables.some((variable) => variable.field === this.regressionOptions.xVar)) {
@@ -1244,6 +1296,10 @@ export default {
   },
   async beforeUnmount() {
     document.removeEventListener('click', this.closePlotDownloadMenu)
+    if (this.sharedAnalysisRefreshTimer) {
+      clearTimeout(this.sharedAnalysisRefreshTimer)
+      this.sharedAnalysisRefreshTimer = null
+    }
     await Promise.all([
       purgePlot(this.$refs.timePlot),
       purgePlot(this.$refs.distributionPlot),
@@ -1388,6 +1444,12 @@ export default {
     backendMassVariableForAnalysis() {
       return this.analysisTableOptions.massVariable || 'total_mass'
     },
+    syncAnalysisCovariateFromRegression() {
+      const regressionMassVariable = this.backendMassVariableForRegression()
+      if (this.analysisTableOptions.massVariable !== regressionMassVariable) {
+        this.analysisTableOptions.massVariable = regressionMassVariable
+      }
+    },
     toFiniteNumber(value) {
       if (value === null || value === undefined || value === '') {
         return null
@@ -1518,6 +1580,25 @@ export default {
     formatAnalysisEffectLabel(effect) {
       return `${effect}`.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
     },
+    regressionStatsCovariateLabel(field) {
+      const label = this.lookupVariableLabel(field)
+      return `${label}`
+        .replace(/\s*\([^)]*\)/g, '')
+        .replace(/^Body Mass$/i, 'Total Mass')
+        .trim()
+    },
+    regressionStatsMassEffectLabel(field) {
+      return field === 'xytot' ? 'Activity effect' : 'Mass effect'
+    },
+    regressionStatsComparisonEffectLabel(baseLabel, entry, showComparisonLabels) {
+      if (!showComparisonLabels) {
+        return baseLabel
+      }
+
+      const group = entry.group || `${entry.label}`.split('_vs_')[0] || 'Group'
+      const reference = entry.reference || `${entry.label}`.split('_vs_')[1] || this.xp.ancovaResults?.reference_group || 'Reference'
+      return `${baseLabel} (${group} vs ${reference})`
+    },
     formatAnalysisPValue(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) {
         return ''
@@ -1642,7 +1723,6 @@ export default {
           this.timeOptions.rangeStart,
           Math.min(this.timeOptions.rangeEnd, this.maxHour),
         ],
-        statsLegendLines: this.regressionOptions.showStatsLegend ? this.regressionStatsLegendLines : [],
         xLabel,
         yLabel,
       })
@@ -1707,6 +1787,20 @@ export default {
       } finally {
         this.setAncovaLoading(false)
       }
+    },
+    scheduleSharedAnalysisRefresh() {
+      if (this.suppressAnalysisDirtyWatch || !this.xp.current) {
+        return
+      }
+
+      if (this.sharedAnalysisRefreshTimer) {
+        clearTimeout(this.sharedAnalysisRefreshTimer)
+      }
+
+      this.sharedAnalysisRefreshTimer = window.setTimeout(() => {
+        this.sharedAnalysisRefreshTimer = null
+        this.runAncova()
+      }, 250)
     },
     async runPower() {
       if (!this.xp.current) {
@@ -1901,6 +1995,7 @@ export default {
 
       this.ensureValidPowerVariable()
       this.ensureValidAnalysisCovariate()
+      this.syncAnalysisCovariateFromRegression()
 
       this.analysisDirty.qc = true
       this.analysisDirty.power = true

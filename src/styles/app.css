@@ -456,6 +456,23 @@ p{
   width: 100%;
 }
 
+.regression-stats-legend {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: min(760px, 100%);
+  margin: 12px 0 0 90px;
+  padding: 8px 10px;
+  border: 2px solid #c7c7c7;
+  background: rgba(255, 147, 77, 0.9);
+  color: #fff;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .plot-loading {
   position: absolute;
   inset: 0;
