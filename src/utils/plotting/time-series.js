@@ -1,7 +1,7 @@
 // Time-series plot rendering.
 // This file takes analysis-ready rows, applies time-series-specific shaping,
 // and produces Plotly traces/layout for the analysis time plot.
-import { applyDefaultOutlierRemoval } from '../process'
+import { applyDefaultOutlierRemoval, isCumulativeVariable, rebaseCumulativeColumns } from '../process'
 import { axisTitle, renderPlot, resolveGroupColor } from './core'
 
 function smoothValues(values, windowSize) {
@@ -152,7 +152,20 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
 
   const yLabel = explorerVariables.find((item) => item.field === options.yVar)?.label || options.yVar
   const filteredRows = options.removeOutliers ? applyDefaultOutlierRemoval(rows) : rows
-  const timeRangeRows = filteredRows.filter((row) => row['exp.minute'] >= options.rangeStart * 60 && row['exp.minute'] <= options.rangeEnd * 60)
+  const startMinute = options.rangeStart * 60
+  const croppedRows = filteredRows.filter((row) => row['exp.minute'] >= startMinute && row['exp.minute'] <= options.rangeEnd * 60)
+
+  // Cumulative variables re-zero at the window start: the acclimation period
+  // before it is intentionally discarded, so its intake/expenditure must not
+  // carry into the analysis. The x-axis is rebased to match, so a window of
+  // hours 18-89 plots as experimental hours 0-71. Rate variables are unaffected
+  // and keep absolute file hours.
+  const isCumulative = isCumulativeVariable(options.yVar)
+  const timeRangeRows = isCumulative
+    ? rebaseCumulativeColumns(filteredRows, croppedRows, startMinute)
+    : croppedRows
+  const xOffset = isCumulative ? options.rangeStart : 0
+
   const minuteBin = computeMinuteBin(timeRangeRows)
   const groups = resolveGroupOrder(timeRangeRows, options.groupOrder || session?.groupNames || [])
   const traces = []
@@ -174,7 +187,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       const color = resolveGroupColor(groupName, options.groupColors, subjectSeries[0]?.color || '#888')
 
       traces.push({
-        x: subjectSeries.map((row) => row['exp.minute'] / 60),
+        x: subjectSeries.map((row) => (row['exp.minute'] / 60) - xOffset),
         y: subjectSeries.map((row) => resolveTimeSeriesValue(row, options.yVar, minuteBin)),
         mode: 'lines',
         line: {
@@ -221,7 +234,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
         .map((value) => Number.parseInt(value, 10))
         .sort((left, right) => left - right)
 
-      const xHours = minutes.map((minute) => minute / 60)
+      const xHours = minutes.map((minute) => (minute / 60) - xOffset)
       const meanValues = []
       const semLower = []
       const semUpper = []
@@ -301,13 +314,13 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
     {
       margin: { t: 20, r: 20, b: 70, l: 90 },
       xaxis: {
-        title: axisTitle('Time (hours)'),
+        title: axisTitle(isCumulative ? 'Experimental Time (hours)' : 'Time (hours)'),
         automargin: true,
         tickmode: 'linear',
         dtick: 12,
         ticks: 'inside',
         ticklen: 6,
-        range: [options.rangeStart, options.rangeEnd],
+        range: [options.rangeStart - xOffset, options.rangeEnd - xOffset],
         zeroline: false,
       },
       yaxis: {
@@ -320,8 +333,8 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
             xref: 'x',
             yref: 'paper',
             layer: 'below',
-            x0: segment.start / 60,
-            x1: segment.end / 60,
+            x0: (segment.start / 60) - xOffset,
+            x1: (segment.end / 60) - xOffset,
             y0: 0.01,
             y1: 1,
             fillcolor: 'rgba(180,180,180,0.2)',

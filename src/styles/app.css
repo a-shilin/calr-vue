@@ -456,6 +456,14 @@ p{
   width: 100%;
 }
 
+.plot-note {
+  margin: 8px 0 0 90px;
+  max-width: min(760px, 100%);
+  color: #5a6673;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .regression-stats-legend {
   display: inline-flex;
   flex-direction: column;

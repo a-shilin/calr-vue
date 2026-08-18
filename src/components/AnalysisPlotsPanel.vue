@@ -147,9 +147,20 @@
               <div v-if="plotRendering.time" class="plot-loading"><BSpinner small /></div>
               <div ref="timePlot" class="plot-surface"></div>
             </div>
+            <p v-if="isCumulativeTimeVariable" class="plot-note">
+              Cumulative values re-zero at the start of the selected time range, and the
+              x-axis is shown as experimental hours from that start. Data before the range
+              is treated as an acclimation period; a mouse in a new cage behaves
+              atypically, so its intake and expenditure are intentionally excluded rather
+              than carried forward.
+              <span v-if="timeOptions.rangeStart > 0">
+                Hours {{ timeOptions.rangeStart }}&ndash;{{ effectiveTimeRangeEnd }} are plotted as
+                0&ndash;{{ effectiveTimeRangeEnd - timeOptions.rangeStart }}.
+              </span>
+            </p>
           </div>
         </section>
-    
+
         <section class="plot-row" v-show="plotViewMode === 'stacked' || activePlotKey === 'distribution'">
           <aside class="controls-panel">
             <div class="plot-controls-title">
@@ -688,6 +699,7 @@
 import { appStore } from '../store/appStore'
 import { runAnalysis } from '../services/registryService'
 import { stringifyCsv } from '../utils/csv'
+import { isCumulativeVariable } from '../utils/process'
 import {
   buildPlotDownloadFilename,
   buildPlotDownloadRows,
@@ -972,6 +984,14 @@ export default {
       const start = Number(this.draftTimeRange.start)
       const end = Number(this.draftTimeRange.end)
       return Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end <= this.maxHour && start <= end
+    },
+    isCumulativeTimeVariable() {
+      return isCumulativeVariable(this.timeOptions.yVar)
+    },
+    // Mirrors the clamp applied when the plot is rendered, so the caption never
+    // quotes a range the plot did not actually use.
+    effectiveTimeRangeEnd() {
+      return Math.min(this.timeOptions.rangeEnd, this.maxHour)
     },
     timeRangeDirty() {
       const normalized = this.normalizedDraftTimeRange

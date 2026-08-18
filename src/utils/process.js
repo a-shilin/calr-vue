@@ -291,6 +291,117 @@ function getCachedDerivedRows(cache, rows, cacheKey, computeValue) {
   return value
 }
 
+// Columns that accumulate over the course of a recording. These are the only
+// columns whose zero point depends on where the analysis window starts.
+// `pedmeter`/`allmeter` are raw monotone instrument counters rather than `.acc`
+// columns, but they behave identically here (box-plot.js baselines them for the
+// same reason).
+export const CUMULATIVE_COLUMNS = [
+  'feed.acc',
+  'ee.acc',
+  'eb.acc',
+  'drink.acc',
+  'wheel.acc',
+  'pedmeter',
+  'allmeter',
+]
+
+export function isCumulativeVariable(variable) {
+  return CUMULATIVE_COLUMNS.includes(variable)
+}
+
+// Resolve, per subject, the value each cumulative column had at the moment the
+// analysis window opens.
+//
+// The anchor is the user-selected `startMinute` — deliberately not "the first
+// value in the window". Anchoring to the data would let subjects drift apart:
+// two animals whose first surviving in-window rows differ, or one whose leading
+// rows were nulled by outlier removal, would end up rebased against different
+// time points. Anchoring to `startMinute` makes the zero point a pure function
+// of what the user typed.
+//
+// `rows` must be the *uncropped* row set so the value at the boundary is still
+// visible. When a subject has no row at or before `startMinute` the anchor is 0,
+// which leaves the already file-zeroed columns untouched.
+function computeCumulativeAnchors(rows, startMinute, columns) {
+  const rowsBySubject = new Map()
+
+  rows.forEach((row) => {
+    const subjectId = normalizeSubjectIdentifier(row['subject.id'] || row.subject_id)
+
+    if (!rowsBySubject.has(subjectId)) {
+      rowsBySubject.set(subjectId, [])
+    }
+
+    rowsBySubject.get(subjectId).push(row)
+  })
+
+  const anchors = new Map()
+
+  rowsBySubject.forEach((subjectRows, subjectId) => {
+    const ordered = subjectRows
+      .slice()
+      .sort((left, right) => (toNullableNumber(left['exp.minute']) ?? 0) - (toNullableNumber(right['exp.minute']) ?? 0))
+
+    const subjectAnchor = {}
+
+    // Walk forward to the window boundary, carrying the last non-null value so a
+    // gap or a nulled bin at `startMinute` falls back to the value before it
+    // rather than stepping forward into the window.
+    for (let index = 0; index < ordered.length; index += 1) {
+      const expMinute = toNullableNumber(ordered[index]['exp.minute'])
+
+      if (expMinute === null || expMinute > startMinute) {
+        break
+      }
+
+      columns.forEach((column) => {
+        const value = toNullableNumber(ordered[index][column])
+        if (value !== null) {
+          subjectAnchor[column] = value
+        }
+      })
+    }
+
+    anchors.set(subjectId, subjectAnchor)
+  })
+
+  return anchors
+}
+
+// Re-zero the cumulative columns of `windowRows` to the analysis window start.
+// `allRows` is the uncropped set the anchors are read from; `windowRows` is the
+// cropped set actually being plotted.
+export function rebaseCumulativeColumns(allRows, windowRows, startMinute, columns = CUMULATIVE_COLUMNS) {
+  if (!Array.isArray(windowRows) || !windowRows.length) {
+    return []
+  }
+
+  const anchors = computeCumulativeAnchors(allRows, startMinute, columns)
+
+  return windowRows.map((row) => {
+    const subjectAnchor = anchors.get(normalizeSubjectIdentifier(row['subject.id'] || row.subject_id))
+
+    if (!subjectAnchor) {
+      return row
+    }
+
+    const nextRow = { ...row }
+
+    columns.forEach((column) => {
+      const value = toNullableNumber(nextRow[column])
+
+      if (value === null) {
+        return
+      }
+
+      nextRow[column] = value - (subjectAnchor[column] ?? 0)
+    })
+
+    return nextRow
+  })
+}
+
 export function fillAccumulatorColumns(rows) {
   const rowsBySubject = new Map()
   const minuteBin = computeMinuteBin(rows)
