@@ -181,7 +181,7 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       subjects[subjectId].push(row)
     })
 
-    Object.values(subjects).forEach((subjectSeries) => {
+    Object.entries(subjects).forEach(([subjectId, subjectSeries]) => {
       subjectSeries.sort((left, right) => left['exp.minute'] - right['exp.minute'])
       const groupName = subjectSeries[0]?.groupName || 'Unknown'
       const color = resolveGroupColor(groupName, options.groupColors, subjectSeries[0]?.color || '#888')
@@ -189,14 +189,33 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       traces.push({
         x: subjectSeries.map((row) => (row['exp.minute'] / 60) - xOffset),
         y: subjectSeries.map((row) => resolveTimeSeriesValue(row, options.yVar, minuteBin)),
-        mode: 'lines',
+        // Carried per point so the tooltip can name the animal being hovered --
+        // the whole reason to look at individual traces is to spot a flatlined or
+        // erratic cage and identify which one to exclude.
+        customdata: subjectSeries.map((row) => [
+          subjectId,
+          groupName,
+          row.day ?? row['exp.day'] ?? '',
+        ]),
+        mode: 'lines+markers',
         line: {
           color,
-          width: 0.5,
+          width: 1,
         },
-        name: `${groupName} (individual)`,
-        hoverinfo: 'none',
-        showlegend: false,
+        marker: {
+          color,
+          size: 4,
+        },
+        name: `${subjectId}:${groupName}`,
+        hovertemplate: [
+          '<b>Subject ID:</b> %{customdata[0]}',
+          '<b>Group:</b> %{customdata[1]}',
+          `<b>${yLabel}:</b> %{y}`,
+          '<b>Time (hours):</b> %{x}',
+          '<b>Circadian Cycle:</b> %{customdata[2]}',
+          '<extra></extra>',
+        ].join('<br>'),
+        showlegend: true,
         type: 'scatter',
       })
     })
@@ -303,6 +322,14 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
           width: 2,
         },
         name: groupName,
+        // Needed once individuals are shown: 'closest' hover would otherwise fall
+        // back to Plotly's default label for this trace.
+        hovertemplate: [
+          `<b>Group:</b> ${groupName}`,
+          `<b>${yLabel} (mean):</b> %{y}`,
+          '<b>Time (hours):</b> %{x}',
+          '<extra></extra>',
+        ].join('<br>'),
         type: 'scatter',
       })
     })
@@ -344,7 +371,11 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       showlegend: true,
-      hovermode: 'x unified',
+      // 'x unified' stacks every trace into one label, which is unusable with a
+      // cage per trace -- switch to per-point hovering when individuals are on.
+      hovermode: options.showIndividuals ? 'closest' : 'x unified',
+      hoverdistance: 20,
+      hoverlabel: { namelength: -1 },
     },
     { responsive: true, displaylogo: false },
   )

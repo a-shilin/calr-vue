@@ -112,7 +112,8 @@
               <input v-model="timeOptions.showIndividuals" type="checkbox" />
               Show Individual Traces
             </label>
-    
+
+
             <label class="checkbox-row">
               <input v-model="timeOptions.showDarkLight" type="checkbox" />
               Shade Dark/Light Periods
