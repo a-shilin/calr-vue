@@ -728,10 +728,48 @@
                       <div>
                         {{ isFoodCutoffValid
                           ? `Passed: meets the minimum ${minimumFoodCutoffKcalPerHour} kcal/hr threshold.`
-                          : `Failed: must be at least ${minimumFoodCutoffKcalPerHour} kcal/hr to meet 100 mg/min minimum.` }}
-                          <span class="muted-copy">
-                            Based on {{ foodCutoffReferenceKcalPerG }} kcal/g diet.
-                        </span>
+                          : `Failed: must be at least ${minimumFoodCutoffKcalPerHour} kcal/hr to meet the 100 mg/min minimum.` }}
+                      </div>
+
+                      <div class="qc-help">
+                        <button class="qc-help__trigger" type="button">What does this mean?</button>
+                        <div class="qc-help__tip" role="tooltip">
+                          <p>
+                            A mouse cannot physically eat more than 100 mg/min, so the cutoff is
+                            checked in mass terms. The threshold is taken from the most
+                            calorie-dense diet in this session ({{ foodCutoffReferenceKcalPerG }}
+                            kcal/g), which keeps the cutoff from clipping real meals on any diet.
+                          </p>
+
+                          <table class="food-cutoff-qc-table">
+                            <thead>
+                              <tr>
+                                <th>Diet</th>
+                                <th>kcal/g</th>
+                                <th>100 mg/min equals</th>
+                                <th>Current cutoff equals</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr v-for="diet in foodCutoffDietBreakdown" :key="diet.key">
+                                <td>{{ diet.name }}</td>
+                                <td>{{ diet.kcalPerG }}</td>
+                                <td>{{ diet.minimumKcalPerHour }} kcal/hr</td>
+                                <td>
+                                  <span v-if="diet.effectiveMgPerMin === null">&mdash;</span>
+                                  <span v-else>{{ diet.effectiveMgPerMin }} mg/min</span>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                          <p v-if="foodCutoffHasMixedDiets">
+                            These diets have different caloric densities, so one kcal/hr cutoff
+                            cannot equal 100 mg/min for all of them &mdash; see the last column.
+                            The cutoff is most permissive on the least calorie-dense diet, where
+                            large food-caching events can slip through unclipped.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1373,6 +1411,20 @@ function convertFoodCutoffMgPerMinToKcalPerHour(mgPerMin, kcalPerG = DEFAULT_FOO
   return roundToTwo((Number(mgPerMin) / 1000) * 60 * Number(kcalPerG))
 }
 
+// Inverse of the above: what a kcal/hr cutoff actually permits, in mass terms,
+// for a diet of a given caloric density. A mouse cannot physically eat more than
+// ~100 mg/min regardless of diet, so mass is the diet-independent way to read a
+// cutoff -- one kcal/hr number means different mg/min on each diet.
+function convertFoodCutoffKcalPerHourToMgPerMin(kcalPerHour, kcalPerG) {
+  const density = Number(kcalPerG)
+
+  if (!Number.isFinite(density) || density <= 0) {
+    return null
+  }
+
+  return Math.round((Number(kcalPerHour) / 60 / density) * 1000)
+}
+
 function hasConfiguredCycleRange(lightCycleStart, darkCycleStart) {
   const light = Number(lightCycleStart)
   const dark = Number(darkCycleStart)
@@ -1781,11 +1833,58 @@ export default {
         ? Math.max(...selectedDietCalories)
         : 0
     },
+    // One row per distinct diet in the session. The cutoff is stored as a single
+    // kcal/hr value, but 100 mg/min converts to a different kcal/hr figure on
+    // every diet -- so the only honest way to present it is per diet.
+    foodCutoffDietBreakdown() {
+      if (!this.isGroupsAndDietsComplete) {
+        return []
+      }
+
+      const cutoff = Number(this.sessionEditor.food_cutoff)
+      const seen = new Map()
+
+      this.sessionEditor.groups.forEach((group) => {
+        const kcalPerG = Number(group?.diet_kcal)
+        const name = group?.diet_name?.trim()
+
+        if (!Number.isFinite(kcalPerG) || kcalPerG <= 0 || !name) {
+          return
+        }
+
+        const key = `${name}::${kcalPerG}`
+
+        if (seen.has(key)) {
+          return
+        }
+
+        seen.set(key, {
+          key,
+          name,
+          kcalPerG,
+          minimumKcalPerHour: convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN, kcalPerG),
+          effectiveMgPerMin: Number.isFinite(cutoff)
+            ? convertFoodCutoffKcalPerHourToMgPerMin(cutoff, kcalPerG)
+            : null,
+        })
+      })
+
+      return [...seen.values()].sort((left, right) => left.kcalPerG - right.kcalPerG)
+    },
+    // With a single kcal/hr cutoff, diets of differing caloric density cannot all
+    // sit at 100 mg/min. Worth calling out explicitly rather than silently
+    // picking one diet's answer.
+    foodCutoffHasMixedDiets() {
+      return new Set(this.foodCutoffDietBreakdown.map((diet) => diet.kcalPerG)).size > 1
+    },
     minimumFoodCutoffKcalPerHour() {
       if (!this.isGroupsAndDietsComplete) {
         return 0
       }
 
+      // Use the most calorie-dense diet: that yields the highest kcal/hr
+      // equivalent of 100 mg/min, so a cutoff at or above it never clips real
+      // eating on any diet in the session.
       return convertFoodCutoffMgPerMinToKcalPerHour(FOOD_CUTOFF_MIN_MG_PER_MIN, this.foodCutoffReferenceKcalPerG)
     },
     isFoodCutoffValid() {

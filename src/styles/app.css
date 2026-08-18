@@ -1352,6 +1352,98 @@ p{
   color: #991b1b;
 }
 
+.qc-help {
+  position: relative;
+  display: inline-block;
+  margin-top: 6px;
+}
+
+.qc-help__trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+/* Opens to the left of the trigger: the QC card sits at the right edge of the
+   session editor, so a right-hand tooltip would run off screen. */
+.qc-help__tip {
+  position: absolute;
+  top: -10px;
+  right: 100%;
+  z-index: 40;
+  display: none;
+  width: min(480px, 70vw);
+  margin-right: 10px;
+  padding: 12px 14px;
+  border: 1px solid #d8e0ec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+/* Invisible bridge across the 10px gap so moving the pointer from the trigger
+   into the tooltip does not dismiss it. */
+.qc-help__tip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 10px;
+}
+
+.qc-help:hover .qc-help__tip,
+.qc-help:focus-within .qc-help__tip {
+  display: block;
+}
+
+.qc-help__tip p {
+  margin: 0;
+}
+
+.qc-help__tip p + p {
+  margin-top: 8px;
+}
+
+.food-cutoff-qc-table {
+  width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: inherit;
+}
+
+.food-cutoff-qc-table th,
+.food-cutoff-qc-table td {
+  padding: 4px 8px 4px 0;
+  text-align: left;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.25);
+  white-space: nowrap;
+}
+
+.food-cutoff-qc-table th:first-child,
+.food-cutoff-qc-table td:first-child {
+  white-space: normal;
+}
+
+.food-cutoff-qc-table th {
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.food-cutoff-qc-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .upload-qc-nav {
   display: inline-flex;
   align-items: center;
