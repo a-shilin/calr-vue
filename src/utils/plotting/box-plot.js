@@ -233,7 +233,7 @@ export async function renderBoxPlot(target, analysisData, variable, options = {}
     hourRange: options.hourRange,
   })
 
-  const groups = resolveGroupOrder(boxRows, options.groupOrder || [])
+  const groups = resolveGroupOrder(boxRows, options.groupOrder || analysisData?.session?.groupNames || [])
   const traces = []
 
   groups.forEach((groupName) => {
@@ -286,6 +286,8 @@ export async function renderBoxPlot(target, analysisData, variable, options = {}
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       showlegend: true,
+      // Pinned so all plots agree on group order even if fills are added later.
+      legend: { traceorder: 'normal' },
       annotations: boxRows.length ? [] : [{
         text: 'No data in selected time range',
         xref: 'paper',

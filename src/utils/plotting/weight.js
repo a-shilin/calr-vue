@@ -517,7 +517,7 @@ export async function renderWeightPlot(target, analysisData, options = {}) {
     return
   }
 
-  const groups = resolveGroupOrder(weightRows, options.groupOrder || [])
+  const groups = resolveGroupOrder(weightRows, options.groupOrder || analysisData?.session?.groupNames || [])
   const metricOrder = [...new Set(weightRows.map((row) => row.metric))]
   const barWidth = Math.min(0.18, 0.55 / Math.max(groups.length, 1))
   const barSpacing = barWidth * 1.15
@@ -597,6 +597,8 @@ export async function renderWeightPlot(target, analysisData, options = {}) {
       shapes: significanceLayout.shapes,
       annotations: significanceLayout.annotations,
       showlegend: true,
+      // Pinned so all plots agree on group order even if fills are added later.
+      legend: { traceorder: 'normal' },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
     },

@@ -371,6 +371,10 @@ export async function renderTimeSeriesPlot(target, analysisData, options, explor
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       showlegend: true,
+      // Pinned: Plotly silently defaults traceorder to 'reversed' when a figure
+      // contains filled-area traces (the SEM ribbons here), which would list the
+      // groups backwards relative to every other plot.
+      legend: { traceorder: 'normal' },
       // 'x unified' stacks every trace into one label, which is unusable with a
       // cage per trace -- switch to per-point hovering when individuals are on.
       hovermode: options.showIndividuals ? 'closest' : 'x unified',

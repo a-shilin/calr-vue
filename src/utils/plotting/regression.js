@@ -225,7 +225,7 @@ export async function renderRegressionPlot(target, analysisData, options = {}) {
 
   const xLabel = options.xLabel || options.xVar
   const yLabel = options.yLabel || options.yVar
-  const groups = resolveGroupOrder(regressionRows, options.groupOrder || [])
+  const groups = resolveGroupOrder(regressionRows, options.groupOrder || analysisData?.session?.groupNames || [])
   const traces = []
 
   groups.forEach((groupName) => {
@@ -333,6 +333,10 @@ export async function renderRegressionPlot(target, analysisData, options = {}) {
       },
       hovermode: 'closest',
       showlegend: true,
+      // Pinned: Plotly silently defaults traceorder to 'reversed' when a figure
+      // contains filled-area traces (the confidence bands here), which would list
+      // the groups backwards relative to every other plot.
+      legend: { traceorder: 'normal' },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
     },

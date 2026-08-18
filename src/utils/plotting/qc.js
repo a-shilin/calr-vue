@@ -162,6 +162,8 @@ export async function renderQcPlot(target, qcResults, options = {}) {
         },
       ],
       annotations: overallAnnotation,
+      // Pinned so all plots agree on group order even if fills are added later.
+      legend: { traceorder: 'normal' },
     },
     { responsive: true, displaylogo: false },
   )
