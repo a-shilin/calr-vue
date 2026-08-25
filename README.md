@@ -44,6 +44,7 @@ The app uses hash routing for GitHub Pages compatibility.
 - [src/views](src/views): page-level screens
 - [src/components/AnalysisPlotsPanel.vue](src/components/AnalysisPlotsPanel.vue): shared analysis plots panel used on both the analysis page and the account builder
 - [src/components/MetadataFieldInput.vue](src/components/MetadataFieldInput.vue): shared text/select/select-plus-free-text metadata field input
+- [src/utils/community-schema.js](src/utils/community-schema.js): standardized community column definitions, value normalization, and subject keys
 - [src/config/experimentMetadata.json](src/config/experimentMetadata.json): data-only experiment metadata field definitions
 - [src/router/index.js](src/router/index.js): app routes
 - [src/services/registryService.js](src/services/registryService.js): live CalR backend API calls
@@ -127,6 +128,151 @@ The `store` has two parallel analysis slices:
 - `store.builderAnalysis` — used by the account builder (`context='builderAnalysis'`)
 
 Loader flags (`doQC`, `doAncova`, `doPower`, `doBuilderQC`, `doBuilderAncova`, `doBuilderPower`) are routed to the correct slice based on `context`.
+
+## Community Page
+
+The community page compares subject-level summary rows across public datasets. It loads
+`public/02032026_combined_datasets_calrepo.csv` directly and does not use the backend APIs.
+
+Column definitions live in [src/utils/community-schema.js](src/utils/community-schema.js). The
+community CSV follows a published column standard, so the variable lists there are explicit rather
+than inferred from the loaded file — new columns reach the app by being added to the standard and
+then listed in that module.
+
+### Data grain
+
+One row per `(experiment_id, subject_id, experiment_start_time, time_of_day)`. That composite is the
+only unique key in the file:
+
+- `subject_id` is unique only within an experiment; some ids are reused across experiments.
+- One animal can be recorded in several sessions, and those sessions can differ in condition
+  (`CalR000171` records the same animals at both 4 °C and 23 °C). Repeated sessions plot as separate
+  points, because averaging them would erase the contrast the data exists to show.
+- Every animal appears once per photoperiod, so plotting without a photoperiod filter draws each
+  animal three times.
+
+`animalKey` counts distinct animals; `subjectKey` identifies a plotted point.
+
+### Photoperiod
+
+A single-select `Light` / `Dark` / `Full day` control, defaulting to `Full day`. Selecting one
+photoperiod is required for the plot to show one point per animal-session.
+
+### Value normalization
+
+Categorical values are canonicalized once at load. Spellings that differ only by case, punctuation,
+or spacing fold onto the most frequent variant, so they do not split into separate filters, legend
+entries, and colors; values that differ by actual words are left alone. Missing-value tokens
+(`NA`, `N/A`, `NaN`, `null`, blank) become empty rather than reading as real categories. `none` is
+preserved, since "no treatment" and "no enrichment" are real values.
+
+### Variable availability
+
+Column coverage varies widely by experiment — lean/fat mass are absent from most, `wheel_counts`
+from all but two. A variable is offered only when it has at least two distinct finite values in the
+current selection; otherwise it is disabled and marked `no data`, so a selection cannot silently
+produce an empty plot.
+
+### Color
+
+`Group / Color By` accepts both categorical and numeric columns.
+
+Categorical columns take a 30-entry qualitative palette, sized for the largest real case — a strain
+survey carries 30 levels.
+
+Numeric columns offer three color scales:
+
+- `Gradient` — continuous per-point color with a viridis colorbar
+- `Grouped — natural breaks` — discrete levels split where the data is already separated
+- `Grouped — rounded values` — one level per rounded value
+
+Grouped levels are spread along the same continuous scale, so their order stays readable as a ramp
+instead of arbitrary categorical colors.
+
+Natural-break binning splits at the widest gaps in the distribution rather than at fixed-width or
+quantile boundaries, because cohort designs leave wide empty stretches between groups that
+equal-width bins cut straight through. Gaps must exceed 5% of the variable's range to count, and
+levels holding fewer than 1% of points (minimum 3) fold into their neighbour so a handful of stray
+animals cannot add a meaningless legend entry.
+
+Bins, level order, and colors are derived once over the whole selection, so Group A, Group B, and the
+two side-by-side panels always agree on what a color means.
+
+### Presets
+
+Preset definitions live in [src/config/communityPresets.js](src/config/communityPresets.js) and sit
+in a row between the plot filters and the plot, each showing a title and a description of what it is
+meant to show.
+
+A preset sets **variable roles only** — photoperiod, X, Y, color, color scale, facet, fit type, fit
+scope, equations. It never names a dataset or a filter value, so every preset stays usable on any
+dataset that follows the standard, including ones added later. Where a reference figure also needed a
+particular subset of animals, the preset states that in `manualStep` rather than encoding values that
+differ between experiments.
+
+Each preset declares the columns it `requires`, so it is offered only when the current selection can
+actually support it and otherwise explains what is missing. Presets that facet also require that
+column to have between 2 and 12 levels.
+
+The highlighted preset is derived from the live plot settings rather than stored, so it always
+reflects real state and stops matching as soon as anything is changed by hand.
+
+Applying a preset moves several watched settings at once, so plot rendering is coalesced to one draw
+per tick.
+
+### Plot filters
+
+The plot filter bar sits between the dataset tables and the plot. Its scope is deliberately distinct
+from the Group A / Group B filter popovers: those choose which *datasets* are in play, while these
+subset the *rows that are plotted*, across any categorical column.
+
+Filtered-out points are not discarded. They render as high-transparency grey context so the excluded
+population stays visible, and are excluded from every fit and from the color scale. A
+`Show filtered points` toggle hides them. Ghost points never win closest-point hover, which would
+otherwise make the visible points hard to inspect.
+
+Bins, level order, and gradient extent are computed from the kept rows only, so filtering does not
+drag the color scale around. Axis ranges are computed from the full selection instead, so the view
+does not jump as filters are toggled.
+
+### Faceting
+
+`Facet By` splits the plot into a panel grid on any categorical column, nested inside the existing
+Group A / Group B overlay and side-by-side modes. Panels use real Plotly subplots with shared,
+matched axes, ggplot-style strip labels, and a single legend — each series appears once in the legend
+and its `legendgroup` toggles that series across every panel.
+
+Faceting is offered only for columns with between 2 and 12 distinct values in the current selection;
+beyond that the grid is unreadable, and a strain survey would ask for 30 panels. The control reports
+why a column is unavailable (`30 panels`, `one value`), and the current facet column is cleared
+automatically if a selection or filter change makes it invalid.
+
+Panels come from rows that survived filtering, so a filtered-away level gets no panel. Ghost points
+follow from that: a ghost whose own facet level was filtered out has nowhere to be drawn and is
+dropped, while a ghost excluded by some *other* column still appears in its own panel.
+
+### Fits
+
+Fit type is `None`, `Linear (OLS)`, or `Loess`. Loess is a tricubic-weighted local linear smoother
+implemented in [src/utils/plotting/fits.js](src/utils/plotting/fits.js), matching
+`geom_smooth(method="loess")` with `span=1`; there is no smoothing dependency in the app.
+
+Fit scope is independent of fit type:
+
+- `Per color group` — one fit per color level
+- `Single overall fit` — one dark fit across all points, leaving color free to show a different
+  variable
+
+A gradient color scale has no discrete groups, so scope is forced to overall while it is active.
+
+Linear fits can print their equation and R² on the plot.
+
+### Dataset tables
+
+Each experiment row shows distinct animal count plus metadata summarized across all of that
+experiment's rows: numeric spreads render as ranges (`4–23`), and categorical columns show up to two
+distinct values before collapsing to a count. Reading metadata off the first row would misreport any
+experiment that spans several recording conditions.
 
 ## Analysis Page Dataset Info
 

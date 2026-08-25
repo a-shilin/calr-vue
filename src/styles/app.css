@@ -208,6 +208,148 @@ p{
   min-height: 240px;
 }
 
+/*
+  Shared wrapper for the community page's stacked sections, so every one of them
+  carries its label the same way: outside the panel it describes.
+*/
+.plot-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plot-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 20px;
+}
+
+.plot-section__action {
+  padding: 0;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.preset-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f9fafc;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.preset-card:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #fff;
+}
+
+.preset-card--active {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 1px #2563eb inset;
+}
+
+.preset-card--unavailable {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.preset-card__title {
+  font-size: 0.84rem;
+  letter-spacing: -0.01em;
+  color: #132033;
+}
+
+.preset-tooltip {
+  position: fixed;
+  z-index: 1080;
+  max-width: 300px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1f2933;
+  color: #f8fafc;
+  font-size: 11.5px;
+  line-height: 1.45;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.28);
+  pointer-events: none;
+}
+
+.preset-card__warning {
+  font-size: 11px;
+  color: #b45309;
+}
+
+.plot-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f9fafc;
+}
+
+.plot-filter-bar__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.plot-filter-bar__ghosts {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.plot-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 2px 8px;
+  border: 1px solid #d5d9dd;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  color: #334155;
+}
+
+.plot-filter-chip__values {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-filter-chip__remove {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  line-height: 1;
+  font-size: 15px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.plot-filter-chip__remove:hover {
+  color: #d62728;
+}
+
 .community-plot-header {
   display: flex;
   justify-content: flex-end;
@@ -360,6 +502,16 @@ p{
   min-width: 0;
   overflow: hidden;
   height: -webkit-fill-available;
+}
+
+/*
+  A faceted community plot sets its own height so panel rows stay readable, and
+  that height can exceed the container. This variant lets the panel grow with it
+  instead of clipping the lower rows.
+*/
+.plot-panel--grows {
+  overflow: visible;
+  height: auto;
 }
 
 .plots-panel {

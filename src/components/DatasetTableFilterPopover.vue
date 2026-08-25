@@ -29,6 +29,10 @@
       </div>
 
       <div v-if="activeField.filterKind === 'numberRange'" class="filter-popover__range-panel">
+        <div class="filter-popover__range-values">
+          <strong>{{ formatNumber(activeRange.min) }}</strong>
+          <strong>{{ formatNumber(activeRange.max) }}</strong>
+        </div>
         <DualRangeSlider
           :min="activeField.range.min"
           :max="activeField.range.max"
@@ -122,10 +126,17 @@ export default {
     },
   },
   methods: {
+    // Precision follows the field's step: these ranges span RER around 1.0 as
+    // well as beam-break counts in the thousands, and one fixed precision
+    // would round the small scales away entirely.
     formatNumber(value) {
       const numeric = Number(value)
       if (!Number.isFinite(numeric)) return '0'
-      return Number.isInteger(numeric) ? `${numeric}` : numeric.toFixed(1)
+      if (Number.isInteger(numeric)) return `${numeric}`
+
+      const step = Number(this.activeField?.step) || 1
+      const decimals = step >= 1 ? 1 : Math.min(4, Math.ceil(-Math.log10(step)))
+      return `${Number(numeric.toFixed(decimals))}`
     },
     isFieldActive(key) {
       const filter = this.filters[key]
